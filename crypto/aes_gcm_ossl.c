@@ -13,49 +13,47 @@
 
 #include <openssl/evp.h>
 
-#define CHECK_ALG(cond) { if (!(cond)) return ERR_BAD_ARGS; }
+#define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 
-#define CIPHER_OPERATION_SET(ctx, operation) (void)((ctx)->oper = operation)
-#define CIPHER_OPERATION_GET(ctx, operation) ((ctx)->oper == operation)
+#define CIPHER_OPERATION_SET(c, operation) (void)((c)->oper = operation)
+#define CIPHER_OPERATION_GET(c, operation) ((c)->oper == operation)
 
-#define CIPHER_FLAG_SET(ctx, flag) (void)((ctx)->flags |= flag)
-#define CIPHER_FLAG_GET(ctx, flag) ((ctx)->flags & flag)
+#define CIPHER_FLAG_SET(c, flag) (void)((c)->flags |= flag)
+#define CIPHER_FLAG_GET(c, flag) ((c)->flags & flag)
 
 /**
  *
  */
-static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len,
-                                  size_t tag_len, cipher_alg_t alg) {
+static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len, size_t tag_len,
+                                  cipher_alg_t alg) {
   extern const cipher_intf_t aes_gcm_intf;
   aes_gcm_ossl_ctx *aes_gcm;
   EVP_CIPHER *evp;
 
   PRINTDEBUG("key_len=%zu, tag_len=%zu", key_len, tag_len);
 
-  if (key_len != AES_GCM_128_KEY_LEN && key_len != AES_GCM_192_KEY_LEN &&
-      key_len != AES_GCM_256_KEY_LEN) {
-    return ERR_BAD_ARGS;
-  }
-
-  if (tag_len != AES_AUTH_TAG_LEN_LONG && tag_len != AES_AUTH_TAG_LEN_SHORT)
-    return ERR_BAD_ARGS;
+  if (!*c)
+    return ERR_NULL_PTR;
 
   switch (alg) {
   case AES_GCM_128:
-    CHECK_ALG(key_len == AES_GCM_128_KEY_LEN);
+    CHECK(key_len == AES_GCM_128_KEY_LEN);
     evp = EVP_aes_128_gcm();
     break;
   case AES_GCM_192:
-    CHECK_ALG(key_len == AES_GCM_192_KEY_LEN);
+    CHECK(key_len == AES_GCM_192_KEY_LEN);
     evp = EVP_aes_192_gcm();
     break;
   case AES_GCM_256:
-    CHECK_ALG(key_len == AES_GCM_256_KEY_LEN);
+    CHECK(key_len == AES_GCM_256_KEY_LEN);
     evp = EVP_aes_256_gcm();
     break;
   default:
     return ERR_BAD_ARGS;
   }
+
+  if (tag_len != AES_AUTH_TAG_LEN_LONG && tag_len != AES_AUTH_TAG_LEN_SHORT)
+    return ERR_BAD_ARGS;
 
   *c = (cipher_t *)calloc(1, sizeof(cipher_t));
   if (!*c)
@@ -80,9 +78,9 @@ static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len,
   aes_gcm->tag_len = tag_len;
 
   (*c)->intf = &aes_gcm_intf;
-  (*c)->alg = alg;
   (*c)->ctx = aes_gcm;
   (*c)->key_len = key_len;
+  (*c)->alg = alg;
   CIPHER_FLAG_SET(*c, CIPHER_FLAG_ALLOC);
 
   return ERR_SUCCESS;
@@ -92,19 +90,21 @@ static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len,
  *
  */
 static error_t ossl_aes_gcm_free(cipher_t *c) {
-  aes_gcm_ossl_ctx *aes_gcm;
+  if (!c)
+    return ERR_SUCCESS;
 
-  if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC))
-    return ERR_NOT_ALLOC;
+  if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
+    aes_gcm_ossl_ctx *aes_gcm = (aes_gcm_ossl_ctx *)c->ctx;
 
-  aes_gcm = (aes_gcm_ossl_ctx *)c->ctx;
-  if (aes_gcm) {
-    EVP_CIPHER_CTX_free(aes_gcm->ossl_ctx);
-    /* Prevent state leaks */
-    memzero(aes_gcm, sizeof(aes_gcm_ossl_ctx));
-    free(aes_gcm);
+    if (aes_gcm) {
+      EVP_CIPHER_CTX_free(aes_gcm->ossl_ctx);
+      EVP_CIPHER_free(aes_gcm->ossl_evp);
+      /* Prevent state leaks */
+      memzero(aes_gcm, sizeof(aes_gcm_ossl_ctx));
+      free(aes_gcm);
+    }
   }
-
+  memzero(c, sizeof(cipher_t));
   free(c);
   c = NULL;
 
@@ -114,25 +114,31 @@ static error_t ossl_aes_gcm_free(cipher_t *c) {
 /**
  *
  */
-static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key, size_t key_len,
-                                 cipher_oper_t oper) {
-  aes_gcm_ossl_ctx *ctx = c->ctx;
-  EVP_CIPHER *evp = ctx->ossl_evp;
+static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key,
+                                 size_t key_len, cipher_oper_t oper) {
+  aes_gcm_ossl_ctx *ctx;
+  cipher_alg_t alg;
 
   PRINTDEBUG("key_len=%zu", key_len);
+
+  if (!c || !key)
+    return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC))
     return ERR_NOT_ALLOC;
 
+  ctx = c->ctx;
+  alg = c->alg;
+
   switch (key_len) {
   case AES_GCM_128_KEY_LEN:
-    CHECK_ALG(evp == EVP_aes_128_gcm());
+    CHECK(alg == AES_GCM_128);
     break;
   case AES_GCM_192_KEY_LEN:
-    CHECK_ALG(evp == EVP_aes_192_gcm());
+    CHECK(alg == AES_GCM_192);
     break;
   case AES_GCM_256_KEY_LEN:
-    CHECK_ALG(evp == EVP_aes_256_gcm());
+    CHECK(alg == AES_GCM_256);
     break;
   default:
     return ERR_BAD_ARGS;
@@ -143,7 +149,7 @@ static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key, size_t key_len
 
   EVP_CIPHER_CTX_reset(ctx->ossl_ctx);
 
-  if (!EVP_CipherInit_ex(ctx->ossl_ctx, evp, NULL, key, NULL, 0))
+  if (!EVP_CipherInit_ex(ctx->ossl_ctx, ctx->ossl_evp, NULL, key, NULL, 0))
     return ERR_INTERNAL;
 
   if (!EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN,
@@ -163,12 +169,17 @@ static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key, size_t key_len
  */
 static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
                                    size_t iv_len) {
-  aes_gcm_ossl_ctx *ctx = c->ctx;
+  aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("iv_len=%zu", iv_len);
 
+  if (!c || !iv)
+    return ERR_NULL_PTR;
+
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
+
+  ctx = c->ctx;
 
   if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT) &&
       !CIPHER_OPERATION_GET(ctx, CIPHER_OPER_DECRYPT)) {
@@ -192,12 +203,17 @@ static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
 static error_t ossl_aes_gcm_set_aad(cipher_t *c, const uint8_t *aad,
                                     size_t aad_len) {
   int rv;
-  aes_gcm_ossl_ctx *ctx = c->ctx;
+  aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("aad_len=%zu", aad_len);
 
+  if (!c || !aad)
+    return ERR_NULL_PTR;
+
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
+
+  ctx = c->ctx;
 
   if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))
     return ERR_BAD_ARGS;
@@ -215,12 +231,17 @@ static error_t ossl_aes_gcm_set_aad(cipher_t *c, const uint8_t *aad,
 static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
                                     size_t in_len, uint8_t *out,
                                     size_t *out_len) {
-  aes_gcm_ossl_ctx *ctx = c->ctx;
+  aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("in_len=%zu, *out_len=%zu", in_len, *out_len);
 
+  if (!c || !in || !out || !out_len)
+    return ERR_NULL_PTR;
+
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
+
+  ctx = c->ctx;
 
   if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))
     return ERR_BAD_ARGS;
@@ -250,12 +271,17 @@ static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
 static error_t ossl_aes_gcm_decrypt(cipher_t *c, const uint8_t *in,
                                     size_t in_len, uint8_t *out,
                                     size_t *out_len) {
-  aes_gcm_ossl_ctx *ctx = c->ctx;
+  aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("in_len=%zu, *out_len=%zu", in_len, *out_len);
 
+  if (!c || !in || !out || !out_len)
+    return ERR_NULL_PTR;
+
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
+
+  ctx = c->ctx;
 
   if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_DECRYPT))
     return ERR_BAD_ARGS;

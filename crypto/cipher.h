@@ -9,6 +9,10 @@ typedef enum {
   CIPHER_FLAG_AEAD = (1U << 2),
 } cipher_flag_t;
 
+/**
+ * This enum MUST NOT be changed, since implementation
+ * exists only for the algorithms present in this list
+ */
 typedef enum {
   AES_GCM_128 = (1U << 0),
   AES_GCM_192 = (1U << 1),

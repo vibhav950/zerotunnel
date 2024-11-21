@@ -13,13 +13,13 @@ typedef enum {
   ERR_SUCCESS,
   ERR_NOT_ALLOC,
   ERR_NOT_INIT,
+  ERR_NULL_PTR,
   ERR_BAD_ARGS,
   ERR_MEM_FAIL,
   ERR_AUTH_FAIL,
   ERR_BUFFER_TOO_SMALL,
   ERR_NOT_SUPPORTED,
-  ERR_INTERNAL
-
+  ERR_INTERNAL,
 } error_t;
 
 /** Logging routines */
