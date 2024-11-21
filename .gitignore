@@ -1,0 +1,7 @@
+# Dotfiles
+.env
+
+# Sensitive data
+keys/
+files/
+logs/
