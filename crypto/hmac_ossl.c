@@ -7,8 +7,10 @@
  */
 
 #include "hmac_ossl.h"
+#include "common/memzero.h"
 #include "hmac.h"
 
+#include <openssl/evp.h>
 #include <openssl/hmac.h>
 
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
@@ -42,7 +44,7 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
                                hmac_alg_t alg) {
   extern const hmac_intf_t hmac_ossl_intf;
   hmac_ossl_ctx *hmac;
-  EVP_MD *md;
+  const EVP_MD *md;
 
   PRINTDEBUG("key_len=%zu, out_len=%zu alg=%s", key_len, out_len, hmac_alg_to_string(alg));
 
@@ -92,14 +94,14 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
     return ERR_MEM_FAIL;
   }
 
-  hmac->ossl_ctx = HMAC_CTX_new();
-  if (!hmac->ossl_ctx) {
+  hmac->md_ctx = EVP_MD_CTX_new();
+  if (!hmac->md_ctx) {
     free(hmac);
     free(*h);
     *h = NULL;
     return ERR_INTERNAL;
   }
-  hmac->ossl_md = md;
+  hmac->md = md;
   hmac->key_len = key_len;
   hmac->alg = alg;
 
@@ -123,8 +125,7 @@ static error_t ossl_hmac_free(hmac_t *h) {
     hmac_ossl_ctx *hmac = h->ctx;
 
     if (hmac) {
-      HMAC_CTX_free(hmac->ossl_ctx);
-      EVP_MD_free(hmac->ossl_md);
+      EVP_MD_CTX_free(hmac->md_ctx);
       /* Prevent state leaks */
       memzero(hmac, sizeof(hmac_ossl_ctx));
       free(hmac);
@@ -143,6 +144,7 @@ static error_t ossl_hmac_free(hmac_t *h) {
 static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   hmac_ossl_ctx *ctx;
   hmac_alg_t alg;
+  EVP_PKEY *mac_key;
 
   PRINTDEBUG("key_len=%zu", key_len);
 
@@ -157,23 +159,30 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 
   switch (key_len) {
   case HMAC_SHA256_OUT_LEN:
-    // case HMAC_SHA3_256_OUT_LEN:
+  // case HMAC_SHA3_256_OUT_LEN:
     CHECK((alg == HMAC_SHA256) || (alg == HMAC_SHA3_256));
     break;
   case HMAC_SHA384_OUT_LEN:
-    // case HMAC_SHA3_384_OUT_LEN:
+  // case HMAC_SHA3_384_OUT_LEN:
     CHECK((alg == HMAC_SHA384) || (alg == HMAC_SHA3_384));
     break;
   case HMAC_SHA512_OUT_LEN:
-    // case HMAC_SHA3_512_OUT_LEN:
+  // case HMAC_SHA3_512_OUT_LEN:
     CHECK((alg == HMAC_SHA512) || (alg == HMAC_SHA3_512));
     break;
   default:
     return ERR_BAD_ARGS;
   }
 
-  if (!HMAC_Init_ex(ctx->ossl_ctx, key, key_len, ctx->ossl_md, NULL))
+  mac_key = EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL, key, key_len);
+  if (!mac_key)
     return ERR_INTERNAL;
+
+  if (!EVP_DigestSignInit(ctx->md_ctx, NULL, ctx->md, NULL, mac_key)) {
+    EVP_PKEY_free(mac_key);
+    return ERR_INTERNAL;
+  }
+  EVP_PKEY_free(mac_key);
 
   HMAC_FLAG_SET(h, HMAC_FLAG_INIT);
 
@@ -195,12 +204,15 @@ static error_t ossl_hmac_update(hmac_t *h, const uint8_t *data,
   if (data_len && !data)
     return ERR_NULL_PTR;
 
+  if (!HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
+
   if (!HMAC_FLAG_GET(h, HMAC_FLAG_INIT))
     return ERR_NOT_INIT;
 
   ctx = h->ctx;
 
-  if (!HMAC_Update(ctx->ossl_ctx, data, data_len))
+  if (!EVP_DigestSignUpdate(ctx->md_ctx, data, data_len))
     return ERR_INTERNAL;
 
   return ERR_SUCCESS;
@@ -210,7 +222,7 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
                                  uint8_t *digest, size_t digest_len) {
   hmac_ossl_ctx *ctx;
   uint8_t md_value[EVP_MAX_MD_SIZE];
-  unsigned int len;
+  size_t len;
 
   PRINTDEBUG("msg_len=%zu, tag_len=%zu", msg_len, digest_len);
 
@@ -220,6 +232,9 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
   if (msg_len && !msg)
     return ERR_NULL_PTR;
 
+  if (!HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
+
   if (!HMAC_FLAG_GET(h, HMAC_FLAG_INIT))
     return ERR_NOT_INIT;
 
@@ -227,12 +242,12 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
 
   /* Process the meessage */
   if (msg_len) {
-    if (!HMAC_Update(ctx->ossl_ctx, msg, msg_len))
+    if (!EVP_DigestSignUpdate(ctx->md_ctx, msg, msg_len))
       return ERR_INTERNAL;
   }
 
   /* Compute the digest */
-  if (!HMAC_Final(ctx->ossl_ctx, md_value, &len))
+  if (!EVP_DigestSignFinal(ctx->md_ctx, md_value, &len))
     return ERR_INTERNAL;
 
   if (len < digest_len)

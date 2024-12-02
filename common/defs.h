@@ -22,7 +22,13 @@ typedef enum {
   ERR_INTERNAL,
 } error_t;
 
-/** Logging routines */
+/**
+ * Logging routines
+ */
+extern void debug_printf(const char *func, const char *fmt, ...);
+extern void error_printf(const char *file, int line, const char *msg);
+extern void info_vprintf(const char *fmt, ...);
+
 #define PRINTDEBUG(fmt, ...) debug_printf(__func__, fmt, ##__VA_ARGS__)
 #define PRINTERROR(msg) error_printf(__FILE__, __LINE__, msg)
 #define PRINTINFO(fmt, ...) info_vprintf(fmt, ##__VA_ARGS__)

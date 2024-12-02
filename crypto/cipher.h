@@ -28,8 +28,8 @@ typedef enum cipher_oper_st {
 /** A pointer type for @p cipher_st, which is defined later */
 typedef struct cipher_st *cipher_ptr_t;
 
-typedef error_t (*cipher_alloc_func_t)(cipher_ptr_t **c, size_t key_len,
-                                       size_t tag_len);
+typedef error_t (*cipher_alloc_func_t)(cipher_ptr_t *c, size_t key_len,
+                                       size_t tag_len, cipher_alg_t alg);
 
 typedef error_t (*cipher_free_func_t)(cipher_ptr_t ctx);
 

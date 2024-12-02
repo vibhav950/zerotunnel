@@ -28,7 +28,7 @@ static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len, size_t tag_len,
                                   cipher_alg_t alg) {
   extern const cipher_intf_t aes_gcm_intf;
   aes_gcm_ossl_ctx *aes_gcm;
-  EVP_CIPHER *evp;
+  const EVP_CIPHER *evp;
 
   PRINTDEBUG("key_len=%zu, tag_len=%zu", key_len, tag_len);
 
@@ -98,7 +98,6 @@ static error_t ossl_aes_gcm_free(cipher_t *c) {
 
     if (aes_gcm) {
       EVP_CIPHER_CTX_free(aes_gcm->ossl_ctx);
-      EVP_CIPHER_free(aes_gcm->ossl_evp);
       /* Prevent state leaks */
       memzero(aes_gcm, sizeof(aes_gcm_ossl_ctx));
       free(aes_gcm);
@@ -190,7 +189,7 @@ static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
     return ERR_BAD_ARGS;
 
   if (!EVP_CipherInit_ex(ctx->ossl_ctx, NULL, NULL, NULL, iv,
-                         CIPHER_OPER_ENCR_CHECK(ctx->oper))) {
+                         CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))) {
     return ERR_INTERNAL;
   }
 

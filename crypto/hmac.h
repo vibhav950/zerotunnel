@@ -27,7 +27,7 @@ typedef enum {
 typedef struct hmac_st *hmac_ptr_t;
 
 typedef error_t (*hmac_alloc_func_t)(hmac_ptr_t *h, size_t key_len,
-                                     size_t out_len);
+                                     size_t out_len, hmac_alg_t alg);
 
 typedef error_t (*hmac_free_func_t)(hmac_ptr_t ctx);
 

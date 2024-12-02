@@ -11,8 +11,8 @@
 #endif
 
 typedef struct hmac_ossl_ctx_st {
-    HMAC_CTX *ossl_ctx;
-    EVP_MD *ossl_md;
+    EVP_MD_CTX *md_ctx;
+    const EVP_MD *md;
     size_t key_len;
     hmac_alg_t alg;
 } hmac_ossl_ctx;

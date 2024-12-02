@@ -11,7 +11,7 @@
 
 typedef struct aes_gcm_ossl_ctx_st {
     EVP_CIPHER_CTX *ossl_ctx;
-    EVP_CIPHER *ossl_evp;
+    const EVP_CIPHER *ossl_evp;
     size_t key_len;
     size_t tag_len;
     cipher_oper_t oper;
