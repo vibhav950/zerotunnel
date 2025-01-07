@@ -1,9 +1,63 @@
 #include "cipher.h"
+#include "common/defs.h"
 
-int cipher_alg_is_supported(cipher_t *c, cipher_alg_t alg) {
-    return ((c) && (c->intf) && (c->intf->supported_algs & alg));
+int cipher_intf_alg_is_supported(cipher_intf_t *intf, cipher_alg_t alg) {
+  return (intf) && (intf->supported_algs & alg);
 }
 
 int cipher_flag_get(cipher_t *c, cipher_flag_t flag) {
-    return ((c) && (c->flags & flag));
+  return (c) && (c->flags & flag);
+}
+
+error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
+                          size_t key_len, size_t tag_len, cipher_alg_t alg) {
+  if (!intf || !intf->alloc || !*c)
+    return ERR_NULL_PTR;
+
+  return (intf)->alloc(c, key_len, tag_len, alg);
+}
+
+error_t cipher_dealloc(cipher_t *c) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->dealloc(c);
+}
+
+error_t cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
+                    cipher_operation_t oper) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->init(c, key, key_len, oper);
+}
+
+error_t cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->set_iv(c, iv, iv_len);
+}
+
+error_t cipher_set_aad(cipher_t *c, const uint8_t *aad, size_t aad_len) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->set_aad(c, aad, aad_len);
+}
+
+error_t cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                       uint8_t *out, size_t *out_len) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->encrypt(c, in, in_len, out, out_len);
+}
+
+error_t cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                       uint8_t *out, size_t *out_len) {
+  if (!c || !c->intf)
+    return ERR_NULL_PTR;
+
+  return ((c)->intf)->decrypt(c, in, in_len, out, out_len);
 }

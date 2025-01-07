@@ -25,11 +25,15 @@ typedef enum {
 /**
  * Logging routines
  */
-extern void debug_printf(const char *func, const char *fmt, ...);
-extern void error_printf(const char *file, int line, const char *msg);
-extern void info_vprintf(const char *fmt, ...);
+void debug_printf(const char *func, const char *fmt, ...);
+void error_printf(const char *file, int line, const char *msg);
+void info_vprintf(const char *fmt, ...);
 
+#if defined(DEBUG)
 #define PRINTDEBUG(fmt, ...) debug_printf(__func__, fmt, ##__VA_ARGS__)
+#else
+#define PRINTDEBUG(fmt, ...)
+#endif
 #define PRINTERROR(msg) error_printf(__FILE__, __LINE__, msg)
 #define PRINTINFO(fmt, ...) info_vprintf(fmt, ##__VA_ARGS__)
 

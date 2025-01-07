@@ -27,11 +27,11 @@ inline void debug_printf(const char *func, const char *fmt, ...) {
   va_start(args, fmt);
   vfprintf(LOG_FP_DEBUG, fmt, args);
   va_end(args);
+  printf("\n");
 }
 
 inline void error_printf(const char *file, const int line, const char *msg) {
-  fprintf(LOG_FP_ERROR, "%s[ERROR %s, %d]%s %s\n", FG_RED, file, line, FG_CLEAR, msg);
-
+  fprintf(LOG_FP_ERROR, "%s[ERROR %s:%d]%s %s\n", FG_RED, file, line, FG_CLEAR, msg);
   exit(EXIT_FAILURE);
 }
 
@@ -41,4 +41,5 @@ inline void info_vprintf(const char *fmt, ...) {
   va_start(args, fmt);
   vfprintf(LOG_FP_INFO, fmt, args);
   va_end(args);
+  printf("\n");
 }

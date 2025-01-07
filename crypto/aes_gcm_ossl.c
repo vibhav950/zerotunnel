@@ -6,7 +6,7 @@
  * vibhav950 on GitHub
  */
 
-#include "aes_gcm_ossl.h"
+#include "aes_gcm.h"
 #include "cipher.h"
 #include "common/defs.h"
 #include "common/memzero.h"
@@ -31,9 +31,6 @@ static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len, size_t tag_len,
   const EVP_CIPHER *evp;
 
   PRINTDEBUG("key_len=%zu, tag_len=%zu", key_len, tag_len);
-
-  if (!*c)
-    return ERR_NULL_PTR;
 
   switch (alg) {
   case AES_GCM_128:
@@ -89,9 +86,8 @@ static error_t ossl_aes_gcm_alloc(cipher_t **c, size_t key_len, size_t tag_len,
 /**
  *
  */
-static error_t ossl_aes_gcm_free(cipher_t *c) {
-  if (!c)
-    return ERR_SUCCESS;
+static error_t ossl_aes_gcm_dealloc(cipher_t *c) {
+  PRINTDEBUG("");
 
   if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
     aes_gcm_ossl_ctx *aes_gcm = (aes_gcm_ossl_ctx *)c->ctx;
@@ -114,13 +110,13 @@ static error_t ossl_aes_gcm_free(cipher_t *c) {
  *
  */
 static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key,
-                                 size_t key_len, cipher_oper_t oper) {
+                                 size_t key_len, cipher_operation_t oper) {
   aes_gcm_ossl_ctx *ctx;
   cipher_alg_t alg;
 
   PRINTDEBUG("key_len=%zu", key_len);
 
-  if (!c || !key)
+  if (!key)
     return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC))
@@ -143,16 +139,17 @@ static error_t ossl_aes_gcm_init(cipher_t *c, const uint8_t *key,
     return ERR_BAD_ARGS;
   }
 
-  if (oper != CIPHER_OPER_ENCRYPT && oper != CIPHER_OPER_DECRYPT)
+  if (oper != CIPHER_OPERATION_ENCRYPT && oper != CIPHER_OPERATION_DECRYPT)
     return ERR_BAD_ARGS;
 
-  EVP_CIPHER_CTX_reset(ctx->ossl_ctx);
+  if (!EVP_CIPHER_CTX_reset(ctx->ossl_ctx))
+    return ERR_INTERNAL;
 
   if (!EVP_CipherInit_ex(ctx->ossl_ctx, ctx->ossl_evp, NULL, key, NULL, 0))
     return ERR_INTERNAL;
 
-  if (!EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN,
-                           AES_GCM_IV_LEN, NULL)) {
+  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN, AES_GCM_IV_LEN,
+                          NULL) != 1) {
     return ERR_INTERNAL;
   }
 
@@ -172,7 +169,7 @@ static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
 
   PRINTDEBUG("iv_len=%zu", iv_len);
 
-  if (!c || !iv)
+  if (!iv)
     return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
@@ -180,17 +177,20 @@ static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
 
   ctx = c->ctx;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT) &&
-      !CIPHER_OPERATION_GET(ctx, CIPHER_OPER_DECRYPT)) {
+  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT) &&
+      !CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_DECRYPT)) {
     return ERR_BAD_ARGS;
   }
 
   if (iv_len != AES_GCM_IV_LEN)
     return ERR_BAD_ARGS;
 
-  if (!EVP_CipherInit_ex(ctx->ossl_ctx, NULL, NULL, NULL, iv,
-                         CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))) {
-    return ERR_INTERNAL;
+  if (CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT)) {
+    if (EVP_EncryptInit_ex(ctx->ossl_ctx, NULL, NULL, NULL, iv) != 1)
+      return ERR_INTERNAL;
+  } else {
+    if (EVP_DecryptInit_ex(ctx->ossl_ctx, NULL, NULL, NULL, iv) != 1)
+      return ERR_INTERNAL;
   }
 
   return ERR_SUCCESS;
@@ -201,12 +201,12 @@ static error_t ossl_aes_gcm_set_iv(cipher_t *c, const uint8_t *iv,
  */
 static error_t ossl_aes_gcm_set_aad(cipher_t *c, const uint8_t *aad,
                                     size_t aad_len) {
-  int rv;
+  int len;
   aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("aad_len=%zu", aad_len);
 
-  if (!c || !aad)
+  if (aad_len && !aad)
     return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
@@ -214,12 +214,18 @@ static error_t ossl_aes_gcm_set_aad(cipher_t *c, const uint8_t *aad,
 
   ctx = c->ctx;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))
-    return ERR_BAD_ARGS;
+  if (aad_len) {
+    if (CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT)) {
+      if (EVP_EncryptUpdate(ctx->ossl_ctx, NULL, &len, aad, aad_len) != 1)
+        return ERR_INTERNAL;
+    } else {
+      if (EVP_DecryptUpdate(ctx->ossl_ctx, NULL, &len, aad, aad_len) != 1)
+        return ERR_INTERNAL;
+    }
 
-  rv = EVP_Cipher(ctx->ossl_ctx, NULL, aad, aad_len);
-  if (rv < 0 || rv != aad_len)
-    return ERR_INTERNAL;
+    if (len != (int)aad_len)
+      return ERR_INTERNAL;
+  }
 
   return ERR_SUCCESS;
 }
@@ -230,11 +236,12 @@ static error_t ossl_aes_gcm_set_aad(cipher_t *c, const uint8_t *aad,
 static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
                                     size_t in_len, uint8_t *out,
                                     size_t *out_len) {
+  int len;
   aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("in_len=%zu, *out_len=%zu", in_len, *out_len);
 
-  if (!c || !in || !out || !out_len)
+  if (!in || !out || !out_len)
     return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
@@ -242,7 +249,7 @@ static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
 
   ctx = c->ctx;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_ENCRYPT))
+  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT))
     return ERR_BAD_ARGS;
 
   *out_len = in_len + ctx->tag_len;
@@ -250,16 +257,21 @@ static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
     return ERR_BUFFER_TOO_SMALL;
 
   /* Encrypt the data */
-  EVP_Cipher(ctx->ossl_ctx, out, in, in_len);
+  if (EVP_EncryptUpdate(ctx->ossl_ctx, out, &len, in, in_len) != 1)
+    return ERR_INTERNAL;
+  *out_len = len;
 
   /* Calculate the tag */
-  EVP_Cipher(ctx->ossl_ctx, NULL, NULL, 0);
+  if (EVP_EncryptFinal_ex(ctx->ossl_ctx, out + len, &len) != 1)
+    return ERR_INTERNAL;
+  *out_len += len;
 
   /* Extract the tag */
-  if (!EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_GET_TAG, ctx->tag_len,
-                           out + in_len)) {
+  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_GET_TAG, ctx->tag_len,
+                          out + *out_len) != 1) {
     return ERR_INTERNAL;
   }
+  *out_len += ctx->tag_len;
 
   return ERR_SUCCESS;
 }
@@ -270,11 +282,12 @@ static error_t ossl_aes_gcm_encrypt(cipher_t *c, const uint8_t *in,
 static error_t ossl_aes_gcm_decrypt(cipher_t *c, const uint8_t *in,
                                     size_t in_len, uint8_t *out,
                                     size_t *out_len) {
+  int len;
   aes_gcm_ossl_ctx *ctx;
 
   PRINTDEBUG("in_len=%zu, *out_len=%zu", in_len, *out_len);
 
-  if (!c || !in || !out || !out_len)
+  if (!in || !out || !out_len)
     return ERR_NULL_PTR;
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
@@ -282,7 +295,7 @@ static error_t ossl_aes_gcm_decrypt(cipher_t *c, const uint8_t *in,
 
   ctx = c->ctx;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPER_DECRYPT))
+  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_DECRYPT))
     return ERR_BAD_ARGS;
 
   if (in_len < ctx->tag_len)
@@ -296,26 +309,29 @@ static error_t ossl_aes_gcm_decrypt(cipher_t *c, const uint8_t *in,
    *
    * Explicitly cast away the const of in
    */
-  if (!EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_TAG, ctx->tag_len,
-                           (void *)(ptrdiff_t)(in + (in_len - ctx->tag_len)))) {
-    return ERR_AUTH_FAIL;
+  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_TAG, ctx->tag_len,
+                          (void *)(ptrdiff_t)(in + (in_len - ctx->tag_len))) !=
+      1) {
+    return ERR_INTERNAL;
   }
-  EVP_Cipher(ctx->ossl_ctx, out, in, in_len - ctx->tag_len);
+
+  if (EVP_DecryptUpdate(ctx->ossl_ctx, out, &len, in, in_len - ctx->tag_len) !=
+      1) {
+    return ERR_INTERNAL;
+  }
+  *out_len = len;
 
   /* Check the tag */
-  if (!EVP_Cipher(ctx->ossl_ctx, NULL, NULL, 0))
+  if (EVP_DecryptFinal_ex(ctx->ossl_ctx, out + *out_len, &len) != 1)
     return ERR_AUTH_FAIL;
-
-  /* Reduce the buffer size by the tag length to get the
-   * length of the original payload */
-  *out_len = in_len - ctx->tag_len;
+  *out_len += len;
 
   return ERR_SUCCESS;
 }
 
 const cipher_intf_t aes_gcm_intf = {
     .alloc = ossl_aes_gcm_alloc,
-    .dealloc = ossl_aes_gcm_free,
+    .dealloc = ossl_aes_gcm_dealloc,
     .init = ossl_aes_gcm_init,
     .set_iv = ossl_aes_gcm_set_iv,
     .set_aad = ossl_aes_gcm_set_aad,
