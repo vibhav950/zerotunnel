@@ -59,7 +59,20 @@ typedef struct hmac_st {
   unsigned int flags;
 } hmac_t;
 
-extern int hmac_alg_is_supported(hmac_t *c, hmac_alg_t alg);
-extern int hmac_flag_get(hmac_t *c, hmac_flag_t flag);
+int hmac_intf_alg_is_supported(hmac_intf_t *intf, hmac_alg_t alg);
+
+int hmac_flag_get(hmac_t *h, hmac_flag_t flag);
+
+error_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
+                        size_t out_len, hmac_alg_t alg);
+
+error_t hmac_dealloc(hmac_t *h);
+
+error_t hmac_init(hmac_t *h, const uint8_t *key, size_t key_len);
+
+error_t hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len);
+
+error_t hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
+                     uint8_t *digest, size_t digest_len);
 
 #endif /* __HMAC_H__ */

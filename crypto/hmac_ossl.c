@@ -6,9 +6,9 @@
  * vibhav950 on GitHub
  */
 
-#include "hmac_ossl.h"
 #include "common/memzero.h"
 #include "hmac.h"
+#include "hmac_defs.h"
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -42,11 +42,12 @@ static const char *hmac_alg_to_string(hmac_alg_t alg) {
  */
 static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
                                hmac_alg_t alg) {
-  extern const hmac_intf_t hmac_ossl_intf;
+  extern const hmac_intf_t hmac_intf;
   hmac_ossl_ctx *hmac;
   const EVP_MD *md;
 
-  PRINTDEBUG("key_len=%zu, out_len=%zu alg=%s", key_len, out_len, hmac_alg_to_string(alg));
+  PRINTDEBUG("key_len=%zu, out_len=%zu alg=%s", key_len, out_len,
+             hmac_alg_to_string(alg));
 
   if (!*h)
     return ERR_NULL_PTR;
@@ -56,27 +57,27 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
 
   switch (alg) {
   case HMAC_SHA256:
-    CHECK(out_len == HMAC_SHA256_OUT_LEN);
+    CHECK(out_len == HMAC_SHA256_MAX_OUT_LEN);
     md = EVP_sha256();
     break;
   case HMAC_SHA384:
-    CHECK(out_len == HMAC_SHA384_OUT_LEN);
+    CHECK(out_len == HMAC_SHA384_MAX_OUT_LEN);
     md = EVP_sha384();
     break;
   case HMAC_SHA512:
-    CHECK(out_len == HMAC_SHA512_OUT_LEN);
+    CHECK(out_len == HMAC_SHA512_MAX_OUT_LEN);
     md = EVP_sha512();
     break;
   case HMAC_SHA3_256:
-    CHECK(out_len == HMAC_SHA3_256_OUT_LEN);
+    CHECK(out_len == HMAC_SHA3_256_MAX_OUT_LEN);
     md = EVP_sha3_256();
     break;
   case HMAC_SHA3_384:
-    CHECK(out_len == HMAC_SHA3_384_OUT_LEN);
+    CHECK(out_len == HMAC_SHA3_384_MAX_OUT_LEN);
     md = EVP_sha3_384();
     break;
   case HMAC_SHA3_512:
-    CHECK(out_len == HMAC_SHA3_512_OUT_LEN);
+    CHECK(out_len == HMAC_SHA3_512_MAX_OUT_LEN);
     md = EVP_sha3_512();
     break;
   default:
@@ -102,10 +103,10 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
     return ERR_INTERNAL;
   }
   hmac->md = md;
-  hmac->key_len = key_len;
-  hmac->alg = alg;
+  // hmac->key_len = key_len;
+  // hmac->alg = alg;
 
-  (*h)->intf = &hmac_ossl_intf;
+  (*h)->intf = &hmac_intf;
   (*h)->ctx = hmac;
   (*h)->key_len = key_len;
   (*h)->alg = alg;
@@ -158,16 +159,16 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   alg = h->alg;
 
   switch (key_len) {
-  case HMAC_SHA256_OUT_LEN:
-  // case HMAC_SHA3_256_OUT_LEN:
+  case HMAC_SHA256_KEY_LEN:
+    // case HMAC_SHA3_256_KEY_LEN:
     CHECK((alg == HMAC_SHA256) || (alg == HMAC_SHA3_256));
     break;
-  case HMAC_SHA384_OUT_LEN:
-  // case HMAC_SHA3_384_OUT_LEN:
+  case HMAC_SHA384_KEY_LEN:
+    // case HMAC_SHA3_348_KEY_LEN:
     CHECK((alg == HMAC_SHA384) || (alg == HMAC_SHA3_384));
     break;
-  case HMAC_SHA512_OUT_LEN:
-  // case HMAC_SHA3_512_OUT_LEN:
+  case HMAC_SHA512_KEY_LEN:
+    // case HMAC_SHA3_512_KEY_LEN:
     CHECK((alg == HMAC_SHA512) || (alg == HMAC_SHA3_512));
     break;
   default:
@@ -178,7 +179,7 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   if (!mac_key)
     return ERR_INTERNAL;
 
-  if (!EVP_DigestSignInit(ctx->md_ctx, NULL, ctx->md, NULL, mac_key)) {
+  if (EVP_DigestSignInit(ctx->md_ctx, NULL, ctx->md, NULL, mac_key) != 1) {
     EVP_PKEY_free(mac_key);
     return ERR_INTERNAL;
   }
@@ -192,41 +193,12 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 /**
  *
  */
-static error_t ossl_hmac_update(hmac_t *h, const uint8_t *data,
-                                size_t data_len) {
+static error_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   hmac_ossl_ctx *ctx;
 
-  PRINTDEBUG("data_len=%zu", data_len);
+  PRINTDEBUG("msg_len=%zu", msg_len);
 
   if (!h)
-    return ERR_NULL_PTR;
-
-  if (data_len && !data)
-    return ERR_NULL_PTR;
-
-  if (!HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC))
-    return ERR_NOT_ALLOC;
-
-  if (!HMAC_FLAG_GET(h, HMAC_FLAG_INIT))
-    return ERR_NOT_INIT;
-
-  ctx = h->ctx;
-
-  if (!EVP_DigestSignUpdate(ctx->md_ctx, data, data_len))
-    return ERR_INTERNAL;
-
-  return ERR_SUCCESS;
-}
-
-static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
-                                 uint8_t *digest, size_t digest_len) {
-  hmac_ossl_ctx *ctx;
-  uint8_t md_value[EVP_MAX_MD_SIZE];
-  size_t len;
-
-  PRINTDEBUG("msg_len=%zu, tag_len=%zu", msg_len, digest_len);
-
-  if (!h || !digest)
     return ERR_NULL_PTR;
 
   if (msg_len && !msg)
@@ -240,14 +212,45 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
 
   ctx = h->ctx;
 
-  /* Process the meessage */
+  if (EVP_DigestSignUpdate(ctx->md_ctx, msg, msg_len) != 1)
+    return ERR_INTERNAL;
+
+  return ERR_SUCCESS;
+}
+
+static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
+                                 uint8_t *digest, size_t digest_len) {
+  hmac_ossl_ctx *ctx;
+  uint8_t md_value[EVP_MAX_MD_SIZE];
+  size_t len;
+
+  PRINTDEBUG("msg_len=%zu, digest_len=%zu", msg_len, digest_len);
+
+  if (!h || !digest)
+    return ERR_NULL_PTR;
+
+  if (msg_len && !msg)
+    return ERR_NULL_PTR;
+
+  if (digest_len > h->key_len)
+    return ERR_BAD_ARGS;
+
+  if (!HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
+
+  if (!HMAC_FLAG_GET(h, HMAC_FLAG_INIT))
+    return ERR_NOT_INIT;
+
+  ctx = h->ctx;
+
+  /* Process the message */
   if (msg_len) {
-    if (!EVP_DigestSignUpdate(ctx->md_ctx, msg, msg_len))
+    if (EVP_DigestSignUpdate(ctx->md_ctx, msg, msg_len) != 1)
       return ERR_INTERNAL;
   }
 
   /* Compute the digest */
-  if (!EVP_DigestSignFinal(ctx->md_ctx, md_value, &len))
+  if (EVP_DigestSignFinal(ctx->md_ctx, md_value, &len) != 1)
     return ERR_INTERNAL;
 
   if (len < digest_len)
@@ -260,7 +263,7 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
   return ERR_SUCCESS;
 }
 
-const hmac_intf_t hmac_ossl_intf = {
+const hmac_intf_t hmac_intf = {
     .alloc = ossl_hmac_alloc,
     .dealloc = ossl_hmac_free,
     .init = ossl_hmac_init,

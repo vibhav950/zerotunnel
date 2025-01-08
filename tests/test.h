@@ -36,3 +36,5 @@
       exit(EXIT_FAILURE);                                                      \
     }                                                                          \
   } while (0)
+
+void read_hex(const char *hex, unsigned char *buf, int len);
