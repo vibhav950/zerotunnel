@@ -49,9 +49,6 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
   PRINTDEBUG("key_len=%zu, out_len=%zu alg=%s", key_len, out_len,
              hmac_alg_to_string(alg));
 
-  if (!*h)
-    return ERR_NULL_PTR;
-
   if (key_len != out_len)
     return ERR_BAD_ARGS;
 
@@ -103,8 +100,6 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
     return ERR_INTERNAL;
   }
   hmac->md = md;
-  // hmac->key_len = key_len;
-  // hmac->alg = alg;
 
   (*h)->intf = &hmac_intf;
   (*h)->ctx = hmac;
@@ -119,8 +114,7 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
  *
  */
 static error_t ossl_hmac_free(hmac_t *h) {
-  if (!h)
-    return ERR_SUCCESS;
+  PRINTDEBUG("");
 
   if (HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC)) {
     hmac_ossl_ctx *hmac = h->ctx;
@@ -149,7 +143,7 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 
   PRINTDEBUG("key_len=%zu", key_len);
 
-  if (!h || !key)
+  if (!key)
     return ERR_NULL_PTR;
 
   if (!HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC))
@@ -198,9 +192,6 @@ static error_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
 
   PRINTDEBUG("msg_len=%zu", msg_len);
 
-  if (!h)
-    return ERR_NULL_PTR;
-
   if (msg_len && !msg)
     return ERR_NULL_PTR;
 
@@ -226,7 +217,7 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
 
   PRINTDEBUG("msg_len=%zu, digest_len=%zu", msg_len, digest_len);
 
-  if (!h || !digest)
+  if (!digest)
     return ERR_NULL_PTR;
 
   if (msg_len && !msg)

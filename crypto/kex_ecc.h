@@ -3,15 +3,16 @@
 
 #include "kex.h"
 
-#if (__has_include(<openssl/evp.h>))
+#define OPENSSL
+#if defined(OPENSSL)
+
 #include <openssl/evp.h>
-#else
-#error "OpenSSL not found"
-#endif
 
 typedef struct kex_ossl_ctx_st {
     EVP_PKEY *ec_params;
     EVP_PKEY *ec_key;
 } kex_ossl_ctx;
+
+#endif /* OPENSSL */
 
 #endif /* __KEX_ECC_OSSL_H__ */
