@@ -59,7 +59,7 @@ typedef struct hmac_st {
   unsigned int flags;
 } hmac_t;
 
-int hmac_intf_alg_is_supported(hmac_intf_t *intf, hmac_alg_t alg);
+int hmac_intf_alg_is_supported(const hmac_intf_t *intf, hmac_alg_t alg);
 
 int hmac_flag_get(hmac_t *h, hmac_flag_t flag);
 

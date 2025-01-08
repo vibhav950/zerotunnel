@@ -1,6 +1,6 @@
 #include "hmac.h"
 
-int hmac_intf_alg_is_supported(hmac_intf_t *intf, hmac_alg_t alg) {
+int hmac_intf_alg_is_supported(const hmac_intf_t *intf, hmac_alg_t alg) {
   return (intf) && (intf->supported_algs & alg);
 }
 

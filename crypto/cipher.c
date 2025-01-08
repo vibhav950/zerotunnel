@@ -1,7 +1,7 @@
 #include "cipher.h"
 #include "common/defs.h"
 
-int cipher_intf_alg_is_supported(cipher_intf_t *intf, cipher_alg_t alg) {
+int cipher_intf_alg_is_supported(const cipher_intf_t *intf, cipher_alg_t alg) {
   return (intf) && (intf->supported_algs & alg);
 }
 

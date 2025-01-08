@@ -32,7 +32,6 @@ inline void debug_printf(const char *func, const char *fmt, ...) {
 
 inline void error_printf(const char *file, const int line, const char *msg) {
   fprintf(LOG_FP_ERROR, "%s[ERROR %s:%d]%s %s\n", FG_RED, file, line, FG_CLEAR, msg);
-  exit(EXIT_FAILURE);
 }
 
 inline void info_vprintf(const char *fmt, ...) {
