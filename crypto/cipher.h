@@ -6,7 +6,7 @@
 typedef enum {
   CIPHER_FLAG_ALLOC = (1U << 0),
   CIPHER_FLAG_INIT = (1U << 1),
-  CIPHER_FLAG_AEAD = (1U << 2),
+  CIPHER_FLAG_AAD = (1U << 2),
 } cipher_flag_t;
 
 /**
@@ -17,7 +17,8 @@ typedef enum {
   AES_GCM_128 = (1U << 0),
   AES_GCM_192 = (1U << 1),
   AES_GCM_256 = (1U << 2),
-  AES_GCM_ALL = AES_GCM_128 | AES_GCM_192 | AES_GCM_256,
+  CHACHA20_POLY1305 = (1U << 3),
+  AEAD_ALL = AES_GCM_128 | AES_GCM_192 | AES_GCM_256 | CHACHA20_POLY1305,
 } cipher_alg_t;
 
 typedef enum cipher_operation_st {

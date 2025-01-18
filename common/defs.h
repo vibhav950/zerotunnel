@@ -52,7 +52,7 @@
 #include "endianness.h"
 
 #include <stdbool.h>
-#include <stdint.h>
+#include <sys/types.h>
 #include <time.h>
 
 typedef enum {

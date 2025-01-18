@@ -2,12 +2,12 @@ CC := gcc
 CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -DDEBUG -DOPENSSL
 LIBS := -lcrypto -lssl
 
-all: bin/aes_gcm_128_test
+all: bin/chacha20_poly1305_test
 
-bin/aes_gcm_128_test: bin/aes_gcm_128_test.o bin/aead_ossl.o bin/cipher.o bin/log.o bin/memzero.o bin/test_utils.o
+bin/chacha20_poly1305_test: bin/chacha20_poly1305_test.o bin/aead_ossl.o bin/cipher.o bin/log.o bin/memzero.o bin/test_utils.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
-bin/aes_gcm_128_test.o: tests/aes_gcm_128_test.c
+bin/chacha20_poly1305_test.o: tests/chacha20_poly1305_test.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/aead_ossl.o: crypto/aead_ossl.c
@@ -27,4 +27,4 @@ bin/test_utils.o: tests/test_utils.c
 
 .PHONY: clean
 clean:
-	rm -f bin/*.o bin/aes_gcm_128_test
+	rm -f bin/*.o bin/chacha20_poly1305_test

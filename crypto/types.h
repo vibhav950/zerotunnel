@@ -5,7 +5,7 @@
 #include "hmac.h"
 #include "kex.h"
 
-extern const cipher_intf_t aes_gcm_intf;
+extern const cipher_intf_t aead_intf;
 
 extern const hmac_intf_t hmac_intf;
 
