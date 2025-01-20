@@ -4,7 +4,7 @@ LIBS := -lcrypto -lssl
 
 all: bin/kex_ecc_test
 
-bin/kex_ecc_test: bin/kex_ecc_test.o bin/kex_ecc_ossl.o bin/kex.o bin/log.o bin/memzero.o bin/test_utils.o
+bin/kex_ecc_test: bin/kex_ecc_test.o bin/kex_ecc_ossl.o bin/kex.o bin/log.o bin/memzero.o bin/test_utils.o bin/mem.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
 bin/kex_ecc_test.o: tests/kex_ecc_test.c
@@ -20,6 +20,9 @@ bin/log.o: common/log.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/memzero.o: common/memzero.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/mem.o: common/mem.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/test_utils.o: tests/test_utils.c

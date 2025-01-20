@@ -4,7 +4,7 @@ LIBS := -lcrypto -lssl
 
 all: bin/hmac_test
 
-bin/hmac_test: bin/hmac_test.o bin/hmac_ossl.o bin/hmac.o bin/log.o bin/memzero.o bin/test_utils.o
+bin/hmac_test: bin/hmac_test.o bin/hmac_ossl.o bin/hmac.o bin/log.o bin/memzero.o bin/test_utils.o bin/mem.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
 bin/hmac_test.o: tests/hmac_test.c
@@ -20,6 +20,9 @@ bin/log.o: common/log.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/memzero.o: common/memzero.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/mem.o: common/mem.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/test_utils.o: tests/test_utils.c

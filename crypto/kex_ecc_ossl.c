@@ -52,11 +52,11 @@ error_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
     return ERR_BAD_ARGS;
   }
 
-  if (!(*kex = (kex_t *)calloc(1, sizeof(kex_t))))
+  if (!(*kex = (kex_t *)xcalloc(1, sizeof(kex_t))))
     return ERR_MEM_FAIL;
 
-  if (!(ossl_ctx = (kex_ossl_ctx *)calloc(1, sizeof(kex_ossl_ctx)))) {
-    free(*kex);
+  if (!(ossl_ctx = (kex_ossl_ctx *)xcalloc(1, sizeof(kex_ossl_ctx)))) {
+    xfree(*kex);
     *kex = NULL;
     return ERR_MEM_FAIL;
   }
@@ -92,11 +92,11 @@ error_t ossl_kex_ecc_dealloc(kex_t *kex) {
       EVP_PKEY_free(ctx->ec_params);
       /* Prevent state leaks */
       memzero(ctx, sizeof(kex_ossl_ctx));
-      free(ctx);
+      xfree(ctx);
     }
   }
   memzero(kex, sizeof(kex_t));
-  free(kex);
+  xfree(kex);
   kex = NULL;
 
   return ERR_SUCCESS;
@@ -162,7 +162,7 @@ error_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
       ossl_ctx->ec_key, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &pubkey_len));
 
   /* Allocate the buffer for the public key */
-  if (!(pubkey = calloc(1, pubkey_len))) {
+  if (!(pubkey = xcalloc(1, pubkey_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -179,7 +179,7 @@ error_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
       ossl_ctx->ec_key, OSSL_PKEY_PARAM_GROUP_NAME, NULL, 0, &curvename_len));
 
   ++curvename_len; /* Null terminator */
-  if (!(curvename = calloc(1, curvename_len))) {
+  if (!(curvename = xcalloc(1, curvename_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -201,7 +201,7 @@ error_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
   OSSL_CHECK(EVP_DigestSignUpdate(md_ctx, pubkey, pubkey_len));
   OSSL_CHECK(EVP_DigestSignFinal(md_ctx, NULL, &mac_len));
 
-  if (!(mac = calloc(1, mac_len))) {
+  if (!(mac = xcalloc(1, mac_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -215,7 +215,7 @@ error_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
   OSSL_CHECK(EVP_DigestSignUpdate(md_ctx, mac, mac_len));
   OSSL_CHECK(EVP_DigestSignFinal(md_ctx, NULL, &peer_data->sig_len));
 
-  if (!(peer_data->sig = (uint8_t *)calloc(1, peer_data->sig_len))) {
+  if (!(peer_data->sig = (uint8_t *)xcalloc(1, peer_data->sig_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -242,10 +242,10 @@ void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
   memzero(peer_data->ec_curvename, peer_data->ec_curvename_len);
   memzero(peer_data->mac, peer_data->mac_len);
   memzero(peer_data->sig, peer_data->sig_len);
-  free(peer_data->ec_pub);
-  free(peer_data->ec_curvename);
-  free(peer_data->mac);
-  free(peer_data->sig);
+  xfree(peer_data->ec_pub);
+  xfree(peer_data->ec_curvename);
+  xfree(peer_data->mac);
+  xfree(peer_data->sig);
 }
 
 /**
@@ -309,7 +309,7 @@ error_t ossl_kex_ecc_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
 
   OSSL_CHECK(EVP_DigestSignFinal(md_ctx, NULL, &mac_len));
 
-  if (!(mac = calloc(1, mac_len))) {
+  if (!(mac = xcalloc(1, mac_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -344,7 +344,7 @@ error_t ossl_kex_ecc_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
   *shared_key_len = 0;
   OSSL_CHECK(EVP_PKEY_derive(derive_ctx, NULL, shared_key_len));
 
-  if (!(*shared_key = calloc(1, *shared_key_len))) {
+  if (!(*shared_key = xcalloc(1, *shared_key_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -358,7 +358,7 @@ cleanup:
   EVP_PKEY_free(mac_key);
   EVP_PKEY_CTX_free(derive_ctx);
   memzero(mac, mac_len);
-  free(mac);
+  xfree(mac);
   EVP_MD_CTX_free(md_ctx);
   return ret;
 }
