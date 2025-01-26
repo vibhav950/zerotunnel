@@ -69,15 +69,13 @@ void *xcalloc(size_t nmemb, size_t size) {
 }
 
 void xfree(void *ptr) {
-  size_t size;
-
   if (!ptr)
     return;
 
   assert(malloc_usable_size(ptr) > 0);
 
 #ifdef __SECURE_LARGE_ALLOC
-  size = malloc_usable_size(ptr);
+  size_t size = malloc_usable_size(ptr);
   if (malloc_usable_size(ptr) >= __LARGE_ALLOC_SIZE) {
     if (munlock(ptr, size)) {
       /**
@@ -96,8 +94,6 @@ void xfree(void *ptr) {
 }
 
 void *xrealloc(void *ptr, size_t size) {
-  void *new_ptr;
-
   assert(size > 0);
 
   memzero(ptr, size);
@@ -163,14 +159,15 @@ unsigned int xmemcmp(const void *a, const void *b, size_t len) {
   return res;
 }
 
-/* Returns zero if the strings are equal, otherwise non-zero.
-
-  Note: To avoid leaking the length of a secret string, use x
-  as the private string and str as the provided string.
-
-  Thanks to John's blog:
-  https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
-*/
+/**
+ * Returns zero if the strings are equal, otherwise non-zero.
+ *
+ * Note: To avoid leaking the length of a secret string, use x
+ * as the private string and str as the provided string.
+ *
+ * Thanks to John's blog:
+ * https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
+ */
 unsigned int xstrcmp(const char *str, const char *x) {
   unsigned int res = 0;
   volatile size_t i, j, k;
@@ -199,10 +196,10 @@ void *xmemdup(const void *m, size_t n) {
   void *p = xmalloc(n);
   if (!p)
     return NULL;
-  return (void *)xmemcpy(p, m, n);
+  return (void *)xmemcpy(p, (void *)m, n);
 }
 
-void *xstrdup(const char *s) { return s ? xmemdup(s, strlen(s) + 1) : NULL; }
+char *xstrdup(const char *s) { return s ? xmemdup(s, strlen(s) + 1) : NULL; }
 
 char *xstrmemdup(const void *m, size_t n) {
   if (!m || !n)
@@ -211,7 +208,7 @@ char *xstrmemdup(const void *m, size_t n) {
   void *p1 = xmalloc(n + 1);
   if (!p1)
     return NULL;
-  char *p2 = (char *)xmemcpy(p1, m, n);
+  char *p2 = (char *)xmemcpy(p1, (void *)m, n);
   p2[n] = 0;
   return p2;
 }

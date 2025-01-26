@@ -49,11 +49,77 @@
 
 #endif
 
-#include "endianness.h"
-
 #include <stdbool.h>
 #include <sys/types.h>
 #include <time.h>
+
+#include "endianness.h"
+
+#define BSWAP16(_x) bswap16(_x)
+#define BSWAP32(_x) bswap32(_x)
+#define BSWAP64(_x) bswap64(_x)
+
+#if defined(_WIN32)
+#include <intrin.h>
+#pragma intrinsic(_rotl8, _rotl16, _rotr8, _rotr16)
+#else
+static inline ATTRIBUTE_ALWAYS_INLINE uint8_t _rotl8(uint8_t x, int s) {
+  return (x << s) | (x >> (8 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint16_t _rotl16(uint16_t x, int s) {
+  return (x << s) | (x >> (16 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint32_t _rotl(uint32_t x, int s) {
+  return (x << s) | (x >> (32 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotl64(uint64_t x, int s) {
+  return (x << s) | (x >> (64 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint8_t _rotr8(uint8_t x, int s) {
+  return (x >> s) | (x << (8 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint16_t _rotr16(uint16_t x, int s) {
+  return (x >> s) | (x << (16 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint32_t _rotr(uint32_t x, int s) {
+  return (x >> s) | (x << (32 - s));
+}
+
+static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
+  return (x >> s) | (x << (64 - s));
+}
+#endif
+
+#define ROTL8(_x, _s) _rotl8((_x), (_s))
+#define ROTL16(_x, _s) _rotl16((_x), (_s))
+#define ROTL32(_x, _s) _rotl((_x), (_s))
+#define ROTL64(_x, _s) _rotl64((_x), (_s))
+
+#define ROTR8(_x, _s) _rotr8((_x), (_s))
+#define ROTR16(_x, _s) _rotr16((_x), (_s))
+#define ROTR32(_x, _s) _rotr((_x), (_s))
+#define ROTR64(_x, _s) _rotr64((_x), (_s))
+
+#ifdef MAX
+#undef MAX
+#endif
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+#ifdef MIN
+#undef MIN
+#endif
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
+#ifdef COUNTF
+#undef COUNTF
+#endif
+#define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 typedef enum {
   ERR_SUCCESS,
@@ -64,6 +130,7 @@ typedef enum {
   ERR_MEM_FAIL,
   ERR_AUTH_FAIL,
   ERR_BUFFER_TOO_SMALL,
+  ERR_AGAIN,
   ERR_NOT_SUPPORTED,
   ERR_INTERNAL,
   ERR_TIMEOUT,
@@ -118,6 +185,13 @@ ATTRIBUTE_NORETURN static inline void __FKILL(void) {
 }
 
 /**
+ * System information helpers
+ */
+
+/** Get the number of CPU cores. */
+int cpu_get_processor_count(void);
+
+/**
  * Memory/string routines
  */
 
@@ -136,7 +210,8 @@ void *xmalloc(size_t size);
  *
  * @param nmemb The number of elements in the array.
  * @param size The size of each element.
- * @return A pointer to the allocated memory block, or NULL if the allocation fails.
+ * @return A pointer to the allocated memory block, or NULL if the allocation
+ * fails.
  */
 void *xcalloc(size_t nmemb, size_t size);
 
@@ -152,12 +227,14 @@ void xfree(void *ptr);
  *
  * @param ptr A pointer to the memory block to reallocate.
  * @param size The new size of the memory block.
- * @return A pointer to the reallocated memory block, or NULL if the reallocation fails.
+ * @return A pointer to the reallocated memory block, or NULL if the
+ * reallocation fails.
  */
 void *xrealloc(void *ptr, size_t size);
 
 /**
- * Sets the first len bytes of the memory area pointed to by mem to the specified value.
+ * Sets the first len bytes of the memory area pointed to by mem to the
+ * specified value.
  *
  * @param mem A pointer to the memory area.
  * @param ch The value to set.
@@ -186,7 +263,8 @@ volatile void *xmemzero(volatile void *mem, size_t len);
 volatile void *xmemcpy(volatile void *dst, volatile void *src, size_t len);
 
 /**
- * Copies len bytes from the memory area src to the memory area dst, even if the memory areas overlap.
+ * Copies len bytes from the memory area src to the memory area dst, even if the
+ * memory areas overlap.
  *
  * @param dst A pointer to the destination memory area.
  * @param src A pointer to the source memory area.
@@ -219,7 +297,8 @@ unsigned int xstrcmp(const char *str, const char *x);
  *
  * @param m A pointer to the memory block.
  * @param n The size of the memory block.
- * @return A pointer to the duplicated memory block, or NULL if the duplication fails.
+ * @return A pointer to the duplicated memory block, or NULL if the duplication
+ * fails.
  *
  * @note The returned pointer must be xfree()'d when no longer needed.
  */
