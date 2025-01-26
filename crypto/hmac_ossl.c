@@ -113,7 +113,7 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
 /**
  *
  */
-static error_t ossl_hmac_free(hmac_t *h) {
+static error_t ossl_hmac_dealloc(hmac_t *h) {
   PRINTDEBUG("");
 
   if (HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC)) {
@@ -256,7 +256,7 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
 
 const hmac_intf_t hmac_intf = {
     .alloc = ossl_hmac_alloc,
-    .dealloc = ossl_hmac_free,
+    .dealloc = ossl_hmac_dealloc,
     .init = ossl_hmac_init,
     .update = ossl_hmac_update,
     .compute = ossl_hmac_compute,

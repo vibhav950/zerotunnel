@@ -56,8 +56,6 @@ typedef struct kex_peer_share_st {
   size_t ec_curvename_len;
   void *mac;
   size_t mac_len;
-  void *sig;
-  size_t sig_len;
 } kex_peer_share_t;
 
 typedef struct kex_st {

@@ -207,20 +207,6 @@ error_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
   }
   OSSL_CHECK(EVP_DigestSignFinal(md_ctx, mac, &mac_len));
 
-  /**
-   *  Sign the HMAC with the private key
-   */
-  OSSL_CHECK(EVP_MD_CTX_reset(md_ctx));
-  OSSL_CHECK(EVP_DigestSignInit(md_ctx, NULL, md, NULL, ossl_ctx->ec_key));
-  OSSL_CHECK(EVP_DigestSignUpdate(md_ctx, mac, mac_len));
-  OSSL_CHECK(EVP_DigestSignFinal(md_ctx, NULL, &peer_data->sig_len));
-
-  if (!(peer_data->sig = (uint8_t *)xcalloc(1, peer_data->sig_len))) {
-    ret = ERR_MEM_FAIL;
-    goto cleanup;
-  }
-  OSSL_CHECK(EVP_DigestSignFinal(md_ctx, peer_data->sig, &peer_data->sig_len));
-
   peer_data->ec_pub = pubkey;
   peer_data->ec_pub_len = pubkey_len;
   peer_data->ec_curvename = curvename;
@@ -241,11 +227,9 @@ void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
   memzero(peer_data->ec_pub, peer_data->ec_pub_len);
   memzero(peer_data->ec_curvename, peer_data->ec_curvename_len);
   memzero(peer_data->mac, peer_data->mac_len);
-  memzero(peer_data->sig, peer_data->sig_len);
   xfree(peer_data->ec_pub);
   xfree(peer_data->ec_curvename);
   xfree(peer_data->mac);
-  xfree(peer_data->sig);
 }
 
 /**
@@ -318,17 +302,6 @@ error_t ossl_kex_ecc_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
   /* Compare values */
   if (mac_len != peer_data->mac_len ||
       CRYPTO_memcmp(mac, peer_data->mac, mac_len)) {
-    ret = ERR_AUTH_FAIL;
-    goto cleanup;
-  }
-
-  OSSL_CHECK(EVP_MD_CTX_reset(md_ctx));
-  OSSL_CHECK(EVP_DigestVerifyInit(md_ctx, NULL, md, NULL, peer_key));
-  OSSL_CHECK(
-      EVP_DigestVerifyUpdate(md_ctx, peer_data->mac, peer_data->mac_len));
-
-  /* Verify the signature */
-  if (!EVP_DigestVerifyFinal(md_ctx, peer_data->sig, peer_data->sig_len)) {
     ret = ERR_AUTH_FAIL;
     goto cleanup;
   }

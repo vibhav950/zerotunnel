@@ -66,6 +66,8 @@ typedef struct cipher_st {
   const cipher_intf_t *intf;
   void *ctx;
   size_t key_len;
+  size_t tag_len;
+  cipher_operation_t oper;
   cipher_alg_t alg;
   cipher_flag_t flags;
 } cipher_t;

@@ -82,12 +82,11 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
     return ERR_INTERNAL;
   }
   aead_ctx->ossl_evp = evp;
-  aead_ctx->key_len = key_len;
-  aead_ctx->tag_len = tag_len;
 
   (*c)->intf = &aead_intf;
   (*c)->ctx = aead_ctx;
   (*c)->key_len = key_len;
+  (*c)->tag_len = tag_len;
   (*c)->alg = alg;
   CIPHER_FLAG_SET(*c, CIPHER_FLAG_ALLOC);
 
@@ -177,7 +176,7 @@ static error_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
   }
 
   CIPHER_FLAG_SET(c, CIPHER_FLAG_INIT);
-  CIPHER_OPERATION_SET(ctx, oper);
+  CIPHER_OPERATION_SET(c, oper);
 
   return ERR_SUCCESS;
 }
@@ -200,8 +199,8 @@ static error_t ossl_aead_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   ctx = c->ctx;
   alg = c->alg;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT) &&
-      !CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_DECRYPT)) {
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT) &&
+      !CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT)) {
     return ERR_BAD_ARGS;
   }
 
@@ -210,7 +209,7 @@ static error_t ossl_aead_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   else if (iv_len != AES_GCM_IV_LEN)
     return ERR_BAD_ARGS;
 
-  if (CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT)) {
+  if (CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT)) {
     if (EVP_EncryptInit_ex(ctx->ossl_ctx, NULL, NULL, NULL, iv) != 1)
       return ERR_INTERNAL;
   } else {
@@ -243,7 +242,7 @@ static error_t ossl_aead_set_aad(cipher_t *c, const uint8_t *aad,
   ctx = c->ctx;
 
   if (aad_len) {
-    if (CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT)) {
+    if (CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT)) {
       if (EVP_EncryptUpdate(ctx->ossl_ctx, NULL, &len, aad, aad_len) != 1)
         return ERR_INTERNAL;
     } else {
@@ -270,21 +269,25 @@ static error_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
 
   PRINTDEBUG("in_len=%zu", in_len);
 
-  if (!in || !out || !out_len)
-    return ERR_NULL_PTR;
-
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
 
-  ctx = c->ctx;
+  if (!out_len)
+    return ERR_NULL_PTR;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_ENCRYPT))
-    return ERR_BAD_ARGS;
-
-  if (*out_len < in_len + ctx->tag_len) {
-    *out_len = in_len + ctx->tag_len;
+  /* Allow querying the buffer size */
+  if (*out_len < in_len + c->tag_len) {
+    *out_len = in_len + c->tag_len;
     return ERR_BUFFER_TOO_SMALL;
   }
+
+  if (!in || !out)
+    return ERR_NULL_PTR;
+
+  ctx = c->ctx;
+
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT))
+    return ERR_BAD_ARGS;
 
   /* Encrypt the data */
   if (EVP_EncryptUpdate(ctx->ossl_ctx, out, &len, in, in_len) != 1)
@@ -297,11 +300,11 @@ static error_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
   *out_len += len;
 
   /* Extract the tag */
-  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_AEAD_GET_TAG, ctx->tag_len,
+  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_AEAD_GET_TAG, c->tag_len,
                           out + *out_len) != 1) {
     return ERR_INTERNAL;
   }
-  *out_len += ctx->tag_len;
+  *out_len += c->tag_len;
 
   return ERR_SUCCESS;
 }
@@ -324,14 +327,14 @@ static error_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
 
   ctx = c->ctx;
 
-  if (!CIPHER_OPERATION_GET(ctx, CIPHER_OPERATION_DECRYPT))
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT))
     return ERR_BAD_ARGS;
 
-  if (in_len < ctx->tag_len)
+  if (in_len < c->tag_len)
     return ERR_BAD_ARGS;
 
-  if (*out_len < in_len - ctx->tag_len) {
-    *out_len = in_len - ctx->tag_len;
+  if (*out_len < in_len - c->tag_len) {
+    *out_len = in_len - c->tag_len;
     return ERR_BUFFER_TOO_SMALL;
   }
 
@@ -340,16 +343,14 @@ static error_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
    *
    * Explicitly cast away the const of in
    */
-  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_AEAD_SET_TAG, ctx->tag_len,
-                          (void *)(ptrdiff_t)(in + (in_len - ctx->tag_len))) !=
+  if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_AEAD_SET_TAG, c->tag_len,
+                          (void *)(ptrdiff_t)(in + (in_len - c->tag_len))) !=
       1) {
     return ERR_INTERNAL;
   }
 
-  if (EVP_DecryptUpdate(ctx->ossl_ctx, out, &len, in, in_len - ctx->tag_len) !=
-      1) {
+  if (EVP_DecryptUpdate(ctx->ossl_ctx, out, &len, in, in_len - c->tag_len) != 1)
     return ERR_INTERNAL;
-  }
   *out_len = len;
 
   /* Check the tag */
