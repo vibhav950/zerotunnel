@@ -2,7 +2,6 @@
 #define __KEX_H__
 
 #include "common/defs.h"
-#include "hmac.h"
 
 typedef enum {
   KEX_FLAG_ALLOC = (1U << 0),
