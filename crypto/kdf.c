@@ -16,11 +16,11 @@ error_t kdf_intf_alloc(const kdf_intf_t *intf, kdf_t **kdf, kdf_alg_t alg) {
   return (intf)->alloc(kdf, alg);
 }
 
-error_t kdf_dealloc(kdf_t *kdf) {
+void kdf_dealloc(kdf_t *kdf) {
   if (!kdf || !kdf->intf)
-    return ERR_NULL_PTR;
+    return;
 
-  return ((kdf)->intf)->dealloc(kdf);
+  ((kdf)->intf)->dealloc(kdf);
 }
 
 error_t kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,

@@ -22,8 +22,8 @@
 #include <openssl/evp.h>
 
 typedef struct aead_ossl_ctx_st {
-  EVP_CIPHER_CTX *ossl_ctx;
   const EVP_CIPHER *ossl_evp;
+  EVP_CIPHER_CTX *ossl_ctx;
 } aead_ossl_ctx;
 
 #endif /* OPENSSL */

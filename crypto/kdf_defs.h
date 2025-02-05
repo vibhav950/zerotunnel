@@ -96,8 +96,8 @@
 #include <openssl/evp.h>
 
 typedef struct kdf_ossl_ctx_st {
+  const EVP_KDF *kdf;
   EVP_KDF_CTX *kctx;
-  EVP_KDF *kdf;
 } kdf_ossl_ctx;
 
 #endif /* OPENSSL */

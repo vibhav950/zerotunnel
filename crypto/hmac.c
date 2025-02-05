@@ -16,11 +16,11 @@ error_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
   return (intf)->alloc(h, key_len, out_len, alg);
 }
 
-error_t hmac_dealloc(hmac_t *h) {
+void hmac_dealloc(hmac_t *h) {
   if (!h || !h->intf)
-    return ERR_NULL_PTR;
+    return;
 
-  return ((h)->intf)->dealloc(h);
+  ((h)->intf)->dealloc(h);
 }
 
 error_t hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {

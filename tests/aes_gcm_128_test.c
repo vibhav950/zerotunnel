@@ -27,7 +27,7 @@ void test_aes_gcm_128_encr(const uint8_t *key, size_t key_len,
   ASSERT_EQ(buffer_len, pt_len + tag_len);
   ASSERT_MEMEQ(buffer, expected_ct, pt_len);
   ASSERT_MEMEQ(buffer + pt_len, tag, tag_len);
-  ASSERT(cipher_dealloc(p_aes_gcm_128) == ERR_SUCCESS);
+  cipher_dealloc(p_aes_gcm_128);
 }
 
 void test_aes_gcm_128_decr(const uint8_t *key, size_t key_len,
@@ -56,7 +56,7 @@ void test_aes_gcm_128_decr(const uint8_t *key, size_t key_len,
     ASSERT(cipher_decrypt(p_aes_gcm_128, data, data_len, buffer, &buffer_len) ==
            ERR_AUTH_FAIL);
   }
-  ASSERT(cipher_dealloc(p_aes_gcm_128) == ERR_SUCCESS);
+  cipher_dealloc(p_aes_gcm_128);
 }
 
 int main() {

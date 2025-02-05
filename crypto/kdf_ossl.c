@@ -76,7 +76,7 @@ static error_t kdf_ossl_alloc(kdf_t **kdf, kdf_alg_t alg) {
 }
 
 /**  */
-static error_t ossl_kdf_dealloc(kdf_t *kdf) {
+static void ossl_kdf_dealloc(kdf_t *kdf) {
   PRINTDEBUG("");
 
   if (KDF_FLAG_GET(kdf, KDF_FLAG_ALLOC)) {
@@ -97,8 +97,6 @@ static error_t ossl_kdf_dealloc(kdf_t *kdf) {
   xfree(kdf->salt);
   xfree(kdf);
   kdf = NULL;
-
-  return ERR_SUCCESS;
 }
 
 #include <assert.h>
@@ -205,6 +203,7 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
 static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
                              size_t password_len, const uint8_t *salt,
                              size_t salt_len, const uint8_t ctr128[16]) {
+  kdf_ossl_ctx *kdf_ctx;
   uint8_t *pw, *slt;
   uint32_t *ctr32;
 
@@ -220,6 +219,8 @@ static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
 
   if (!KDF_FLAG_GET(kdf, KDF_FLAG_ALLOC))
     return ERR_NOT_ALLOC;
+
+  kdf_ctx = kdf->ctx;
 
   if (!(pw = (uint8_t *)xmemdup(password, password_len)))
     return ERR_MEM_FAIL;
@@ -238,6 +239,8 @@ static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
   KDF_FLAG_SET(kdf, KDF_FLAG_INIT);
   KDF_FLAG_UNSET(kdf, KDF_FLAG_NEED_REINIT);
   kdf->count = 0; /* Reset this re-initialization counter */
+
+  EVP_KDF_CTX_reset(kdf_ctx->kctx);
 
   return ERR_SUCCESS;
 }

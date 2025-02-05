@@ -17,11 +17,11 @@ error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
   return (intf)->alloc(c, key_len, tag_len, alg);
 }
 
-error_t cipher_dealloc(cipher_t *c) {
+void cipher_dealloc(cipher_t *c) {
   if (!c || !c->intf)
-    return ERR_NULL_PTR;
+    return;
 
-  return ((c)->intf)->dealloc(c);
+  ((c)->intf)->dealloc(c);
 }
 
 error_t cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,

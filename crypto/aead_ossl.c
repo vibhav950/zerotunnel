@@ -96,7 +96,7 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
 /**
  *
  */
-static error_t ossl_aead_dealloc(cipher_t *c) {
+static void ossl_aead_dealloc(cipher_t *c) {
   PRINTDEBUG("");
 
   if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
@@ -112,8 +112,6 @@ static error_t ossl_aead_dealloc(cipher_t *c) {
   memzero(c, sizeof(cipher_t));
   xfree(c);
   c = NULL;
-
-  return ERR_SUCCESS;
 }
 
 /**
@@ -153,8 +151,7 @@ static error_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
   if (oper != CIPHER_OPERATION_ENCRYPT && oper != CIPHER_OPERATION_DECRYPT)
     return ERR_BAD_ARGS;
 
-  if (EVP_CIPHER_CTX_reset(ctx->ossl_ctx) != 1)
-    return ERR_INTERNAL;
+  EVP_CIPHER_CTX_reset(ctx->ossl_ctx);
 
   if (oper == CIPHER_OPERATION_ENCRYPT) {
     if (EVP_EncryptInit_ex(ctx->ossl_ctx, ctx->ossl_evp, NULL, key, NULL) != 1)

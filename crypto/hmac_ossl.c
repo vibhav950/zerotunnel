@@ -113,7 +113,7 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
 /**
  *
  */
-static error_t ossl_hmac_dealloc(hmac_t *h) {
+static void ossl_hmac_dealloc(hmac_t *h) {
   PRINTDEBUG("");
 
   if (HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC)) {
@@ -129,8 +129,6 @@ static error_t ossl_hmac_dealloc(hmac_t *h) {
   memzero(h, sizeof(hmac_t));
   xfree(h);
   h = NULL;
-
-  return ERR_SUCCESS;
 }
 
 /**
@@ -172,6 +170,8 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   mac_key = EVP_PKEY_new_mac_key(EVP_PKEY_HMAC, NULL, key, key_len);
   if (!mac_key)
     return ERR_INTERNAL;
+
+  EVP_MD_CTX_reset(ctx->md_ctx);
 
   if (EVP_DigestSignInit(ctx->md_ctx, NULL, ctx->md, NULL, mac_key) != 1) {
     EVP_PKEY_free(mac_key);

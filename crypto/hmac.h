@@ -29,7 +29,7 @@ typedef struct hmac_st *hmac_ptr_t;
 typedef error_t (*hmac_alloc_func_t)(hmac_ptr_t *h, size_t key_len,
                                      size_t out_len, hmac_alg_t alg);
 
-typedef error_t (*hmac_free_func_t)(hmac_ptr_t ctx);
+typedef void (*hmac_dealloc_func_t)(hmac_ptr_t ctx);
 
 typedef error_t (*hmac_init_func_t)(hmac_ptr_t h, const uint8_t *key,
                                     size_t key_len);
@@ -43,7 +43,7 @@ typedef error_t (*hmac_compute_func_t)(hmac_ptr_t h, const uint8_t *msg,
 
 typedef struct hmac_intf_st {
   hmac_alloc_func_t alloc;
-  hmac_free_func_t dealloc;
+  hmac_dealloc_func_t dealloc;
   hmac_init_func_t init;
   hmac_update_func_t update;
   hmac_compute_func_t compute;
@@ -66,7 +66,7 @@ int hmac_flag_get(hmac_t *h, hmac_flag_t flag);
 error_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
                         size_t out_len, hmac_alg_t alg);
 
-error_t hmac_dealloc(hmac_t *h);
+void hmac_dealloc(hmac_t *h);
 
 error_t hmac_init(hmac_t *h, const uint8_t *key, size_t key_len);
 

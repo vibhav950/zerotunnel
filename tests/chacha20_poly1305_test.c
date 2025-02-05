@@ -50,7 +50,7 @@ int main() {
   ASSERT(cipher_encrypt(p_chacha20_poly1305, pt, sizeof(pt), ct, &out_len) ==
          ERR_SUCCESS);
 
-  ASSERT(cipher_dealloc(p_chacha20_poly1305) == ERR_SUCCESS);
+  cipher_dealloc(p_chacha20_poly1305);
 
   /**
    * Decrypt the data we just encrypted
@@ -75,7 +75,7 @@ int main() {
 
   ASSERT_MEMEQ(pt, buf, 114);
 
-  ASSERT(cipher_dealloc(p_chacha20_poly1305) == ERR_SUCCESS);
+  cipher_dealloc(p_chacha20_poly1305);
 
   return 0;
 }

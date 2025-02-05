@@ -19,7 +19,7 @@ void test_hmac(hmac_alg_t alg, const uint8_t *hmac_key, const size_t key_len,
   ASSERT(hmac_compute(p_hmac, NULL, 0, buffer, hmac_expected_len) ==
          ERR_SUCCESS);
   ASSERT_MEMEQ(buffer, hmac_expected, hmac_expected_len);
-  ASSERT(hmac_dealloc(p_hmac) == ERR_SUCCESS);
+  hmac_dealloc(p_hmac);
 }
 
 int main() {

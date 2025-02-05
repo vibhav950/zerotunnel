@@ -32,7 +32,7 @@ typedef struct cipher_st *cipher_ptr_t;
 typedef error_t (*cipher_alloc_func_t)(cipher_ptr_t *c, size_t key_len,
                                        size_t tag_len, cipher_alg_t alg);
 
-typedef error_t (*cipher_dealloc_func_t)(cipher_ptr_t c);
+typedef void (*cipher_dealloc_func_t)(cipher_ptr_t c);
 
 typedef error_t (*cipher_init_func_t)(cipher_ptr_t c, const uint8_t *key,
                                       size_t key_len, cipher_operation_t oper);
@@ -79,7 +79,7 @@ int cipher_flag_get(cipher_t *c, cipher_flag_t flag);
 error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
                           size_t key_len, size_t tag_len, cipher_alg_t alg);
 
-error_t cipher_dealloc(cipher_t *c);
+void cipher_dealloc(cipher_t *c);
 
 error_t cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
                     cipher_operation_t oper);
