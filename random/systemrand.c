@@ -94,7 +94,6 @@ fallback:
   return sys_rand_bytes((uint8_t *)buf, bytes4 * 4);
 }
 
-#if defined(UINT64_MAX)
 /**
  * For a request where the size is a multiple of 8 bytes, it is advised to use
  * this function over sys_rand_bytes() if the underlying architecture is x86.
@@ -114,7 +113,6 @@ int sys_rand_8bytes(uint64_t *buf, size_t bytes8) {
 fallback:
   return sys_rand_bytes((uint8_t *)buf, bytes8 * 8);
 }
-#endif
 
 int rand_gen_u8(uint8_t *rand) {
 #if defined(HAVE_ARC4RANDOM)
@@ -143,9 +141,7 @@ int rand_gen_u32(uint32_t *rand) {
 #endif
 }
 
-#if defined(UINT64_MAX)
 int rand_gen_u64(uint64_t *rand) { return sys_rand_8bytes(rand, 1); }
-#endif
 
 const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
                                       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

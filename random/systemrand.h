@@ -9,9 +9,7 @@ int sys_rand_bytes(uint8_t *buf, size_t bytes);
 
 int sys_rand_4bytes(uint32_t *buf, size_t bytes4);
 
-#if defined(UINT64_MAX)
 int sys_rand_8bytes(uint64_t *buf, size_t bytes8);
-#endif
 
 /**
  * Place an 8-bit random value into \p rand.
@@ -34,14 +32,12 @@ int rand_gen_u16(uint16_t *rand);
  */
 int rand_gen_u32(uint32_t *rand);
 
-#if defined(UINT64_MAX)
 /**
  * Place an 64-bit random value into \p rand.
  *
  * Returns 0 on success, -1 on failure.
  */
 int rand_gen_u64(uint64_t *rand);
-#endif
 
 int rand_gen_charset(char *rstr, size_t rstr_len, const char *charset,
                      size_t charset_len);
