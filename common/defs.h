@@ -55,9 +55,9 @@
 
 #include "endianness.h"
 
-#define BSWAP16(_x) bswap16(_x)
-#define BSWAP32(_x) bswap32(_x)
-#define BSWAP64(_x) bswap64(_x)
+#define BSWAP16(x) bswap16(x)
+#define BSWAP32(x) bswap32(x)
+#define BSWAP64(x) bswap64(x)
 
 #if defined(_WIN32)
 #include <intrin.h>
@@ -94,17 +94,23 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint32_t _rotr(uint32_t x, int s) {
 static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
   return (x >> s) | (x << (64 - s));
 }
-#endif
+#endif /* !defined _WIN32 */
 
-#define ROTL8(_x, _s) _rotl8((_x), (_s))
-#define ROTL16(_x, _s) _rotl16((_x), (_s))
-#define ROTL32(_x, _s) _rotl((_x), (_s))
-#define ROTL64(_x, _s) _rotl64((_x), (_s))
+#define ROTL8(x, s) _rotl8((x), (s))
+#define ROTL16(x, s) _rotl16((x), (s))
+#define ROTL32(x, s) _rotl((x), (s))
+#define ROTL64(x, s) _rotl64((x), (s))
 
-#define ROTR8(_x, _s) _rotr8((_x), (_s))
-#define ROTR16(_x, _s) _rotr16((_x), (_s))
-#define ROTR32(_x, _s) _rotr((_x), (_s))
-#define ROTR64(_x, _s) _rotr64((_x), (_s))
+#define ROTR8(x, s) _rotr8((x), (s))
+#define ROTR16(x, s) _rotr16((x), (s))
+#define ROTR32(x, s) _rotr((x), (s))
+#define ROTR64(x, s) _rotr64((x), (s))
+
+#define PTRV(ptr) ((void *)(ptr))
+#define PTR8(ptr) ((uint8_t *)(ptr))
+#define PTR16(ptr) ((uint16_t *)(ptr))
+#define PTR32(ptr) ((uint32_t *)(ptr))
+#define PTR64(ptr) ((uint64_t *)(ptr))
 
 #ifdef MAX
 #undef MAX
