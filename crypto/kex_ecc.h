@@ -11,6 +11,7 @@
 typedef struct kex_ossl_ctx_st {
     EVP_PKEY *ec_params;
     EVP_PKEY *ec_key;
+    int nid;
 } kex_ossl_ctx;
 
 #endif /* OPENSSL */
