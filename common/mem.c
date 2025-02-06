@@ -154,7 +154,7 @@ unsigned int xmemcmp(const void *a, const void *b, size_t len) {
 
   pa = (const char *)a;
   pb = (const char *)b;
-  for (; len; res |= pa[len] ^ pb[len], len--)
+  for (; len; --len, res |= pa[len] ^ pb[len])
     ;
   return res;
 }

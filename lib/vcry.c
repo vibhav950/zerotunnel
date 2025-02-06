@@ -810,9 +810,12 @@ clean1:
  *
  * NOTE: This function is called by the initiator of the handshake process.
  */
-int vcry_initiator_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
+int vcry_initiator_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
                                    const char *id_a, const char *id_b) {
   const char *id1, *id2;
+
+  if (!verify_msg || !verify_msg_len)
+    return -1;
 
   if (VCRY_FLAG_GET(_vcry_fl_all_set) != _vcry_fl_all_set)
     return -1;
@@ -836,23 +839,30 @@ int vcry_initiator_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
     id2 = id_a;
   }
 
-  if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS)
+  if ((*verify_msg = xmalloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return -1;
+
+  if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS) {
+    xfree(*verify_msg);
+    return -1;
+  }
 
   if ((hmac_update(__vctx.mac, id1, strlen(id1)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, id2, strlen(id2)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                    strlen(VCRY_VERIFY_CONST0)) != ERR_SUCCESS)) {
+    xfree(*verify_msg);
     return -1;
   }
 
-  if (hmac_compute(__vctx.mac, NULL, 0, verify_msg, VCRY_VERIFY_MSG_LEN) !=
+  if (hmac_compute(__vctx.mac, NULL, 0, *verify_msg, VCRY_VERIFY_MSG_LEN) !=
       ERR_SUCCESS) {
+    xfree(*verify_msg);
     return -1;
   }
 
+  *verify_msg_len = VCRY_VERIFY_MSG_LEN;
   VCRY_STATE_CHANGE(_vcry_hs_verify_complete);
-
   return 0;
 }
 
@@ -866,9 +876,12 @@ int vcry_initiator_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
  *
  * NOTE: This function is called by the responder of the handshake process.
  */
-int vcry_responder_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
+int vcry_responder_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
                                    const char *id_a, const char *id_b) {
   const char *id1, *id2;
+
+  if (!verify_msg || !verify_msg_len)
+    return -1;
 
   if (VCRY_FLAG_GET(_vcry_fl_all_set) != _vcry_fl_all_set)
     return -1;
@@ -892,21 +905,29 @@ int vcry_responder_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
     id2 = id_a;
   }
 
-  if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS)
+  if ((*verify_msg = xmalloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return -1;
+
+  if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS) {
+    xfree(*verify_msg);
+    return -1;
+  }
 
   if ((hmac_update(__vctx.mac, id1, strlen(id1)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, id2, strlen(id2)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                    strlen(VCRY_VERIFY_CONST1)) != ERR_SUCCESS)) {
+    xfree(*verify_msg);
     return -1;
   }
 
-  if (hmac_compute(__vctx.mac, NULL, 0, verify_msg, VCRY_VERIFY_MSG_LEN) !=
+  if (hmac_compute(__vctx.mac, NULL, 0, *verify_msg, VCRY_VERIFY_MSG_LEN) !=
       ERR_SUCCESS) {
+    xfree(*verify_msg);
     return -1;
   }
 
+  *verify_msg_len = VCRY_VERIFY_MSG_LEN;
   VCRY_STATE_CHANGE(_vcry_hs_verify_complete);
 
   return 0;
@@ -921,8 +942,9 @@ int vcry_responder_verify_initiate(uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
  *
  * Returns 0 on successful verification, -1 on failure.
  */
-int vcry_initiator_verify_complete(const uint8_t *verify_msg, const char *id_a,
-                                   const char *id_b) {
+int vcry_initiator_verify_complete(
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
+    const char *id_b) {
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
   const char *id1, *id2;
 
@@ -963,7 +985,7 @@ int vcry_initiator_verify_complete(const uint8_t *verify_msg, const char *id_a,
     return -1;
   }
 
-  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN) != 0)
+  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
     return -1;
 
   VCRY_STATE_CHANGE(_vcry_hs_done);
@@ -980,8 +1002,9 @@ int vcry_initiator_verify_complete(const uint8_t *verify_msg, const char *id_a,
  *
  * Returns 0 on successful verification, -1 on failure.
  */
-int vcry_responder_verify_complete(const uint8_t *verify_msg, const char *id_a,
-                                   const char *id_b) {
+int vcry_responder_verify_complete(
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
+    const char *id_b) {
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
   const char *id1, *id2;
 
@@ -1022,7 +1045,7 @@ int vcry_responder_verify_complete(const uint8_t *verify_msg, const char *id_a,
     return -1;
   }
 
-  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN) != 0)
+  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
     return -1;
 
   VCRY_STATE_CHANGE(_vcry_hs_done);

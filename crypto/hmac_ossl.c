@@ -222,6 +222,7 @@ static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
   }
 
   /* Compute the digest */
+  len = sizeof(md_value);
   if (EVP_DigestSignFinal(ctx->md_ctx, md_value, &len) != 1)
     return ERR_INTERNAL;
 
