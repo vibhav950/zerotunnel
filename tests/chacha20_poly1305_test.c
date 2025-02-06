@@ -36,7 +36,7 @@ int main() {
   ASSERT(cipher_intf_alloc(&aead_intf, &p_chacha20_poly1305,
                            CHACHA20_POLY1305_KEY_LEN,
                            CHACHA20_POLY1305_AUTH_TAG_LEN_LONG,
-                           CHACHA20_POLY1305) == ERR_SUCCESS);
+                           CIPHER_CHACHA20_POLY1305) == ERR_SUCCESS);
 
   ASSERT(cipher_init(p_chacha20_poly1305, key, CHACHA20_POLY1305_KEY_LEN,
                      CIPHER_OPERATION_ENCRYPT) == ERR_SUCCESS);
@@ -59,7 +59,7 @@ int main() {
   ASSERT(cipher_intf_alloc(&aead_intf, &p_chacha20_poly1305,
                            CHACHA20_POLY1305_KEY_LEN,
                            CHACHA20_POLY1305_AUTH_TAG_LEN_LONG,
-                           CHACHA20_POLY1305) == ERR_SUCCESS);
+                           CIPHER_CHACHA20_POLY1305) == ERR_SUCCESS);
 
   ASSERT(cipher_init(p_chacha20_poly1305, key, CHACHA20_POLY1305_KEY_LEN,
                      CIPHER_OPERATION_DECRYPT) == ERR_SUCCESS);

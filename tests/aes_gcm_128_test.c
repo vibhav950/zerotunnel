@@ -13,11 +13,10 @@ void test_aes_gcm_128_encr(const uint8_t *key, size_t key_len,
                            const uint8_t *expected_ct, const uint8_t *tag,
                            size_t tag_len) {
   size_t buffer_len = sizeof(buffer);
-  cipher_t aes_gcm_128;
-  cipher_t *p_aes_gcm_128 = &aes_gcm_128;
+  cipher_t *p_aes_gcm_128 = NULL;
 
   ASSERT(cipher_intf_alloc(&aead_intf, &p_aes_gcm_128, key_len, tag_len,
-                           AES_GCM_128) == ERR_SUCCESS);
+                           CIPHER_AES_GCM_128) == ERR_SUCCESS);
   ASSERT(cipher_init(p_aes_gcm_128, key, key_len, CIPHER_OPERATION_ENCRYPT) ==
          ERR_SUCCESS);
   ASSERT(cipher_set_iv(p_aes_gcm_128, iv, iv_len) == ERR_SUCCESS);
@@ -42,7 +41,7 @@ void test_aes_gcm_128_decr(const uint8_t *key, size_t key_len,
   cipher_t *p_aes_gcm_128 = &aes_gcm_128;
 
   ASSERT(cipher_intf_alloc(&aead_intf, &p_aes_gcm_128, key_len, tag_len,
-                           AES_GCM_128) == ERR_SUCCESS);
+                           CIPHER_AES_GCM_128) == ERR_SUCCESS);
   ASSERT(cipher_init(p_aes_gcm_128, key, key_len, CIPHER_OPERATION_DECRYPT) ==
          ERR_SUCCESS);
   ASSERT(cipher_set_iv(p_aes_gcm_128, iv, iv_len) == ERR_SUCCESS);

@@ -33,7 +33,7 @@ static error_t liboqs_kem_alloc(kem_t **kem, kem_alg_t alg) {
   OQS_KEM *oqs_kem;
   uint8_t *privkey;
 
-  PRINTDEBUG("alg=%d", alg);
+  PRINTDEBUG("alg=%s", kem_alg_to_string(alg));
 
   switch (alg) {
   case KEM_Kyber_512:
@@ -164,9 +164,6 @@ static error_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
 
   if (!peer_pubkey || !ct || !ct_len || !ss || !ss_len)
     return ERR_NULL_PTR;
-
-  if (!KEM_FLAG_GET(kem, KEM_FLAG_KEYGEN))
-    return ERR_NOT_INIT;
 
   oqs_ctx = (kem_oqs_ctx *)kem->ctx;
   alg = kem->alg;

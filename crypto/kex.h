@@ -70,7 +70,7 @@ typedef struct kex_st {
   kex_flag_t flags;
 } kex_t;
 
-const char *kex_curve_name(int id);
+const char *kex_curve_name(kex_curve_t id);
 
 int kex_intf_curve_is_supported(const kex_intf_t *intf, kex_curve_t curve);
 

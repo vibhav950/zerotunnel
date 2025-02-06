@@ -1,5 +1,18 @@
 #include "kem.h"
 
+const char *kem_alg_to_string(kem_alg_t alg) {
+  switch (alg) {
+  case KEM_Kyber_512:
+    return "Kyber-512";
+  case KEM_Kyber_768:
+    return "Kyber-768";
+  case KEM_Kyber_1024:
+    return "Kyber-1024";
+  default:
+    return "unknown type";
+  }
+}
+
 int kem_intf_alg_is_supported(const kem_intf_t *intf, kem_alg_t alg) {
   return (intf) && (intf->supported_algs & alg);
 }
@@ -9,7 +22,7 @@ int kem_flag_get(kem_t *kem, kem_flag_t flag) {
 }
 
 error_t kem_intf_alloc(const kem_intf_t *intf, kem_t **kem, kem_alg_t alg) {
-  if (!intf || !intf->alloc || !*kem)
+  if (!intf || !intf->alloc || !kem)
     return ERR_NULL_PTR;
 
   return (intf)->alloc(kem, alg);

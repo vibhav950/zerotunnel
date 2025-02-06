@@ -6,8 +6,7 @@
 #include <string.h>
 
 int main() {
-  kem_t kem;
-  kem_t *pkem = &kem;
+  kem_t *pkem = NULL;
 
   uint8_t *pubkey, *ct, *ss_mine, *ss_theirs;
   size_t pubkey_len, ct_len, ss_mine_len, ss_theirs_len;

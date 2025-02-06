@@ -55,6 +55,8 @@ typedef struct kem_st {
   kem_flag_t flags;
 } kem_t;
 
+const char *kem_alg_to_string(kem_alg_t alg);
+
 int kem_intf_alg_is_supported(const kem_intf_t *intf, kem_alg_t alg);
 
 int kem_flag_get(kem_t *kem, kem_flag_t flag);

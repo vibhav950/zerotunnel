@@ -1,6 +1,21 @@
 #include "cipher.h"
 #include "common/defs.h"
 
+const char *cipher_alg_to_string(cipher_alg_t alg) {
+  switch (alg) {
+  case CIPHER_AES_GCM_128:
+    return "AES-128-GCM";
+  case CIPHER_AES_GCM_192:
+    return "AES-192-GCM";
+  case CIPHER_AES_GCM_256:
+    return "AES-256-GCM";
+  case CIPHER_CHACHA20_POLY1305:
+    return "CHACHA20-POLY1305";
+  default:
+    return "unknown type";
+  }
+}
+
 int cipher_intf_alg_is_supported(const cipher_intf_t *intf, cipher_alg_t alg) {
   return (intf) && (intf->supported_algs & alg);
 }
@@ -11,7 +26,7 @@ int cipher_flag_get(cipher_t *c, cipher_flag_t flag) {
 
 error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
                           size_t key_len, size_t tag_len, cipher_alg_t alg) {
-  if (!intf || !intf->alloc || !*c)
+  if (!intf || !intf->alloc || !c)
     return ERR_NULL_PTR;
 
   return (intf)->alloc(c, key_len, tag_len, alg);

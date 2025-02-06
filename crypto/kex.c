@@ -1,6 +1,6 @@
 #include "kex.h"
 
-const char *kex_curve_name(int id) {
+const char *kex_curve_name(kex_curve_t id) {
   switch (id) {
   case KEX_CURVE_secp256k1:
     return "secp256k1";
@@ -30,7 +30,7 @@ int kex_flag_get(kex_t *kex, kex_flag_t flag) {
 }
 
 error_t kex_intf_alloc(const kex_intf_t *intf, kex_t **kex, kex_curve_t curve) {
-  if (!intf || !intf->alloc || !*kex)
+  if (!intf || !intf->alloc || !kex)
     return ERR_NULL_PTR;
 
   return (intf)->alloc(kex, curve);

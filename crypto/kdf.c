@@ -1,6 +1,19 @@
 #include "kdf.h"
 #include "common/defs.h"
 
+const char *kdf_alg_to_string(kdf_alg_t alg) {
+  switch (alg) {
+  case KDF_ALG_PBKDF2:
+    return "PBKDF2";
+  case KDF_ALG_scrypt:
+    return "scrypt";
+  case KDF_ALG_argon2:
+    return "argon2";
+  default:
+    return "unknown type";
+  }
+}
+
 int kdf_intf_alg_is_supported(const kdf_intf_t *intf, kdf_alg_t alg) {
   return (intf) && (intf->supported_algs & alg);
 }
@@ -10,7 +23,7 @@ int kdf_flag_get(kdf_t *kdf, kdf_flag_t flag) {
 }
 
 error_t kdf_intf_alloc(const kdf_intf_t *intf, kdf_t **kdf, kdf_alg_t alg) {
-  if (!intf || !intf->alloc || !*kdf)
+  if (!intf || !intf->alloc || !kdf)
     return ERR_NULL_PTR;
 
   return (intf)->alloc(kdf, alg);

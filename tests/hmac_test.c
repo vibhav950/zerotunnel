@@ -9,8 +9,7 @@ static uint8_t buffer[64];
 void test_hmac(hmac_alg_t alg, const uint8_t *hmac_key, const size_t key_len,
                const uint8_t *hmac_data, const size_t hmac_data_len,
                const uint8_t *hmac_expected, const size_t hmac_expected_len) {
-  hmac_t hmac;
-  hmac_t *p_hmac = &hmac;
+  hmac_t *p_hmac = NULL;
 
   ASSERT(hmac_intf_alloc(&hmac_intf, &p_hmac, key_len, key_len, alg) ==
          ERR_SUCCESS);

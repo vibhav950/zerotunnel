@@ -23,12 +23,12 @@
 #define KDF_FLAG_UNSET(kdf, flag) (void)((kdf)->flags &= ~flag)
 
 /**  */
-static error_t kdf_ossl_alloc(kdf_t **kdf, kdf_alg_t alg) {
+static error_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   extern const kdf_intf_t kdf_intf;
   kdf_ossl_ctx *kdf_ctx;
   EVP_KDF *pkdf;
 
-  PRINTDEBUG("alg=%d", alg);
+  PRINTDEBUG("alg=%s", kdf_alg_to_string(alg));
 
   switch (alg) {
   case KDF_ALG_scrypt:
@@ -92,9 +92,9 @@ static void ossl_kdf_dealloc(kdf_t *kdf) {
   }
   memzero(kdf->pw, kdf->pwlen);
   memzero(kdf->salt, kdf->saltlen);
-  memzero(kdf, sizeof(kdf_t));
   xfree(kdf->pw);
   xfree(kdf->salt);
+  memzero(kdf, sizeof(kdf_t));
   xfree(kdf);
   kdf = NULL;
 }
@@ -230,6 +230,16 @@ static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
     return ERR_MEM_FAIL;
   }
 
+  if (kdf->pw) {
+    memzero(kdf->pw, kdf->pwlen);
+    xfree(kdf->pw);
+  }
+
+  if (kdf->salt) {
+    memzero(kdf->salt, kdf->saltlen);
+    xfree(kdf->salt);
+  }
+
   kdf->pw = pw;
   kdf->pwlen = password_len;
   kdf->salt = slt;
@@ -319,7 +329,7 @@ static error_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
 }
 
 const kdf_intf_t kdf_intf = {
-    .alloc = kdf_ossl_alloc,
+    .alloc = ossl_kdf_alloc,
     .dealloc = ossl_kdf_dealloc,
     .init = ossl_kdf_init,
     .derive = ossl_kdf_derive,

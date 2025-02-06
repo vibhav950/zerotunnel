@@ -59,6 +59,8 @@ typedef struct kdf_st {
   kdf_flag_t flags;
 } kdf_t;
 
+const char *kdf_alg_to_string(kdf_alg_t alg);
+
 int kdf_intf_alg_is_supported(const kdf_intf_t *intf, kdf_alg_t alg);
 
 int kdf_flag_get(kdf_t *kdf, kdf_flag_t flag);

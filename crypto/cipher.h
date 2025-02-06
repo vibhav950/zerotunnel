@@ -14,11 +14,11 @@ typedef enum {
  * exists only for the algorithms present in this list
  */
 typedef enum {
-  AES_GCM_128 = (1U << 0),
-  AES_GCM_192 = (1U << 1),
-  AES_GCM_256 = (1U << 2),
-  CHACHA20_POLY1305 = (1U << 3),
-  AEAD_ALL = AES_GCM_128 | AES_GCM_192 | AES_GCM_256 | CHACHA20_POLY1305,
+  CIPHER_AES_GCM_128 = (1U << 0),
+  CIPHER_AES_GCM_192 = (1U << 1),
+  CIPHER_AES_GCM_256 = (1U << 2),
+  CIPHER_CHACHA20_POLY1305 = (1U << 3),
+  AEAD_ALL = CIPHER_AES_GCM_128 | CIPHER_AES_GCM_192 | CIPHER_AES_GCM_256 | CIPHER_CHACHA20_POLY1305,
 } cipher_alg_t;
 
 typedef enum cipher_operation_st {
@@ -71,6 +71,8 @@ typedef struct cipher_st {
   cipher_alg_t alg;
   cipher_flag_t flags;
 } cipher_t;
+
+const char *cipher_alg_to_string(cipher_alg_t alg);
 
 int cipher_intf_alg_is_supported(const cipher_intf_t *intf, cipher_alg_t alg);
 

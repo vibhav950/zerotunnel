@@ -5,13 +5,10 @@
 #include "test.h"
 
 void test_kex_ecc(const kex_curve_t curve) {
-  kex_t kex_peer1;
-  kex_t kex_peer2;
-
   kex_peer_share_t peer1_data;
   kex_peer_share_t peer2_data;
-  kex_t *kex_peer1_ptr = &kex_peer1;
-  kex_t *kex_peer2_ptr = &kex_peer2;
+  kex_t *kex_peer1_ptr = NULL;
+  kex_t *kex_peer2_ptr = NULL;
 
   unsigned char *shared_key1;
   unsigned char *shared_key2;

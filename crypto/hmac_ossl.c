@@ -18,25 +18,6 @@
 #define HMAC_FLAG_SET(h, flag) (void)((h)->flags |= flag)
 #define HMAC_FLAG_GET(h, flag) ((h)->flags & flag)
 
-static const char *hmac_alg_to_string(hmac_alg_t alg) {
-  switch (alg) {
-  case HMAC_SHA256:
-    return "HMAC_SHA256";
-  case HMAC_SHA384:
-    return "HMAC_SHA384";
-  case HMAC_SHA512:
-    return "HMAC_SHA512";
-  case HMAC_SHA3_256:
-    return "HMAC_SHA3_256";
-  case HMAC_SHA3_384:
-    return "HMAC_SHA3_384";
-  case HMAC_SHA3_512:
-    return "HMAC_SHA3_512";
-  default:
-    return "Unknown type";
-  }
-}
-
 /**
  *
  */
