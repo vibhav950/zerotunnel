@@ -48,11 +48,11 @@ enum {
  * Flags to enforce strict call sequence
  */
 enum {
-  _vcry_fl_cipher_set = (1U << 1),
-  _vcry_fl_mac_set = (1U << 2),
-  _vcry_fl_kex_set = (1U << 3),
-  _vcry_fl_kem_set = (1U << 4),
-  _vcry_fl_kdf_set = (1U << 5),
+  _vcry_fl_cipher_set = (1U << 0),
+  _vcry_fl_mac_set = (1U << 1),
+  _vcry_fl_kex_set = (1U << 2),
+  _vcry_fl_kem_set = (1U << 3),
+  _vcry_fl_kdf_set = (1U << 4),
   _vcry_fl_all_set = (_vcry_fl_cipher_set | _vcry_fl_mac_set |
                       _vcry_fl_kex_set | _vcry_fl_kem_set | _vcry_fl_kdf_set),
 };
@@ -67,7 +67,7 @@ enum {
   _vcry_hs_complete = (1U << 2),
   _vcry_hs_verify_initiate = (1U << 3),
   _vcry_hs_verify_complete = (1U << 4),
-  _vcry_hs_done = (1U << 4),
+  _vcry_hs_done = (1U << 5),
 };
 
 /**

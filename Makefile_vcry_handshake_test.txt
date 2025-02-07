@@ -1,0 +1,91 @@
+CC := gcc
+CFLAGS := -Wno-pedantic -std=gnu17 -fgnu89-inline -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS
+LIBS := -lcrypto -lssl -loqs -lm -pthread
+
+all: bin/vcry_handshake_test
+
+bin/vcry_handshake_test: bin/vcry_handshake_test.o \
+                    bin/vcry.o \
+                    bin/aead_ossl.o \
+                    bin/cipher.o \
+                    bin/hmac_ossl.o \
+                    bin/hmac.o \
+                    bin/kdf_ossl.o \
+                    bin/kdf.o \
+                    bin/kem_kyber_oqs.o \
+                    bin/kem.o \
+                    bin/kex_ecc_ossl.o \
+										bin/kex.o \
+										bin/log.o \
+										bin/memzero.o \
+										bin/test_utils.o \
+										bin/mem.o \
+                    bin/cpu.o \
+                    bin/rdrand.o \
+                    bin/systemrand.o
+
+	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
+
+bin/vcry_handshake_test.o: tests/vcry_handshake_test.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/vcry.o: lib/vcry.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/aead_ossl.o: crypto/aead_ossl.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/cipher.o: crypto/cipher.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/hmac_ossl.o: crypto/hmac_ossl.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/hmac.o: crypto/hmac.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kdf_ossl.o: crypto/kdf_ossl.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kdf.o: crypto/kdf.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kem_kyber_oqs.o: crypto/kem_kyber_oqs.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kem.o: crypto/kem.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kex_ecc_ossl.o: crypto/kex_ecc_ossl.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kex.o: crypto/kex.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/log.o: common/log.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/memzero.o: common/memzero.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/test_utils.o: tests/test_utils.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/mem.o: common/mem.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/cpu.o: common/cpu.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/rdrand.o: random/rdrand.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/systemrand.o: random/systemrand.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+
+.PHONY: clean
+clean:
+	rm -f bin/*.o bin/vcry_handshake_test
+
+

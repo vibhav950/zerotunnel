@@ -19,7 +19,7 @@
 #define VCRY_HMAC_SHA3_384            0x015
 #define VCRY_HMAC_SHA3_512            0x016
 
-/** Ephemeral Diffie-Hellman (Elliptic Curve) curves */
+/** Diffie-Hellman Ephemeral (Elliptic Curve) */
 
 #define VCRY_KEX_ECDH_SECP256K1       0x021
 #define VCRY_KEX_ECDH_SECP384R1       0x022
@@ -29,13 +29,13 @@
 #define VCRY_KEX_ECDH_X25519          0x026
 #define VCRY_KEX_ECDH_X448            0x027
 
-/** PQ-KEM algorithms */
+/** PQ-KEM */
 
 #define VCRY_KEM_KYBER512             0x031
 #define VCRY_KEM_KYBER768             0x032
 #define VCRY_KEM_KYBER1024            0x033
 
-/** Key Derivation Function algorithms */
+/** Key Derivation Function */
 
 #define VCRY_KDF_PBKDF2               0x041
 #define VCRY_KDF_SCRYPT               0x042
