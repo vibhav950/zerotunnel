@@ -100,7 +100,7 @@ int vcry_set_authkey(const uint8_t *authkey, size_t authkey_len) {
   if (!authkey || !authkey_len)
     return -1;
 
-  __vctx.authkey = xmemdup(authkey, authkey_len);
+  __vctx.authkey = zt_memdup(authkey, authkey_len);
   __vctx.authkey_len = authkey_len;
   return 0;
 }
@@ -406,7 +406,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     return -1;
   }
 
-  if (sys_rand_bytes(__vctx.salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
+  if (zt_systemrand_bytes(__vctx.salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
     return -1;
 
   uint8_t ctr128[16];
@@ -416,7 +416,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     return -1;
   }
 
-  if (!(k_pass = xmalloc(VCRY_MASTER_KEY_LEN)))
+  if (!(k_pass = zt_malloc(VCRY_MASTER_KEY_LEN)))
     return -1;
 
   /** Derive the master key from the master password (auth key) */
@@ -452,7 +452,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
                               &encbuf_len) == ERR_BUFFER_TOO_SMALL),
               clean1);
 
-  VCRY_EXPECT((encbuf = xmalloc(encbuf_len)), clean1);
+  VCRY_EXPECT((encbuf = zt_malloc(encbuf_len)), clean1);
 
   VCRY_EXPECT((cipher_encrypt(__vctx.cipher, pqpub, pqpub_len, encbuf,
                               &encbuf_len) == ERR_SUCCESS),
@@ -462,7 +462,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
          encbuf_len + VCRY_HSHAKE_SALT_LEN;
   plen += 3 * sizeof(uint64_t);
 
-  VCRY_EXPECT((*peerdata = xmalloc(plen)), clean0);
+  VCRY_EXPECT((*peerdata = zt_malloc(plen)), clean0);
   *peerdata_len = plen;
 
   /** We need to store the lengths to be able to deserialize the data */
@@ -473,13 +473,13 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
 
   /** Serialize the data by copying individual members */
   p = *peerdata + (3 * sizeof(uint64_t));
-  xmemcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
+  zt_memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
   p += keyshare_mine.ec_pub_len;
-  xmemcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
+  zt_memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
   p += keyshare_mine.ec_curvename_len;
-  xmemcpy(p, encbuf, encbuf_len);
+  zt_memcpy(p, encbuf, encbuf_len);
   p += encbuf_len;
-  xmemcpy(p, __vctx.salt, VCRY_HSHAKE_SALT_LEN);
+  zt_memcpy(p, __vctx.salt, VCRY_HSHAKE_SALT_LEN);
 
   /** This memory is freed in vcry_module_release() */
   __vctx.pqpub = pqpub;
@@ -489,12 +489,12 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
 
 clean0:
   memzero(encbuf, encbuf_len);
-  xfree(encbuf);
+  zt_free(encbuf);
 clean1:
   kex_free_peer_data(__vctx.kex, &keyshare_mine);
 clean2:
   memzero(k_pass, VCRY_MASTER_KEY_LEN);
-  xfree(k_pass);
+  zt_free(k_pass);
   return ret;
 }
 
@@ -565,7 +565,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
 
   /** Set the session salt */
   p += peer_pqpub_enc_len;
-  xmemcpy(__vctx.salt, p, VCRY_HSHAKE_SALT_LEN);
+  zt_memcpy(__vctx.salt, p, VCRY_HSHAKE_SALT_LEN);
 
   /** Compute K_pass */
   uint8_t ctr128[16];
@@ -575,7 +575,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
     return -1;
   }
 
-  if (!(k_pass = xmalloc(VCRY_MASTER_KEY_LEN)))
+  if (!(k_pass = zt_malloc(VCRY_MASTER_KEY_LEN)))
     return -1;
 
   VCRY_EXPECT((kdf_derive(__vctx.kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
@@ -594,7 +594,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
                              VCRY_HSHAKE_SALT1_LEN) == ERR_SUCCESS),
               clean1);
 
-  VCRY_EXPECT((peer_pqpub = xmalloc(peer_pqpub_enc_len)), clean1);
+  VCRY_EXPECT((peer_pqpub = zt_malloc(peer_pqpub_enc_len)), clean1);
 
   VCRY_EXPECT((cipher_decrypt(__vctx.cipher, peer_pqpub_enc, peer_pqpub_enc_len,
                               peer_pqpub, &peer_pqpub_enc_len) == ERR_SUCCESS),
@@ -626,7 +626,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   p_len = keyshare_mine.ec_pub_len + keyshare_mine.ec_curvename_len + ct_len;
   p_len += 3 * sizeof(uint64_t);
 
-  VCRY_EXPECT((*peerdata_mine = xmalloc(p_len)), clean0);
+  VCRY_EXPECT((*peerdata_mine = zt_malloc(p_len)), clean0);
   *peerdata_mine_len = p_len;
 
   p64 = PTR64(*peerdata_mine);
@@ -635,11 +635,11 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   p64[2] = hton64((uint64_t)ct_len);
 
   p = *peerdata_mine + (3 * sizeof(uint64_t));
-  xmemcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
+  zt_memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
   p += keyshare_mine.ec_pub_len;
-  xmemcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
+  zt_memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
   p += keyshare_mine.ec_curvename_len;
-  xmemcpy(p, ct, ct_len);
+  zt_memcpy(p, ct, ct_len);
 
   /** This memory is freed in vcry_module_release() */
   __vctx.pqpub_peer = peer_pqpub;
@@ -653,7 +653,7 @@ clean0:
   kem_mem_free(&kem_kyber_intf, ct, ct_len);
 clean1:
   memzero(k_pass, VCRY_MASTER_KEY_LEN);
-  xfree(k_pass);
+  zt_free(k_pass);
   return ret;
 }
 
@@ -796,18 +796,18 @@ int vcry_derive_session_key(void) {
 
   buf_len = __vctx.ss_len + shared_secret_len + __vctx.pqpub_len + dhek_a_len +
             dhek_b_len;
-  VCRY_EXPECT((buf = xmalloc(buf_len)), clean1);
+  VCRY_EXPECT((buf = zt_malloc(buf_len)), clean1);
 
   p = buf;
-  xmemcpy(p, __vctx.ss, __vctx.ss_len);
+  zt_memcpy(p, __vctx.ss, __vctx.ss_len);
   p += __vctx.ss_len;
-  xmemcpy(p, shared_secret, shared_secret_len);
+  zt_memcpy(p, shared_secret, shared_secret_len);
   p += shared_secret_len;
-  xmemcpy(p, pqpub, __vctx.pqpub_len);
+  zt_memcpy(p, pqpub, __vctx.pqpub_len);
   p += __vctx.pqpub_len;
-  xmemcpy(p, dhek_a, dhek_a_len);
+  zt_memcpy(p, dhek_a, dhek_a_len);
   p += dhek_a_len;
-  xmemcpy(p, dhek_b, dhek_b_len);
+  zt_memcpy(p, dhek_b, dhek_b_len);
 
   uint8_t ctr128[16];
   memset(ctr128, 0xab, sizeof(ctr128));
@@ -826,13 +826,13 @@ int vcry_derive_session_key(void) {
 
 clean0:
   memzero(buf, buf_len);
-  xfree(buf);
+  zt_free(buf);
 clean1:
   memzero(tmp, tmp_len);
-  xfree(tmp);
+  zt_free(tmp);
 clean2:
   memzero(shared_secret, shared_secret_len);
-  xfree(shared_secret);
+  zt_free(shared_secret);
   return ret;
 }
 
@@ -875,11 +875,11 @@ int vcry_initiator_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
     id2 = id_a;
   }
 
-  if ((*verify_msg = xmalloc(VCRY_VERIFY_MSG_LEN)) == NULL)
+  if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return -1;
 
   if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
@@ -887,13 +887,13 @@ int vcry_initiator_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
       (hmac_update(__vctx.mac, id2, strlen(id2)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                    strlen(VCRY_VERIFY_CONST0)) != ERR_SUCCESS)) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
   if (hmac_compute(__vctx.mac, NULL, 0, *verify_msg, VCRY_VERIFY_MSG_LEN) !=
       ERR_SUCCESS) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
@@ -941,11 +941,11 @@ int vcry_responder_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
     id2 = id_a;
   }
 
-  if ((*verify_msg = xmalloc(VCRY_VERIFY_MSG_LEN)) == NULL)
+  if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return -1;
 
   if (hmac_init(__vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN) != ERR_SUCCESS) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
@@ -953,13 +953,13 @@ int vcry_responder_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
       (hmac_update(__vctx.mac, id2, strlen(id2)) != ERR_SUCCESS) ||
       (hmac_update(__vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                    strlen(VCRY_VERIFY_CONST1)) != ERR_SUCCESS)) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
   if (hmac_compute(__vctx.mac, NULL, 0, *verify_msg, VCRY_VERIFY_MSG_LEN) !=
       ERR_SUCCESS) {
-    xfree(*verify_msg);
+    zt_free(*verify_msg);
     return -1;
   }
 
@@ -1021,7 +1021,7 @@ int vcry_initiator_verify_complete(
     return -1;
   }
 
-  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
+  if (zt_memcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
     return -1;
 
   VCRY_STATE_CHANGE(_vcry_hs_done);
@@ -1081,7 +1081,7 @@ int vcry_responder_verify_complete(
     return -1;
   }
 
-  if (xmemcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
+  if (zt_memcmp(verify_msg, verify_msg_cmp, VCRY_VERIFY_MSG_LEN))
     return -1;
 
   VCRY_STATE_CHANGE(_vcry_hs_done);
@@ -1120,14 +1120,14 @@ void vcry_module_release(void) {
     kem_mem_free(&kem_kyber_intf, __vctx.pqpub, __vctx.pqpub_len);
   } else if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_responder) {
     memzero(__vctx.pqpub_peer, __vctx.pqpub_len);
-    xfree(__vctx.pqpub_peer);
+    zt_free(__vctx.pqpub_peer);
   }
 
   memzero(__vctx.authkey, __vctx.authkey_len);
   memzero(__vctx.salt, VCRY_HSHAKE_SALT_LEN);
   memzero(__vctx.skey, VCRY_SESSION_KEY_LEN);
 
-  xfree(__vctx.authkey);
+  zt_free(__vctx.authkey);
 
   __vctx.authkey = NULL;
   __vctx.pqpub = NULL;
@@ -1187,17 +1187,17 @@ int vcry_cipher_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
     return -1;
   }
 
-  if (!(buf = xmalloc(clen)))
+  if (!(buf = zt_malloc(clen)))
     return -1;
 
   if (cipher_encrypt(__vctx.cipher, in, in_len, buf, &clen) != ERR_SUCCESS) {
-    xfree(buf);
+    zt_free(buf);
     return -1;
   }
 
-  xmemcpy(out, buf, clen);
+  zt_memcpy(out, buf, clen);
   memzero(buf, clen);
-  xfree(buf);
+  zt_free(buf);
 
   return 0;
 }
@@ -1244,17 +1244,17 @@ int vcry_cipher_decrypt(uint8_t *in, size_t len, const uint8_t *ad,
     return -1;
   }
 
-  if (!(buf = xmalloc(clen)))
+  if (!(buf = zt_malloc(clen)))
     return -1;
 
   if (cipher_decrypt(__vctx.cipher, in, len, buf, &clen) != ERR_SUCCESS) {
-    xfree(buf);
+    zt_free(buf);
     return -1;
   }
 
-  xmemcpy(out, buf, clen);
+  zt_memcpy(out, buf, clen);
   memzero(buf, clen);
-  xfree(buf);
+  zt_free(buf);
 
   return 0;
 }

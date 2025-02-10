@@ -2,8 +2,8 @@
  *
  */
 
-#ifndef __DEFS_H__
-#define __DEFS_H__
+#ifndef __ZEROTUNNEL_H__
+#define __ZEROTUNNEL_H__
 
 #if defined(__GNUC__) && defined(__GNUC_MINOR__)
 #define GCC_VERSION_AT_LEAST(major, minor)                                     \
@@ -150,20 +150,20 @@ typedef enum {
  * Logging routines
  */
 
-void debug_vprintf(const char *func, const char *fmt, ...);
+void zt_debug_vprintf(const char *func, const char *fmt, ...);
 
-void error_vprintf(const char *file, int line, const char *fmt, ...);
+void zt_error_vprintf(const char *file, int line, const char *fmt, ...);
 
-void info_vprintf(const char *fmt, ...);
+void zt_info_vprintf(const char *fmt, ...);
 
 #if defined(DEBUG)
-#define PRINTDEBUG(fmt, ...) debug_vprintf(__func__, fmt, ##__VA_ARGS__)
+#define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
 #else
 #define PRINTDEBUG(fmt, ...)
 #endif
 #define PRINTERROR(fmt, ...)                                                   \
-  error_vprintf(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#define PRINTINFO(fmt, ...) info_vprintf(fmt, ##__VA_ARGS__)
+  zt_error_vprintf(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define PRINTINFO(fmt, ...) zt_info_vprintf(fmt, ##__VA_ARGS__)
 
 #if defined(_MSC_VER)
 #include <intrin.h> // __fastfail
@@ -195,7 +195,7 @@ ATTRIBUTE_NORETURN static inline void __FKILL(void) {
  */
 
 /** Get the number of CPU cores. */
-int cpu_get_processor_count(void);
+int zt_cpu_get_processor_count(void);
 
 /**
  * Memory/string routines
@@ -208,7 +208,7 @@ int cpu_get_processor_count(void);
  * @return A pointer to the allocated memory block, or NULL if the allocation
  * fails.
  */
-void *xmalloc(size_t size);
+void *zt_malloc(size_t size);
 
 /**
  * Allocates a block of memory for an array of elements, each of the given size.
@@ -219,14 +219,14 @@ void *xmalloc(size_t size);
  * @return A pointer to the allocated memory block, or NULL if the allocation
  * fails.
  */
-void *xcalloc(size_t nmemb, size_t size);
+void *zt_calloc(size_t nmemb, size_t size);
 
 /**
  * Frees a previously allocated block of memory.
  *
  * @param ptr A pointer to the memory block to free.
  */
-void xfree(void *ptr);
+void zt_free(void *ptr);
 
 /**
  * Changes the size of the memory block pointed to by ptr to the given size.
@@ -236,7 +236,7 @@ void xfree(void *ptr);
  * @return A pointer to the reallocated memory block, or NULL if the
  * reallocation fails.
  */
-void *xrealloc(void *ptr, size_t size);
+void *zt_realloc(void *ptr, size_t size);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to the
@@ -247,7 +247,7 @@ void *xrealloc(void *ptr, size_t size);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-volatile void *xmemset(volatile void *mem, int ch, size_t len);
+volatile void *zt_memset(volatile void *mem, int ch, size_t len);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to zero.
@@ -256,7 +256,7 @@ volatile void *xmemset(volatile void *mem, int ch, size_t len);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-volatile void *xmemzero(volatile void *mem, size_t len);
+volatile void *zt_memzero(volatile void *mem, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst.
@@ -266,7 +266,7 @@ volatile void *xmemzero(volatile void *mem, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-volatile void *xmemcpy(volatile void *dst, volatile void *src, size_t len);
+volatile void *zt_memcpy(volatile void *dst, volatile void *src, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst, even if the
@@ -277,7 +277,7 @@ volatile void *xmemcpy(volatile void *dst, volatile void *src, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-volatile void *xmemmove(volatile void *dst, volatile void *src, size_t len);
+volatile void *zt_memmove(volatile void *dst, volatile void *src, size_t len);
 
 /**
  * Compares the first len bytes of the memory areas a and b.
@@ -287,7 +287,7 @@ volatile void *xmemmove(volatile void *dst, volatile void *src, size_t len);
  * @param len The number of bytes to compare.
  * @return Zero if the memory areas are equal, non-zero otherwise.
  */
-unsigned int xmemcmp(const void *a, const void *b, size_t len);
+unsigned int zt_memcmp(const void *a, const void *b, size_t len);
 
 /**
  * Compares two strings without leaking timing info about the private string.
@@ -296,7 +296,7 @@ unsigned int xmemcmp(const void *a, const void *b, size_t len);
  * @param x The second (secret/private) string.
  * @return Zero if the strings are equal, non-zero otherwise.
  */
-unsigned int xstrcmp(const char *str, const char *x);
+unsigned int zt_strcmp(const char *str, const char *x);
 
 /**
  * Duplicates a memory block.
@@ -306,9 +306,9 @@ unsigned int xstrcmp(const char *str, const char *x);
  * @return A pointer to the duplicated memory block, or NULL if the duplication
  * fails.
  *
- * @note The returned pointer must be xfree()'d when no longer needed.
+ * @note The returned pointer must be zt_free()'d when no longer needed.
  */
-void *xmemdup(const void *m, size_t n);
+void *zt_memdup(const void *m, size_t n);
 
 /**
  * Duplicates a string.
@@ -316,9 +316,9 @@ void *xmemdup(const void *m, size_t n);
  * @param s The string to duplicate.
  * @return A pointer to the duplicated string, or NULL if the duplication fails.
  *
- * @note The returned pointer must be xfree()'d when no longer needed.
+ * @note The returned pointer must be zt_free()'d when no longer needed.
  */
-char *xstrdup(const char *s);
+char *zt_strdup(const char *s);
 
 /**
  * Duplicates a memory block and converts it to a null-terminated string.
@@ -327,9 +327,9 @@ char *xstrdup(const char *s);
  * @param n The size of the memory block.
  * @return A pointer to the duplicated string, or NULL if the duplication fails.
  *
- * @note The returned pointer must be xfree()'d when no longer needed.
+ * @note The returned pointer must be zt_free()'d when no longer needed.
  */
-char *xstrmemdup(const void *m, size_t n);
+char *zt_strmemdup(const void *m, size_t n);
 
 /**
  * Timeout routines
@@ -339,61 +339,62 @@ char *xstrmemdup(const void *m, size_t n);
 
 typedef void (*timeout_cb)(void *args);
 
-typedef struct _timeout_st {
-  timeval_t begin;
+typedef struct _zt_timeout_st {
+  zt_timeval_t begin;
   timediff_t expire_in_usec;
   timeout_cb handler;
-} timeout_t;
+} zt_timeout_t;
 
 /**
  * Set a timeout now
  */
-void timeout_begin(timeout_t *timeout, timediff_t usec, timeout_cb handler);
+void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec,
+                      timeout_cb handler);
 
 /**
  * Reset the timeout
  *
  * This function should only be called after a timeout has already been set
- * using timeout_begin()
+ * using zt_timeout_begin()
  */
-void timeout_reset(timeout_t *timeout);
+void zt_timeout_reset(zt_timeout_t *timeout);
 
 /**
  * Check if the timeout has expired
  *
  * This function should only be called after a timeout has already been set
- * using timeout_begin()
+ * using zt_timeout_begin()
  *
  * Returns 1 if the timeout has expired, 0 otherwise
  */
-int timeout_expired(timeout_t *timeout, void *args);
+int zt_timeout_expired(zt_timeout_t *timeout, void *args);
 
 /**
  * Type conversions
  */
 
-unsigned short ultous(unsigned long val);
-unsigned char ultouc(unsigned long val);
-unsigned long ulltoul(unsigned long long val);
-unsigned int ulltoui(unsigned long long val);
-unsigned short ulltous(unsigned long long val);
-unsigned long ustoul(size_t val);
-unsigned int ustoui(size_t val);
-unsigned short ustous(size_t val);
-int sltoi(long val);
-unsigned int sltoui(long val);
-short sltos(long val);
-unsigned short sltous(long val);
-long long ulltoll(unsigned long long val);
-long ulltol(unsigned long long val);
-int ulltoi(unsigned long long val);
-long slltol(long long val);
-int slltoi(long long val);
-short slltos(long long val);
-ssize_t ssztosz(size_t val);
-int sztoi(size_t val);
-short sztos(size_t val);
-unsigned int ssztoui(ssize_t val);
-unsigned short ssztous(ssize_t val);
+unsigned short zt_ultous(unsigned long val);
+unsigned char zt_ultouc(unsigned long val);
+unsigned long zt_ulltoul(unsigned long long val);
+unsigned int zt_ulltoui(unsigned long long val);
+unsigned short zt_ulltous(unsigned long long val);
+unsigned long zt_ustoul(size_t val);
+unsigned int zt_ustoui(size_t val);
+unsigned short zt_ustous(size_t val);
+int zt_sltoi(long val);
+unsigned int zt_sltoui(long val);
+short zt_sltos(long val);
+unsigned short zt_sltous(long val);
+long long zt_ulltoll(unsigned long long val);
+long zt_ulltol(unsigned long long val);
+int zt_ulltoi(unsigned long long val);
+long zt_slltol(long long val);
+int zt_slltoi(long long val);
+short zt_slltos(long long val);
+ssize_t zt_ssztosz(size_t val);
+int zt_sztoi(size_t val);
+short zt_sztos(size_t val);
+unsigned int zt_ssztoui(ssize_t val);
+unsigned short zt_ssztous(ssize_t val);
 
-#endif /* __DEFS_H__ */
+#endif /* __ZEROTUNNEL_H__ */

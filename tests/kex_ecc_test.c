@@ -35,8 +35,8 @@ void test_kex_ecc(const kex_curve_t curve) {
                                &shared_key2_len) == ERR_SUCCESS);
 
   /* Cleanup */
-  xfree(shared_key1);
-  xfree(shared_key2);
+  zt_free(shared_key1);
+  zt_free(shared_key2);
   kex_free_peer_data(kex_peer1_ptr, &peer1_data);
   kex_free_peer_data(kex_peer2_ptr, &peer2_data);
   kex_dealloc(kex_peer1_ptr);

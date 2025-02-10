@@ -1,4 +1,4 @@
-#include "defs.h"
+#include "zerotunnel.h"
 
 #if defined(_WIN32)
 #define __platform_type 1
@@ -15,7 +15,7 @@
 #endif
 #endif
 
-inline int cpu_get_processor_count(void) {
+inline int zt_cpu_get_processor_count(void) {
 #if __platform_type == 1
   SYSTEM_LOGICAL_PROCESSOR_INFORMATION *info = NULL;
   DWORD length = 0;

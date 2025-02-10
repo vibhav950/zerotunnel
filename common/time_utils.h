@@ -4,10 +4,10 @@
 #include <stdint.h>
 #include <time.h>
 
-typedef struct _timeval_st {
+typedef struct _zt_timeval_st {
   time_t tv_sec; /* seconds */
   int tv_usec;   /* microseconds */
-} timeval_t;
+} zt_timeval_t;
 
 #define TYPEOF_TIMEDIFF_T __int64_t
 #define SIZEOF_TIMEDIFF_T sizeof(TYPEOF_TIMEDIFF_T)
@@ -21,7 +21,7 @@ typedef __int64_t timediff_t;
  *
  * @return the current time.
  */
-timeval_t now();
+zt_timeval_t zt_time_now();
 
 /**
  * Returns the time in milliseconds, rounded up to the nearest millisecond.
@@ -30,7 +30,7 @@ timeval_t now();
  * @param older the older time.
  * @return the time difference in milliseconds.
  */
-timediff_t timediff_msec(timeval_t newer, timeval_t older);
+timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older);
 
 /**
  * Returns the time in microseconds.
@@ -39,6 +39,6 @@ timediff_t timediff_msec(timeval_t newer, timeval_t older);
  * @param older the older time.
  * @return the time difference in microseconds.
  */
-timediff_t timediff_usec(timeval_t newer, timeval_t older);
+timediff_t zt_timediff_usec(zt_timeval_t newer, zt_timeval_t older);
 
 #endif /* __TIMEDEFS_H__ */

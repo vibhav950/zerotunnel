@@ -51,11 +51,11 @@ static error_t liboqs_kem_alloc(kem_t **kem, kem_alg_t alg) {
   if (!oqs_kem)
     return ERR_INTERNAL;
 
-  if (!(*kem = xcalloc(1, sizeof(kem_t))))
+  if (!(*kem = zt_calloc(1, sizeof(kem_t))))
     return ERR_MEM_FAIL;
 
-  if (!(oqs_ctx = xcalloc(1, sizeof(kem_oqs_ctx)))) {
-    xfree(*kem);
+  if (!(oqs_ctx = zt_calloc(1, sizeof(kem_oqs_ctx)))) {
+    zt_free(*kem);
     *kem = NULL;
     return ERR_MEM_FAIL;
   }
@@ -82,7 +82,7 @@ static void liboqs_kem_dealloc(kem_t *kem) {
       OQS_KEM_free(oqs_ctx->kem);
       /* Prevent state leaks */
       memzero(oqs_ctx, sizeof(kem_oqs_ctx));
-      xfree(oqs_ctx);
+      zt_free(oqs_ctx);
     }
   }
 
@@ -90,7 +90,7 @@ static void liboqs_kem_dealloc(kem_t *kem) {
     OQS_MEM_secure_free(kem->privkey, kem->privkey_len);
 
   memzero(kem, sizeof(kem_t));
-  xfree(kem);
+  zt_free(kem);
   kem = NULL;
 }
 

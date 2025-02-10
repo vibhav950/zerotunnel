@@ -8,7 +8,7 @@
 
 #include "aead.h"
 #include "cipher.h"
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 #include "common/memzero.h"
 
 #include <openssl/evp.h>
@@ -63,21 +63,21 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
     return ERR_BAD_ARGS;
   }
 
-  *c = (cipher_t *)xcalloc(1, sizeof(cipher_t));
+  *c = (cipher_t *)zt_calloc(1, sizeof(cipher_t));
   if (!*c)
     return ERR_MEM_FAIL;
 
-  aead_ctx = (aead_ossl_ctx *)xcalloc(1, sizeof(aead_ossl_ctx));
+  aead_ctx = (aead_ossl_ctx *)zt_calloc(1, sizeof(aead_ossl_ctx));
   if (!aead_ctx) {
-    xfree(*c);
+    zt_free(*c);
     *c = NULL;
     return ERR_MEM_FAIL;
   }
 
   aead_ctx->ossl_ctx = EVP_CIPHER_CTX_new();
   if (!aead_ctx->ossl_ctx) {
-    xfree(aead_ctx);
-    xfree(*c);
+    zt_free(aead_ctx);
+    zt_free(*c);
     *c = NULL;
     return ERR_INTERNAL;
   }
@@ -106,11 +106,11 @@ static void ossl_aead_dealloc(cipher_t *c) {
       EVP_CIPHER_CTX_free(aead->ossl_ctx);
       /* Prevent state leaks */
       memzero(aead, sizeof(aead_ossl_ctx));
-      xfree(aead);
+      zt_free(aead);
     }
   }
   memzero(c, sizeof(cipher_t));
-  xfree(c);
+  zt_free(c);
   c = NULL;
 }
 

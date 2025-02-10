@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 
 #include <stdlib.h>
 #include <string.h>

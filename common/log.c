@@ -1,4 +1,4 @@
-#include "defs.h"
+#include "zerotunnel.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,7 +20,7 @@
 #define FG_GREEN  "\x1B[92m"
 #define FG_CLEAR  "\x1B[0m"
 
-inline void debug_vprintf(const char *func, const char *fmt, ...) {
+inline void zt_debug_vprintf(const char *func, const char *fmt, ...) {
   va_list args;
 
   fprintf(LOG_FP_DEBUG, "%s[DEBUG %s]%s ", FG_BLUE, func, FG_CLEAR);
@@ -30,7 +30,7 @@ inline void debug_vprintf(const char *func, const char *fmt, ...) {
   printf("\n");
 }
 
-inline void error_vprintf(const char *file, const int line, const char *fmt, ...) {
+inline void zt_error_vprintf(const char *file, const int line, const char *fmt, ...) {
   va_list args;
 
   fprintf(LOG_FP_ERROR, "%s[ERROR %s:%d]%s ", FG_RED, file, line, FG_CLEAR);
@@ -40,7 +40,7 @@ inline void error_vprintf(const char *file, const int line, const char *fmt, ...
   printf("\n");
 }
 
-inline void info_vprintf(const char *fmt, ...) {
+inline void zt_info_vprintf(const char *fmt, ...) {
   va_list args;
 
   va_start(args, fmt);

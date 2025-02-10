@@ -62,21 +62,21 @@ static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
     return ERR_BAD_ARGS;
   }
 
-  *h = (hmac_t *)xcalloc(1, sizeof(hmac_t));
+  *h = (hmac_t *)zt_calloc(1, sizeof(hmac_t));
   if (!*h)
     return ERR_MEM_FAIL;
 
-  hmac = (hmac_ossl_ctx *)xcalloc(1, sizeof(hmac_ossl_ctx));
+  hmac = (hmac_ossl_ctx *)zt_calloc(1, sizeof(hmac_ossl_ctx));
   if (!hmac) {
-    xfree(*h);
+    zt_free(*h);
     *h = NULL;
     return ERR_MEM_FAIL;
   }
 
   hmac->md_ctx = EVP_MD_CTX_new();
   if (!hmac->md_ctx) {
-    xfree(hmac);
-    xfree(*h);
+    zt_free(hmac);
+    zt_free(*h);
     *h = NULL;
     return ERR_INTERNAL;
   }
@@ -104,11 +104,11 @@ static void ossl_hmac_dealloc(hmac_t *h) {
       EVP_MD_CTX_free(hmac->md_ctx);
       /* Prevent state leaks */
       memzero(hmac, sizeof(hmac_ossl_ctx));
-      xfree(hmac);
+      zt_free(hmac);
     }
   }
   memzero(h, sizeof(hmac_t));
-  xfree(h);
+  zt_free(h);
   h = NULL;
 }
 

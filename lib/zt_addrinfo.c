@@ -3,8 +3,8 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
-void my_addrinfo_free(struct my_addrinfo *ai) {
-  struct my_addrinfo *ai_cur, *ai_next;
+void zt_addrinfo_free(struct zt_addrinfo *ai) {
+  struct zt_addrinfo *ai_cur, *ai_next;
 
   for (ai_cur = ai; ai_cur; ai_cur = ai_next) {
     ai_next = ai_cur->ai_next;
@@ -12,8 +12,8 @@ void my_addrinfo_free(struct my_addrinfo *ai) {
   }
 }
 
-void my_addrinfo_set_port(struct my_addrinfo *ai, int port) {
-  struct my_addrinfo *ai_cur;
+void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port) {
+  struct zt_addrinfo *ai_cur;
   struct sockaddr_in *addr;
 #ifdef USE_IPV6
   struct sockaddr_in6 *addr6;

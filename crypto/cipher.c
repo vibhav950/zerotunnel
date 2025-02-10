@@ -1,5 +1,5 @@
 #include "cipher.h"
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 
 const char *cipher_alg_to_string(cipher_alg_t alg) {
   switch (alg) {

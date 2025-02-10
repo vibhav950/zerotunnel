@@ -1,5 +1,5 @@
 #include "client.h"
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 
 // #include <arpa/inet.h>
 #include <assert.h>
@@ -22,9 +22,9 @@
 
 // TODO deal with this formatting
 static const char clientstate_names[][20] = {
-    "CLIENTSTATE_CONN_INIT", "CLIENTSTATE_AUTH_INIT",
-    "CLIENTSTATE_CONN_DONE", "CLIENTSTATE_PEERAUTH_WAIT",
-    "CLIENTSTATE_TRANSFER",  "CLIENTSTATE_DONE"};
+    "ZT_CLIENTSTATE_CONN_INIT", "ZT_CLIENTSTATE_AUTH_INIT",
+    "ZT_CLIENTSTATE_CONN_DONE", "ZT_CLIENTSTATE_PEERAUTH_WAIT",
+    "ZT_CLIENTSTATE_TRANSFER",  "ZT_CLIENTSTATE_DONE"};
 
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
@@ -33,10 +33,11 @@ ATTRIBUTE_NORETURN static void alrm_handler(int sig ATTRIBUTE_UNUSED) {
   siglongjmp(jmpenv, 1);
 }
 
-error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_list,
-                                    timediff_t timeout_msec) {
+error_t zt_client_resolve_host_timeout(cconnctx *ctx,
+                                       struct zt_addrinfo **ai_list,
+                                       timediff_t timeout_msec) {
   error_t ret = ERR_SUCCESS;
-  struct my_addrinfo *ai_head = NULL, *ai_cur;
+  struct zt_addrinfo *ai_head = NULL, *ai_cur;
   struct addrinfo hints, *res = NULL, *p;
   size_t saddr_len;
   int status;
@@ -51,7 +52,7 @@ error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_list,
 #endif
 
   assert(ctx);
-  assert(ctx->state == CLIENTSTATE_CONN_INIT);
+  assert(ctx->state == ZT_CLIENTSTATE_CONN_INIT);
   assert(timeout_msec > 0);
 
   if (!ctx->hostname) {
@@ -83,7 +84,7 @@ error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_list,
      * This will cause a SIGALRM signal to be sent after `timeout_msec` in
      * seconds (rounded up) which will cause the system call to abort
      */
-    prev_alarm = alarm(sltoui((timeout_msec + 999) / 1000));
+    prev_alarm = alarm(zt_sltoui((timeout_msec + 999) / 1000));
   }
 #endif
 
@@ -149,8 +150,8 @@ error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_list,
     if ((size_t)p->ai_addrlen < saddr_len)
       continue;
 
-    /* Allocate a single block for all members of my_addrinfo */
-    ai_cur = malloc(sizeof(struct my_addrinfo) + cname_len + saddr_len);
+    /* Allocate a single block for all members of zt_addrinfo */
+    ai_cur = malloc(sizeof(struct zt_addrinfo) + cname_len + saddr_len);
     if (!ai_cur) {
       ret = ERR_MEM_FAIL;
       goto cleanup;
@@ -166,7 +167,7 @@ error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_list,
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
 
-    ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct my_addrinfo));
+    ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
     memcpy(ai_cur->ai_addr, p->ai_addr, saddr_len);
 
     if (cname_len) {
@@ -204,7 +205,8 @@ cleanup:
    * here
    */
   if (prev_alarm) {
-    timediff_t elapsed_sec = timediff_msec(now(), ctx->created_at) / 1000;
+    timediff_t elapsed_sec =
+        zt_timediff_msec(zt_time_now(), ctx->created_at) / 1000;
 
     unsigned long alarm_runout = (unsigned long)(prev_alarm - elapsed_sec);
 
@@ -226,18 +228,18 @@ cleanup:
 
   /* If there was an error, free the my_addrinfo list */
   if (ret)
-    my_addrinfo_free(ai_head);
+    zt_addrinfo_free(ai_head);
   freeaddrinfo(res);
   return ret;
 }
 
-error_t client_tcp_conn0(cconnctx *ctx, struct my_addrinfo *ai_list) {
+error_t zt_client_tcp_conn0(cconnctx *ctx, struct zt_addrinfo *ai_list) {
   error_t ret = ERR_SUCCESS;
-  struct my_addrinfo *ai_cur, *ai_estab;
+  struct zt_addrinfo *ai_cur, *ai_estab;
   int sockfd, on;
 
   assert(ctx);
-  assert(ctx->state == CLIENTSTATE_CONN_INIT);
+  assert(ctx->state == ZT_CLIENTSTATE_CONN_INIT);
   assert(ai_list);
 
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
@@ -318,9 +320,9 @@ error_t client_tcp_conn0(cconnctx *ctx, struct my_addrinfo *ai_list) {
 
     /* If nothing failed we have found a valid candidate */
     ctx->ai_estab = NULL;
-    ai_estab = malloc(sizeof(struct my_addrinfo));
+    ai_estab = malloc(sizeof(struct zt_addrinfo));
     if (ai_estab) {
-      memcpy(ai_estab, ai_cur, sizeof(struct my_addrinfo));
+      memcpy(ai_estab, ai_cur, sizeof(struct zt_addrinfo));
       ai_estab->ai_next = NULL;
       ctx->sockfd = sockfd;
       ctx->ai_estab = ai_estab;
@@ -346,10 +348,10 @@ exit:
 error_t client_tcp_conn1(cconnctx *ctx) {
   int rv, flags;
   int sockfd;
-  struct my_addrinfo *ai_estab;
+  struct zt_addrinfo *ai_estab;
 
   assert(ctx);
-  assert(ctx->state == CLIENTSTATE_CONN_INIT);
+  assert(ctx->state == ZT_CLIENTSTATE_CONN_INIT);
   assert(ctx->ai_estab);
   assert(ctx->sockfd >= 0);
 
@@ -369,8 +371,8 @@ error_t client_tcp_conn1(cconnctx *ctx) {
     return ERR_CONNECT;
   }
   /**
-   * We are done for now, but it is important to verify the connection before
-   * performing a read/write and restore the file status flags then
+   * We are done for now, but it is important to verify the connection
+   * before performing a read/write and restore the file status flags then
    */
   return ERR_SUCCESS;
 }
@@ -384,7 +386,7 @@ error_t client_tcp_verify(cconnctx *ctx, timediff_t timeout_msec) {
   struct timeval tval;
 
   assert(ctx);
-  assert(ctx->state == CLIENTSTATE_AUTH_INIT);
+  assert(ctx->state == ZT_CLIENTSTATE_AUTH_INIT);
   assert(ctx->sockfd >= 0);
   assert(timeout_msec >= 0);
 
@@ -431,10 +433,10 @@ error_t client_tcp_verify(cconnctx *ctx, timediff_t timeout_msec) {
 // TODO handle *done
 // TODO handle error_t errors, this function will only return 0 or -1
 
-// This is the client state machine; the idea is to call client_do from the main
-// routine with different arguments required for different states. This way we
-// can have some nice async behaviour while building the connection
-int client_do(cconnctx *ctx, void *args, bool *done) {
+// This is the client state machine; the idea is to call zt_client_do from the
+// main routine with different arguments required for different states. This way
+// we can have some nice async behaviour while building the connection
+int zt_client_do(cconnctx *ctx, void *args, bool *done) {
   int rv;
 
   if (!ctx) {
@@ -443,28 +445,29 @@ int client_do(cconnctx *ctx, void *args, bool *done) {
   }
 
   switch (ctx->state) {
-  case CLIENTSTATE_CONN_INIT: {
-    struct my_addrinfo *ai_list = NULL;
+  case ZT_CLIENTSTATE_CONN_INIT: {
+    struct zt_addrinfo *ai_list = NULL;
 
-    if ((rv = client_resolve_host_timeout(ctx, &ai_list,
-                                          (ctx->resolve_timeout > 0)
-                                              ? ctx->resolve_timeout
-                                              : CLIENT_TIMEOUT_RESOLVE)) != 0) {
+    if ((rv = zt_client_resolve_host_timeout(
+             ctx, &ai_list,
+             (ctx->resolve_timeout > 0) ? ctx->resolve_timeout
+                                        : ZT_CLIENT_TIMEOUT_RESOLVE)) != 0) {
       goto exit;
     }
-    if ((rv = client_tcp_conn0(ctx, ai_list)) != 0)
+    if ((rv = zt_client_tcp_conn0(ctx, ai_list)) != 0)
       goto exit;
     if ((rv = client_tcp_conn1(ctx)) != 0)
       goto exit;
 
-    CLIENTSTATE_CHANGE(ctx->state, CLIENTSTATE_AUTH_INIT);
+    CLIENTSTATE_CHANGE(ctx->state, ZT_CLIENTSTATE_AUTH_INIT);
     goto exit;
   }
 
-  case CLIENTSTATE_AUTH_INIT: {
+  case ZT_CLIENTSTATE_AUTH_INIT: {
     /**
      * We have arrived here with the required authentication parameters from
-     * the user; so now would be the time to verify if connect() was successful
+     * the user; so now would be the time to verify if connect() was
+     * successful
      *
      * Note: A zero timeout is allowed in this case meaning that we will not
      * wait for the connection to be verified (expect a completed TCP
@@ -472,7 +475,7 @@ int client_do(cconnctx *ctx, void *args, bool *done) {
      */
     if ((rv = client_tcp_verify(ctx, (ctx->connect_timeout >= 0)
                                          ? ctx->connect_timeout
-                                         : CLIENT_TIMEOUT_CONNECT)) != 0) {
+                                         : ZT_CLIENT_TIMEOUT_CONNECT)) != 0) {
       goto exit;
     }
   }

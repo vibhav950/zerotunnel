@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -DDEBUG -DOPENSSL -fsanitize=address -fsanitize=leak
+CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -DDEBUG -DOPENSSL
 LIBS := -lcrypto -lssl
 
 all: bin/kex_ecc_test
@@ -30,4 +30,4 @@ bin/test_utils.o: tests/test_utils.c
 
 .PHONY: clean
 clean:
-	rm -f bin/*.o bin/kex_ecc_test.c
+	rm -f bin/*.o bin/kex_ecc_test

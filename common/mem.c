@@ -3,7 +3,7 @@
  * Wrapper for LIBC memory functions.
  */
 
-#include "defs.h"
+#include "zerotunnel.h"
 #include "memzero.h"
 
 #include <assert.h>
@@ -21,7 +21,7 @@
 #undef __LARGE_ALLOC_SIZE
 #undef __LARGE_ALLOC_ALIGN_SIZE
 
-void *xmalloc(size_t size) {
+void *zt_malloc(size_t size) {
   void *ptr;
 
   assert(size > 0);
@@ -47,7 +47,7 @@ void *xmalloc(size_t size) {
   return ptr;
 }
 
-void *xcalloc(size_t nmemb, size_t size) {
+void *zt_calloc(size_t nmemb, size_t size) {
   void *ptr;
 
   assert(nmemb > 0);
@@ -55,7 +55,7 @@ void *xcalloc(size_t nmemb, size_t size) {
 
 #ifdef __SECURE_LARGE_ALLOC
   if (size * nmemb >= __LARGE_ALLOC_SIZE) {
-    ptr = xmalloc(size * nmemb);
+    ptr = zt_malloc(size * nmemb);
     if (ptr)
       memzero(ptr, malloc_usable_size(ptr));
 #else
@@ -68,7 +68,7 @@ void *xcalloc(size_t nmemb, size_t size) {
   return ptr;
 }
 
-void xfree(void *ptr) {
+void zt_free(void *ptr) {
   if (!ptr)
     return;
 
@@ -82,7 +82,7 @@ void xfree(void *ptr) {
        * NOTE: This failure will only occur if pages corresponding to ptr[.size]
        * have not been successfully locked with mlock(). Forcing an exit here
        * means we are exiting without first sweeping process memory with secrets
-       * in it. Even more the reason to only call xfree() with valid arguments!
+       * in it. Even more the reason to only call zt_free() with valid arguments!
        */
       PRINTDEBUG("munlock(%zu) failed (%s)\n", size, strerror(errno));
       memzero(ptr, size);
@@ -93,20 +93,20 @@ void xfree(void *ptr) {
   free(ptr);
 }
 
-void *xrealloc(void *ptr, size_t size) {
+void *zt_realloc(void *ptr, size_t size) {
   assert(size > 0);
 
   memzero(ptr, size);
 #ifdef __SECURE_LARGE_ALLOC
-  xfree(ptr);
-  ptr = xmalloc(size);
+  zt_free(ptr);
+  ptr = zt_malloc(size);
 #else
   ptr = realloc(ptr, size);
 #endif
   return ptr;
 }
 
-volatile void *xmemset(volatile void *mem, int ch, size_t len) {
+volatile void *zt_memset(volatile void *mem, int ch, size_t len) {
   volatile char *p;
 
   for (p = (volatile char *)mem; len; p[--len] = ch)
@@ -114,7 +114,7 @@ volatile void *xmemset(volatile void *mem, int ch, size_t len) {
   return mem;
 }
 
-volatile void *xmemzero(volatile void *mem, size_t len) {
+volatile void *zt_memzero(volatile void *mem, size_t len) {
   volatile char *p;
 
   for (p = (volatile char *)mem; len; p[--len] = 0x00)
@@ -122,7 +122,7 @@ volatile void *xmemzero(volatile void *mem, size_t len) {
   return mem;
 }
 
-volatile void *xmemcpy(volatile void *dst, volatile void *src, size_t len) {
+volatile void *zt_memcpy(volatile void *dst, volatile void *src, size_t len) {
   volatile char *cdst, *csrc;
 
   cdst = (volatile char *)dst;
@@ -132,7 +132,7 @@ volatile void *xmemcpy(volatile void *dst, volatile void *src, size_t len) {
   return dst;
 }
 
-volatile void *xmemmove(volatile void *dst, volatile void *src, size_t len) {
+volatile void *zt_memmove(volatile void *dst, volatile void *src, size_t len) {
   size_t i;
   volatile char *cdst, *csrc;
 
@@ -148,7 +148,7 @@ volatile void *xmemmove(volatile void *dst, volatile void *src, size_t len) {
 }
 
 /* Returns zero if a[0:len-1] == b[0:len-1], otherwise non-zero. */
-unsigned int xmemcmp(const void *a, const void *b, size_t len) {
+unsigned int zt_memcmp(const void *a, const void *b, size_t len) {
   unsigned int res = 0;
   const char *pa, *pb;
 
@@ -168,7 +168,7 @@ unsigned int xmemcmp(const void *a, const void *b, size_t len) {
  * Thanks to John's blog:
  * https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
  */
-unsigned int xstrcmp(const char *str, const char *x) {
+unsigned int zt_strcmp(const char *str, const char *x) {
   unsigned int res = 0;
   volatile size_t i, j, k;
 
@@ -189,26 +189,26 @@ unsigned int xstrcmp(const char *str, const char *x) {
   return res;
 }
 
-void *xmemdup(const void *m, size_t n) {
+void *zt_memdup(const void *m, size_t n) {
   if (!m || !n)
     return NULL;
 
-  void *p = xmalloc(n);
+  void *p = zt_malloc(n);
   if (!p)
     return NULL;
-  return (void *)xmemcpy(p, (void *)m, n);
+  return (void *)zt_memcpy(p, (void *)m, n);
 }
 
-char *xstrdup(const char *s) { return s ? xmemdup(s, strlen(s) + 1) : NULL; }
+char *zt_strdup(const char *s) { return s ? zt_memdup(s, strlen(s) + 1) : NULL; }
 
-char *xstrmemdup(const void *m, size_t n) {
+char *zt_strmemdup(const void *m, size_t n) {
   if (!m || !n)
     return NULL;
 
-  void *p1 = xmalloc(n + 1);
+  void *p1 = zt_malloc(n + 1);
   if (!p1)
     return NULL;
-  char *p2 = (char *)xmemcpy(p1, (void *)m, n);
+  char *p2 = (char *)zt_memcpy(p1, (void *)m, n);
   p2[n] = 0;
   return p2;
 }

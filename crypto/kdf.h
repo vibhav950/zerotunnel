@@ -1,7 +1,7 @@
 #ifndef __KDF_H__
 #define __KDF_H__
 
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 
 typedef enum {
   KDF_FLAG_ALLOC = (1U << 0),

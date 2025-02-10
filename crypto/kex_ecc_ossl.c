@@ -1,4 +1,4 @@
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 #include "common/memzero.h"
 #include "kex.h"
 #include "kex_ecc.h"
@@ -58,11 +58,11 @@ static error_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
     return ERR_BAD_ARGS;
   }
 
-  if (!(*kex = (kex_t *)xcalloc(1, sizeof(kex_t))))
+  if (!(*kex = (kex_t *)zt_calloc(1, sizeof(kex_t))))
     return ERR_MEM_FAIL;
 
-  if (!(ossl_ctx = (kex_ossl_ctx *)xcalloc(1, sizeof(kex_ossl_ctx)))) {
-    xfree(*kex);
+  if (!(ossl_ctx = (kex_ossl_ctx *)zt_calloc(1, sizeof(kex_ossl_ctx)))) {
+    zt_free(*kex);
     *kex = NULL;
     return ERR_MEM_FAIL;
   }
@@ -111,11 +111,11 @@ static void ossl_kex_ecc_dealloc(kex_t *kex) {
       EVP_PKEY_free(ctx->ec_params);
       /* Prevent state leaks */
       memzero(ctx, sizeof(kex_ossl_ctx));
-      xfree(ctx);
+      zt_free(ctx);
     }
   }
   memzero(kex, sizeof(kex_t));
-  xfree(kex);
+  zt_free(kex);
   kex = NULL;
 }
 
@@ -181,7 +181,7 @@ static error_t ossl_kex_ecc_get_peer_data(kex_t *kex,
     OSSL_CHECK(
         EVP_PKEY_get_raw_public_key(ossl_ctx->ec_key, NULL, &pubkey_len));
 
-    if (!(pubkey = xcalloc(1, pubkey_len))) {
+    if (!(pubkey = zt_calloc(1, pubkey_len))) {
       ret = ERR_MEM_FAIL;
       goto cleanup;
     }
@@ -195,7 +195,7 @@ static error_t ossl_kex_ecc_get_peer_data(kex_t *kex,
         ossl_ctx->ec_key, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &pubkey_len));
 
     /* Allocate the buffer for the public key */
-    if (!(pubkey = xcalloc(1, pubkey_len))) {
+    if (!(pubkey = zt_calloc(1, pubkey_len))) {
       ret = ERR_MEM_FAIL;
       goto cleanup;
     }
@@ -211,7 +211,7 @@ static error_t ossl_kex_ecc_get_peer_data(kex_t *kex,
         ossl_ctx->ec_key, OSSL_PKEY_PARAM_GROUP_NAME, NULL, 0, &curvename_len));
 
     ++curvename_len; /* Null terminator */
-    if (!(curvename = xcalloc(1, curvename_len))) {
+    if (!(curvename = zt_calloc(1, curvename_len))) {
       ret = ERR_MEM_FAIL;
       goto cleanup;
     }
@@ -231,8 +231,8 @@ static error_t ossl_kex_ecc_get_peer_data(kex_t *kex,
 
 cleanup:
   if (ret) {
-    xfree(pubkey);
-    xfree(curvename);
+    zt_free(pubkey);
+    zt_free(curvename);
     pubkey = curvename = NULL;
   }
 
@@ -249,9 +249,9 @@ static error_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
   if (!peer_data)
     return ERR_NULL_PTR;
 
-  peer_data->ec_pub = xmemdup(ec_pub, ec_pub_len);
+  peer_data->ec_pub = zt_memdup(ec_pub, ec_pub_len);
   peer_data->ec_pub_len = ec_pub_len;
-  peer_data->ec_curvename = xmemdup(ec_curvename, ec_curvename_len);
+  peer_data->ec_curvename = zt_memdup(ec_curvename, ec_curvename_len);
   peer_data->ec_curvename_len = ec_curvename_len;
 
   return ERR_SUCCESS;
@@ -265,8 +265,8 @@ static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
 
   memzero(peer_data->ec_pub, peer_data->ec_pub_len);
   memzero(peer_data->ec_curvename, peer_data->ec_curvename_len);
-  xfree(peer_data->ec_pub);
-  xfree(peer_data->ec_curvename);
+  zt_free(peer_data->ec_pub);
+  zt_free(peer_data->ec_curvename);
 }
 
 /**
@@ -335,7 +335,7 @@ static error_t ossl_kex_ecc_derive_shared_key(kex_t *kex,
   *shared_key_len = 0;
   OSSL_CHECK(EVP_PKEY_derive(derive_ctx, NULL, shared_key_len));
 
-  if (!(*shared_key = xcalloc(1, *shared_key_len))) {
+  if (!(*shared_key = zt_calloc(1, *shared_key_len))) {
     ret = ERR_MEM_FAIL;
     goto cleanup;
   }
@@ -383,7 +383,7 @@ static error_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
         ossl_ctx->ec_key, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &required));
   }
 
-  if (!(*pubkey = xmalloc(required)))
+  if (!(*pubkey = zt_malloc(required)))
     return ERR_MEM_FAIL;
   *pubkey_len = required;
 

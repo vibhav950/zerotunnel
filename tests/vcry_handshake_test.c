@@ -6,7 +6,7 @@
  * four-way handshake.
  */
 
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 #include "lib/vcry.h"
 #include "test.h"
 #include <pthread.h>
@@ -89,7 +89,7 @@ void *initiator_thread(void *arg) {
 
   /* ============ HANDSHAKE COMPLETE ============ */
   ASSERT(vcry_handshake_complete(read, read_len) == 0);
-  xfree(read); // free after use
+  zt_free(read); // free after use
 
   /* We are now in the right state to derive the session key */
   pthread_barrier_wait(&barrier);
@@ -121,7 +121,7 @@ void *initiator_thread(void *arg) {
 
   /* ============ VERIFY COMPLETE ============ */
   ASSERT(vcry_initiator_verify_complete(read, "Alice", "Bob") == 0);
-  xfree(read); // free after use
+  zt_free(read); // free after use
 
   vcry_module_release();
 
@@ -158,7 +158,7 @@ void *responder_thread(void *arg) {
 
   /* ============ HANDSHAKE RESPONSE ============ */
   ASSERT(vcry_handshake_respond(read, read_len, &write, &write_len) == 0);
-  xfree(read);
+  zt_free(read);
 
   /* Send response message */
   pthread_mutex_lock(&responder_buf->lock);
@@ -200,7 +200,7 @@ void *responder_thread(void *arg) {
 
   /* ============ VERIFY COMPLETE ============ */
   ASSERT(vcry_responder_verify_complete(read, "Alice", "Bob") == 0);
-  xfree(read);
+  zt_free(read);
 
   vcry_module_release();
 
@@ -236,6 +236,14 @@ int main(void) {
   pthread_join(responder, NULL);
 
   pthread_barrier_destroy(&barrier);
+
+  pthread_mutex_destroy(&initiator_buf.lock);
+  pthread_mutex_destroy(&responder_buf.lock);
+
+  pthread_cond_destroy(&initiator_buf.can_produce);
+  pthread_cond_destroy(&initiator_buf.can_consume);
+  pthread_cond_destroy(&responder_buf.can_produce);
+  pthread_cond_destroy(&responder_buf.can_consume);
 
   exit(EXIT_SUCCESS);
 }

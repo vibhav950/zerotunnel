@@ -1,9 +1,9 @@
 #include "time_utils.h"
 
 /** */
-timeval_t now() {
+zt_timeval_t zt_time_now() {
   struct timespec t;
-  timeval_t rv;
+  zt_timeval_t rv;
   if (clock_gettime(CLOCK_MONOTONIC, &t) == 0) {
     rv.tv_sec = t.tv_sec;
     rv.tv_usec = t.tv_nsec / 1000;
@@ -19,7 +19,7 @@ timeval_t now() {
  *
  * For differencces too large/small, it returns the maximum/minimum value.
  */
-timediff_t timediff_msec(timeval_t newer, timeval_t older) {
+timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older) {
   timediff_t diff = (timediff_t)newer.tv_sec - older.tv_sec;
   if (diff >= TIMEDIFF_T_MAX)
     return TIMEDIFF_T_MAX;
@@ -33,7 +33,7 @@ timediff_t timediff_msec(timeval_t newer, timeval_t older) {
  *
  * For differences too large/small, it returns the maximum/minimum value.
  */
-timediff_t timediff_usec(timeval_t newer, timeval_t older) {
+timediff_t zt_timediff_usec(zt_timeval_t newer, zt_timeval_t older) {
   timediff_t diff = (timediff_t)newer.tv_sec - older.tv_sec;
   if (diff >= (TIMEDIFF_T_MAX / 1000))
     return TIMEDIFF_T_MAX;

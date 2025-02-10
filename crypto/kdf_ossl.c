@@ -6,7 +6,7 @@
  * vibhav950 on GitHub
  */
 
-#include "common/defs.h"
+#include "common/zerotunnel.h"
 #include "common/memzero.h"
 #include "kdf.h"
 #include "kdf_defs.h"
@@ -46,21 +46,21 @@ static error_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   if (!pkdf)
     return ERR_INTERNAL;
 
-  *kdf = (kdf_t *)xcalloc(1, sizeof(kdf_t));
+  *kdf = (kdf_t *)zt_calloc(1, sizeof(kdf_t));
   if (!*kdf)
     return ERR_MEM_FAIL;
 
-  kdf_ctx = (kdf_ossl_ctx *)xcalloc(1, sizeof(kdf_ossl_ctx));
+  kdf_ctx = (kdf_ossl_ctx *)zt_calloc(1, sizeof(kdf_ossl_ctx));
   if (!kdf_ctx) {
-    xfree(*kdf);
+    zt_free(*kdf);
     *kdf = NULL;
     return ERR_MEM_FAIL;
   }
 
   kdf_ctx->kctx = EVP_KDF_CTX_new(pkdf);
   if (!kdf_ctx->kctx) {
-    xfree(kdf_ctx);
-    xfree(*kdf);
+    zt_free(kdf_ctx);
+    zt_free(*kdf);
     *kdf = NULL;
     EVP_KDF_free(pkdf);
     return ERR_INTERNAL;
@@ -87,15 +87,15 @@ static void ossl_kdf_dealloc(kdf_t *kdf) {
       EVP_KDF_free(kdf_ctx->kdf);
       /* Prevent state leaks */
       memzero(kdf_ctx, sizeof(kdf_ossl_ctx));
-      xfree(kdf_ctx);
+      zt_free(kdf_ctx);
     }
   }
   memzero(kdf->pw, kdf->pwlen);
   memzero(kdf->salt, kdf->saltlen);
-  xfree(kdf->pw);
-  xfree(kdf->salt);
+  zt_free(kdf->pw);
+  zt_free(kdf->salt);
   memzero(kdf, sizeof(kdf_t));
-  xfree(kdf);
+  zt_free(kdf);
   kdf = NULL;
 }
 
@@ -118,7 +118,7 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
 
   scrypt_n = KDF_SCRYPT_CFABLE_N;
   scrypt_r = KDF_SCRYPT_CFABLE_R;
-  scrypt_p = MAX(MIN(KDF_SCRYPT_CFABLE_P, cpu_get_processor_count()), 1);
+  scrypt_p = MAX(MIN(KDF_SCRYPT_CFABLE_P, zt_cpu_get_processor_count()), 1);
   scrypt_maxmem = KDF_SCRYPT_CFABLE_MAXMEM;
   *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, pw, pw_len);
   *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, salt_len);
@@ -222,22 +222,22 @@ static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
 
   kdf_ctx = kdf->ctx;
 
-  if (!(pw = (uint8_t *)xmemdup(password, password_len)))
+  if (!(pw = (uint8_t *)zt_memdup(password, password_len)))
     return ERR_MEM_FAIL;
 
-  if (!(slt = (uint8_t *)xmemdup(salt, salt_len))) {
-    xfree(pw);
+  if (!(slt = (uint8_t *)zt_memdup(salt, salt_len))) {
+    zt_free(pw);
     return ERR_MEM_FAIL;
   }
 
   if (kdf->pw) {
     memzero(kdf->pw, kdf->pwlen);
-    xfree(kdf->pw);
+    zt_free(kdf->pw);
   }
 
   if (kdf->salt) {
     memzero(kdf->salt, kdf->saltlen);
-    xfree(kdf->salt);
+    zt_free(kdf->salt);
   }
 
   kdf->pw = pw;
@@ -290,16 +290,16 @@ static error_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   alg = kdf->alg;
 
   buf_len = kdf->saltlen + 16 + additional_data_len;
-  if (!(buf = xmalloc(buf_len)))
+  if (!(buf = zt_malloc(buf_len)))
     return ERR_MEM_FAIL;
 
   pbuf = buf;
-  xmemcpy(pbuf, kdf->salt, kdf->saltlen);
+  zt_memcpy(pbuf, kdf->salt, kdf->saltlen);
   pbuf += kdf->saltlen;
-  xmemcpy(pbuf, kdf->ctr.bytes, 16);
+  zt_memcpy(pbuf, kdf->ctr.bytes, 16);
   pbuf += 16;
   if (additional_data_len)
-    xmemcpy(pbuf, additional_data, additional_data_len);
+    zt_memcpy(pbuf, additional_data, additional_data_len);
 
   switch (alg) {
   case KDF_ALG_scrypt:
@@ -324,7 +324,7 @@ static error_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
 
   /** Cleanup */
   memzero(buf, buf_len);
-  xfree(buf);
+  zt_free(buf);
   return ret;
 }
 

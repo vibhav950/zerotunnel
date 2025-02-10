@@ -10,18 +10,18 @@
 #include <sys/types.h>
 
 typedef enum {
-  CLIENTSTATE_CONN_INIT,
-  CLIENTSTATE_AUTH_INIT,
-  CLIENTSTATE_CONN_DONE,
-  CLIENTSTATE_PEERAUTH_WAIT,
-  CLIENTSTATE_TRANSFER,
-  CLIENTSTATE_DONE
-} CLIENTSTATE;
+  ZT_CLIENTSTATE_CONN_INIT,
+  ZT_CLIENTSTATE_AUTH_INIT,
+  ZT_CLIENTSTATE_CONN_DONE,
+  ZT_CLIENTSTATE_PEERAUTH_WAIT,
+  ZT_CLIENTSTATE_TRANSFER,
+  ZT_CLIENTSTATE_DONE
+} ZT_CLIENTSTATE;
 
 typedef struct {
-  CLIENTSTATE
+  ZT_CLIENTSTATE
     state;
-  struct my_addrinfo
+  struct zt_addrinfo
     *ai_estab;
   struct sockaddr_in
     *addr_ipv4;
@@ -30,7 +30,7 @@ typedef struct {
     *addr_ipv6;
 #endif
 #if 1 // USE_SIGACT_TIMEOUT
-  timeval_t
+  zt_timeval_t
     created_at;
 #endif
   char
@@ -57,14 +57,14 @@ typedef struct {
     config_live_read : 1; /* live read enabled */
 } cconnctx;
 
-int client_do(cconnctx *ctx, void *args, bool *done);
+int zt_client_do(cconnctx *ctx, void *args, bool *done);
 
-error_t client_resolve_host_timeout(cconnctx *ctx, struct my_addrinfo **ai_head, int timeout_sec);
+error_t zt_client_resolve_host_timeout(cconnctx *ctx, struct zt_addrinfo **ai_head, zt_timeout_t timeout_sec);
 
-void my_addrinfo_free(struct my_addrinfo *ai);
+void zt_addrinfo_free(struct zt_addrinfo *ai);
 
-void my_addrinfo_set_port(struct my_addrinfo *ai, int port);
+void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port);
 
-error_t client_tcp_conn0(cconnctx *ctx, struct my_addrinfo *ai_list);
+error_t zt_client_tcp_conn0(cconnctx *ctx, struct zt_addrinfo *ai_list);
 
 #endif /* __CLIENT_H__ */

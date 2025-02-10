@@ -46,7 +46,7 @@ static int _win32_sys_rand(uint8_t *buf, size_t bytes) {
  *
  * Returns 0 on success, -1 on failure.
  */
-int sys_rand_bytes(uint8_t *buf, size_t bytes) {
+int zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
   int rv = 0;
 #ifndef _WIN32
   int fd;
@@ -73,14 +73,14 @@ int sys_rand_bytes(uint8_t *buf, size_t bytes) {
 
 /**
  * For a request where the size is a multiple of 4 bytes, it is advised to use
- * this function over sys_rand_bytes() if the underlying architecture is x86.
+ * this function over zt_systemrand_bytes() if the underlying architecture is x86.
  * This function uses a runtime check performed by DetectX86Rand() at program
  * startup to determine if we can get random data from the RDRAND instruction;
- * if this check fails, we naturally fall back to sys_rand_bytes().
+ * if this check fails, we naturally fall back to zt_systemrand_bytes().
  *
  * Returns 0 on success, -1 on failure.
  */
-int sys_rand_4bytes(uint32_t *buf, size_t bytes4) {
+int zt_systemrand_4bytes(uint32_t *buf, size_t bytes4) {
   if (!buf || !bytes4)
     return -1;
 
@@ -91,16 +91,16 @@ int sys_rand_4bytes(uint32_t *buf, size_t bytes4) {
     return 0;
   }
 fallback:
-  return sys_rand_bytes((uint8_t *)buf, bytes4 * 4);
+  return zt_systemrand_bytes((uint8_t *)buf, bytes4 * 4);
 }
 
 /**
  * For a request where the size is a multiple of 8 bytes, it is advised to use
- * this function over sys_rand_bytes() if the underlying architecture is x86.
+ * this function over zt_systemrand_bytes() if the underlying architecture is x86.
  *
  * Returns 0 on success, -1 on failure.
  */
-int sys_rand_8bytes(uint64_t *buf, size_t bytes8) {
+int zt_systemrand_8bytes(uint64_t *buf, size_t bytes8) {
   if (!buf || !bytes8)
     return -1;
 
@@ -111,37 +111,37 @@ int sys_rand_8bytes(uint64_t *buf, size_t bytes8) {
     return 0;
   }
 fallback:
-  return sys_rand_bytes((uint8_t *)buf, bytes8 * 8);
+  return zt_systemrand_bytes((uint8_t *)buf, bytes8 * 8);
 }
 
-int rand_gen_u8(uint8_t *rand) {
+int zt_rand_u8(uint8_t *rand) {
 #if defined(HAVE_ARC4RANDOM)
   *rand = arc4random_uniform(UINT8_MAX + 1);
   return 0;
 #else
-  return sys_rand_bytes(rand, 1);
+  return zt_systemrand_bytes(rand, 1);
 #endif
 }
 
-int rand_gen_u16(uint16_t *rand) {
+int zt_rand_u16(uint16_t *rand) {
 #if defined(HAVE_ARC4RANDOM)
   *rand = arc4random_uniform(UINT16_MAX + 1);
   return 0;
 #else
-  return sys_rand_bytes((uint8_t *)rand, 2);
+  return zt_systemrand_bytes((uint8_t *)rand, 2);
 #endif
 }
 
-int rand_gen_u32(uint32_t *rand) {
+int zt_rand_u32(uint32_t *rand) {
 #if defined(HAVE_ARC4RANDOM)
   *rand = arc4random();
   return 0;
 #else
-  return sys_rand_4bytes(rand, 1);
+  return zt_systemrand_4bytes(rand, 1);
 #endif
 }
 
-int rand_gen_u64(uint64_t *rand) { return sys_rand_8bytes(rand, 1); }
+int zt_rand_u64(uint64_t *rand) { return zt_systemrand_8bytes(rand, 1); }
 
 const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
                                       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -158,7 +158,7 @@ const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
  * \param charset_len Length of \p charset EXCLUDING the null terminator (can be
  * zero if \p charset is null). If 1 is passed, the default char set is used.
  */
-int rand_gen_charset(char *rstr, size_t rstr_len, const char *charset,
+int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
                      size_t charset_len) {
   const char *p;
   uint8_t rand;
@@ -174,7 +174,7 @@ int rand_gen_charset(char *rstr, size_t rstr_len, const char *charset,
   }
 
   for (size_t i = 0; i < rstr_len - 1; i++) {
-    if (rand_gen_u8(&rand))
+    if (zt_rand_u8(&rand))
       return -1;
     rstr[i] = p[rand % charset_len];
   }
