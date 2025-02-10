@@ -5,11 +5,11 @@
 #include "kdf.h"
 
 /** Max password length in bytes */
-#define KDF_MAX_PASSWORD_LEN 512
+#define KDF_MAX_PASSWORD_LEN 1024
 /** Max salt length in bytes */
 #define KDF_MAX_SALT_LEN 128
 /** Maximum keystream length in bytes */
-#define KDF_MAX_KEYSTREAM_LEN 512
+#define KDF_MAX_KEYSTREAM_LEN 1024
 /** Maximum number of bytes between initializations */
 #define KDF_MAX_REINIT_BYTES (1 << 12)
 

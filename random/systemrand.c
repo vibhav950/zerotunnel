@@ -153,8 +153,8 @@ const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
  *
  * \param rstr Buffer for the random string.
  * \param rstr_len Length of \p rstr INCLUDING the null terminator.
- * \param charset A null-terminated string containing the character set. If null
- * is passed, then the default character set is used.
+ * \param charset A null-terminated string containing the UTF-8 character set.
+ * If null is passed, then the default character set is used.
  * \param charset_len Length of \p charset EXCLUDING the null terminator (can be
  * zero if \p charset is null). If 1 is passed, the default char set is used.
  */

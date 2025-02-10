@@ -165,6 +165,9 @@ static error_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
   if (!peer_pubkey || !ct || !ct_len || !ss || !ss_len)
     return ERR_NULL_PTR;
 
+  if (!KEM_FLAG_GET(kem, KEM_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
+
   oqs_ctx = (kem_oqs_ctx *)kem->ctx;
   alg = kem->alg;
   oqs_kem = oqs_ctx->kem;
@@ -222,6 +225,9 @@ static error_t liboqs_kem_decapsulate(kem_t *kem, const uint8_t *ct,
 
   if (!ct || !ss || !ss_len)
     return ERR_NULL_PTR;
+
+  if (!KEM_FLAG_GET(kem, KEM_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
 
   if (!KEM_FLAG_GET(kem, KEM_FLAG_KEYGEN))
     return ERR_NOT_INIT;

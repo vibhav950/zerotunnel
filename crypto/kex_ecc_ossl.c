@@ -244,6 +244,8 @@ static error_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
                                           size_t ec_pub_len,
                                           const uint8_t *ec_curvename,
                                           size_t ec_curvename_len) {
+  PRINTDEBUG("");
+
   if (!peer_data)
     return ERR_NULL_PTR;
 
@@ -256,6 +258,8 @@ static error_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
 }
 
 static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
+  PRINTDEBUG("");
+
   if (!peer_data)
     return;
 
@@ -346,6 +350,56 @@ cleanup:
   return ret;
 }
 
+/**
+ *
+ */
+static error_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
+                                                 size_t *pubkey_len) {
+  error_t ret = ERR_SUCCESS;
+  kex_ossl_ctx *ossl_ctx;
+  size_t required;
+  int ec_nid;
+
+  PRINTDEBUG("");
+
+  if (!pubkey || !pubkey_len)
+    return ERR_NULL_PTR;
+
+  if (!KEX_FLAG_GET(kex, KEX_FLAG_ALLOC))
+    return ERR_NOT_ALLOC;
+
+  if (!KEX_FLAG_GET(kex, KEX_FLAG_KEYGEN))
+    return ERR_NOT_INIT;
+
+  ossl_ctx = kex->ctx;
+  ec_nid = ossl_ctx->nid;
+
+  /** Get the required buffer length */
+  required = 0;
+  if (ec_nid == NID_X25519 || ec_nid == NID_X448) {
+    OSSL_CHECK(EVP_PKEY_get_raw_public_key(ossl_ctx->ec_key, NULL, &required));
+  } else {
+    OSSL_CHECK(EVP_PKEY_get_octet_string_param(
+        ossl_ctx->ec_key, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &required));
+  }
+
+  if (!(*pubkey = xmalloc(required)))
+    return ERR_MEM_FAIL;
+  *pubkey_len = required;
+
+  if (ec_nid == NID_X25519 || ec_nid == NID_X448) {
+    OSSL_CHECK(
+        EVP_PKEY_get_raw_public_key(ossl_ctx->ec_key, *pubkey, pubkey_len));
+  } else {
+    OSSL_CHECK(EVP_PKEY_get_octet_string_param(ossl_ctx->ec_key,
+                                               OSSL_PKEY_PARAM_PUB_KEY, *pubkey,
+                                               required, pubkey_len));
+  }
+
+cleanup:
+  return ret;
+}
+
 const kex_intf_t kex_ecc_intf = {
     .alloc = ossl_kex_ecc_alloc,
     .dealloc = ossl_kex_ecc_dealloc,
@@ -354,6 +408,7 @@ const kex_intf_t kex_ecc_intf = {
     .new_peer_data = ossl_kex_ecc_new_peer_data,
     .free_peer_data = ossl_kex_ecc_free_peer_data,
     .derive_shared_key = ossl_kex_ecc_derive_shared_key,
+    .get_public_key_bytes = ossl_kex_ecc_get_public_key_bytes,
     .supported_curves = KEX_CURVE_secp256k1 | KEX_CURVE_secp384r1 |
                         KEX_CURVE_secp521r1 | KEX_CURVE_prime239v3 |
                         KEX_CURVE_prime256v1 | KEX_CURVE_X25519 |

@@ -45,6 +45,10 @@ typedef error_t (*kex_derive_shared_key_func_t)(kex_ptr_t kex,
                                                 unsigned char **shared_key,
                                                 size_t *shared_key_len);
 
+typedef error_t (*kex_get_public_key_bytes_func_t)(kex_ptr_t kex,
+                                                   uint8_t **pubkey,
+                                                   size_t *pubkey_len);
+
 typedef struct kex_intf_st {
   kex_alloc_func_t alloc;
   kex_dealloc_func_t dealloc;
@@ -53,6 +57,7 @@ typedef struct kex_intf_st {
   kex_new_peer_data_func_t new_peer_data;
   kex_free_peer_data_func_t free_peer_data;
   kex_derive_shared_key_func_t derive_shared_key;
+  kex_get_public_key_bytes_func_t get_public_key_bytes;
   kex_curve_t supported_curves;
 } kex_intf_t;
 
@@ -93,5 +98,8 @@ void kex_free_peer_data(kex_t *kex, kex_peer_share_t *peer_data);
 error_t kex_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
                               unsigned char **shared_key,
                               size_t *shared_key_len);
+
+error_t kex_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
+                                 size_t *pubkey_len);
 
 #endif /* __KEX_H__ */

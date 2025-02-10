@@ -85,3 +85,11 @@ error_t kex_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
   return ((kex)->intf)
       ->derive_shared_key(kex, peer_data, shared_key, shared_key_len);
 }
+
+error_t kex_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
+                                 size_t *pubkey_len) {
+  if (!kex || !kex->intf)
+    return ERR_NULL_PTR;
+
+  return ((kex)->intf)->get_public_key_bytes(kex, pubkey, pubkey_len);
+}
