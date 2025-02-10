@@ -16,21 +16,16 @@
 #define VCRY_FLAG_GET(x) ((int)(__vctx.flags & (x)))
 
 #define VCRY_EXPECT(cond, jmp)                                                 \
-  do {                                                                         \
-    if (!(cond)) {                                                             \
-      ret = -1;                                                                \
-      goto jmp;                                                                \
-    }                                                                          \
-  } while (0)
+  do { if (!(cond)) { ret = -1; goto jmp; } } while (0)
 
 #define VCRY_HSHAKE_ROLE() (__vctx.role)
 
 #define VCRY_STATE() (__vctx.state)
 #define VCRY_STATE_CHANGE(nextstate) ((void)(__vctx.state = (nextstate)))
 
-#define VCRY_MAC_KEY_OFFSET 0
-#define VCRY_ENC_KEY_OFFSET 32
-#define VCRY_ENC_IV_OFFSET 64
+#define VCRY_MAC_KEY_OFFSET 0U
+#define VCRY_ENC_KEY_OFFSET 32U
+#define VCRY_ENC_IV_OFFSET  64U
 
 #define vcry_mac_key() (__vctx.skey + VCRY_MAC_KEY_OFFSET)
 #define vcry_enc_key() (__vctx.skey + VCRY_ENC_KEY_OFFSET)
@@ -84,9 +79,9 @@ struct __vcry_ctx_st {
   kem_t *kem;
   kdf_t *kdf;
   kex_peer_share_t peer_ec_share;
-  uint8_t *authkey, *ss;
+  uint8_t *authkey, *pqpub, *pqpub_peer, *ss;
   uint8_t salt[VCRY_HSHAKE_SALT_LEN], skey[VCRY_SESSION_KEY_LEN];
-  size_t authkey_len, ss_len;
+  size_t authkey_len, pqpub_len, ss_len;
   int role, state, flags;
 };
 
@@ -375,11 +370,11 @@ int vcry_set_kdf_from_name(const char *name) {
 
 /**
  * Initialize the handshake process by generating the following components:
- * The AES-transformed PQ-KEM public key: AES(PQPUB_A, k_pass, salt=salt2)
- * The DHE public key: DHPUB_A
- * Randomly generated initiator random value: salt = salt1 || salt2 || salt3
+ * 1. The AES-encrypted PQ-KEM public key: AES-Enc(PQK, K_pass, salt=salt2)
+ * 2. The DHE public key: DHEK_A
+ * 3. Randomly generated initiator random value: salt = salt1 || salt2 || salt3
  *
- * Compute k_pass = KDF(pass || salt1 || "Compute master key (k_pass)")
+ * Compute K_pass = KDF(pass || salt1 || "Compute master key (k_pass)")
  * where KDF is a memory-hard key derivation function (e.g., scrypt/argon2)
  *
  * Note: This function is called by the initiator of the handshake process
@@ -428,11 +423,11 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   VCRY_EXPECT((kdf_derive(__vctx.kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
                           strlen(VCRY_HSHAKE_CONST0), k_pass,
                           VCRY_MASTER_KEY_LEN) == ERR_SUCCESS),
-              clean3);
+              clean2);
 
   /** Generate the PQ-KEM keypair */
   VCRY_EXPECT((kem_keygen(__vctx.kem, &pqpub, &pqpub_len) == ERR_SUCCESS),
-              clean3);
+              clean2);
 
   /** Generate the DHE private key */
   VCRY_EXPECT((kex_key_gen(__vctx.kex) == ERR_SUCCESS), clean2);
@@ -486,6 +481,10 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   p += encbuf_len;
   xmemcpy(p, __vctx.salt, VCRY_HSHAKE_SALT_LEN);
 
+  /** This memory is freed in vcry_module_release() */
+  __vctx.pqpub = pqpub;
+  __vctx.pqpub_len = pqpub_len;
+
   VCRY_STATE_CHANGE(_vcry_hs_initiate);
 
 clean0:
@@ -494,8 +493,6 @@ clean0:
 clean1:
   kex_free_peer_data(__vctx.kex, &keyshare_mine);
 clean2:
-  kem_mem_free(&kem_kyber_intf, pqpub, pqpub_len);
-clean3:
   memzero(k_pass, VCRY_MASTER_KEY_LEN);
   xfree(k_pass);
   return ret;
@@ -504,17 +501,16 @@ clean3:
 /**
  * Responds to a handshake initiation message by performing the following:
  *
- * 1. Reverse the AES transformation on the PQ-KEM public key using the auth key
- * 2. Generate the PQ-KEM shared secret and encapsulate it with the peer's
- *    PQ-KEM public key.
- * 3. Save peer's DHE public key; Generate own DHE keypair and attach the public
- *    key to the response.
+ * 1. Decrypt the PQ-KEM public key PQK = AES-Dec(PQK_enc, K_pass, salt=salt2)
+ * 2. Encapsulate the PQ-KEM shared secret (SS, CT) = encaps(PQK)
+ * 3. Save peer's DHE public key and generate own DHE keypair and attach the
+ *    public key to the response.
  *
  * Note: This function is called by the responder of the handshake process
  */
-int vcry_handshake_response(const uint8_t *peerdata_theirs,
-                            size_t peerdata_theirs_len, uint8_t **peerdata_mine,
-                            size_t *peerdata_mine_len) {
+int vcry_handshake_respond(const uint8_t *peerdata_theirs,
+                           size_t peerdata_theirs_len, uint8_t **peerdata_mine,
+                           size_t *peerdata_mine_len) {
   int ret = 0;
   kex_peer_share_t keyshare_mine;
   uint8_t *p = NULL;
@@ -602,7 +598,7 @@ int vcry_handshake_response(const uint8_t *peerdata_theirs,
 
   VCRY_EXPECT((cipher_decrypt(__vctx.cipher, peer_pqpub_enc, peer_pqpub_enc_len,
                               peer_pqpub, &peer_pqpub_enc_len) == ERR_SUCCESS),
-              clean0);
+              clean1);
   /**
    * Encapsulate the shared secret with the peer's public key; this will
    * also place the generated shared secret into the local store
@@ -615,7 +611,7 @@ int vcry_handshake_response(const uint8_t *peerdata_theirs,
   VCRY_EXPECT(
       (kem_encapsulate(__vctx.kem, peer_pqpub, peer_pqpub_enc_len, &ct, &ct_len,
                        &__vctx.ss, &__vctx.ss_len) == ERR_SUCCESS),
-      clean0);
+      clean1);
 
   /** Generate the DHE keypair */
   VCRY_EXPECT((kex_key_gen(__vctx.kex) == ERR_SUCCESS), clean0);
@@ -645,6 +641,10 @@ int vcry_handshake_response(const uint8_t *peerdata_theirs,
   p += keyshare_mine.ec_curvename_len;
   xmemcpy(p, ct, ct_len);
 
+  /** This memory is freed in vcry_module_release() */
+  __vctx.pqpub_peer = peer_pqpub;
+  __vctx.pqpub_len = peer_pqpub_enc_len;
+
   kex_free_peer_data(__vctx.kex, &keyshare_mine);
 
   VCRY_STATE_CHANGE(_vcry_hs_response);
@@ -652,20 +652,17 @@ int vcry_handshake_response(const uint8_t *peerdata_theirs,
 clean0:
   kem_mem_free(&kem_kyber_intf, ct, ct_len);
 clean1:
-  memzero(peer_pqpub, peer_pqpub_enc_len);
-  xfree(peer_pqpub);
-clean2:
   memzero(k_pass, VCRY_MASTER_KEY_LEN);
   xfree(k_pass);
   return ret;
 }
 
 /**
- * Completes the handshake process by decapsulating the shared secret
- * encapsulated by the peer and storing it in the local context.
+ * Completes the handshake process by decapsulating the PQ-KEM shared secret
+ * SS = decaps(CT, PQPK)
  *
- * After this function successfully completes, the shared session key
- * can be derived using vcry_derive_shared_key().
+ * This stage synchronizes the client and server and both parties have
+ * everything they need to generate the session key.
  *
  * Note: This function is called by the initiator of the handshake process
  */
@@ -731,17 +728,20 @@ int vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
 
 /**
  * Compute the session key:
- * skey = KDF(DH_ss || ss || salt3 || "Compute session key (skey)")
+ * skey = KDF(SS || DHE_SS || PQK || DHEK_A || DHEK_B || salt3 || "Compute
+ *            session key (skey)")
  *
- * where DH_ss is the shared secret derived from the DHE key exchange, ss is the
- * shared secret derived from the PQ-KEM key encapsultion, and KDF is a
- * memory-hard key derivation function.
+ * where DH_SS is the shared secret derived from the DHE key exchange, SS is
+ * the shared secret derived from the PQ-KEM key encapsultion, PQK is the PQ-KEM
+ * public key, and DHEK_A and DHEK_B are the DHE public keys of Alice and Bob.
  */
 int vcry_derive_session_key(void) {
   int ret = 0;
   uint8_t *shared_secret;
-  uint8_t *buf;
-  size_t shared_secret_len = 0, buf_len = 0;
+  uint8_t *pqpub;
+  uint8_t *buf, *p, *tmp, *dhek_a, *dhek_b;
+  size_t shared_secret_len = 0, buf_len = 0, tmp_len = 0, dhek_a_len,
+         dhek_b_len;
 
   if (VCRY_FLAG_GET(_vcry_fl_all_set) != _vcry_fl_all_set)
     return -1;
@@ -770,16 +770,49 @@ int vcry_derive_session_key(void) {
     return -1;
   }
 
-  VCRY_EXPECT((buf = xmalloc(shared_secret_len + __vctx.ss_len)), clean1);
-  buf_len = shared_secret_len + __vctx.ss_len;
+  /** Get own DHE raw public key and store the length in buf_len */
+  VCRY_EXPECT(
+      (kex_get_public_key_bytes(__vctx.kex, &tmp, &tmp_len) == ERR_SUCCESS),
+      clean2);
 
-  xmemcpy(buf, shared_secret, shared_secret_len);
-  xmemcpy(buf + shared_secret_len, __vctx.ss, __vctx.ss_len);
+  /**
+   * Arrange dhek_a and dhek_b so they point to the initiator's
+   * and responder's DHE public keys respectively, also set pqpub
+   * to the PQ-KEM public key of the initiator
+   */
+  if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_initiator) {
+    dhek_a = tmp;
+    dhek_a_len = tmp_len;
+    dhek_b = __vctx.peer_ec_share.ec_pub;
+    dhek_b_len = __vctx.peer_ec_share.ec_pub_len;
+    pqpub = __vctx.pqpub;
+  } else {
+    dhek_a = __vctx.peer_ec_share.ec_pub;
+    dhek_a_len = __vctx.peer_ec_share.ec_pub_len;
+    dhek_b = tmp;
+    dhek_b_len = tmp_len;
+    pqpub = __vctx.pqpub_peer;
+  }
+
+  buf_len = __vctx.ss_len + shared_secret_len + __vctx.pqpub_len + dhek_a_len +
+            dhek_b_len;
+  VCRY_EXPECT((buf = xmalloc(buf_len)), clean1);
+
+  p = buf;
+  xmemcpy(p, __vctx.ss, __vctx.ss_len);
+  p += __vctx.ss_len;
+  xmemcpy(p, shared_secret, shared_secret_len);
+  p += shared_secret_len;
+  xmemcpy(p, pqpub, __vctx.pqpub_len);
+  p += __vctx.pqpub_len;
+  xmemcpy(p, dhek_a, dhek_a_len);
+  p += dhek_a_len;
+  xmemcpy(p, dhek_b, dhek_b_len);
 
   uint8_t ctr128[16];
   memset(ctr128, 0xab, sizeof(ctr128));
   VCRY_EXPECT(
-      (kdf_init(__vctx.kdf, __vctx.authkey, __vctx.authkey_len,
+      (kdf_init(__vctx.kdf, buf, buf_len,
                 __vctx.salt + VCRY_HSHAKE_SALT0_LEN + VCRY_HSHAKE_SALT1_LEN,
                 VCRY_HSHAKE_SALT2_LEN, ctr128) == ERR_SUCCESS),
       clean0);
@@ -795,6 +828,9 @@ clean0:
   memzero(buf, buf_len);
   xfree(buf);
 clean1:
+  memzero(tmp, tmp_len);
+  xfree(tmp);
+clean2:
   memzero(shared_secret, shared_secret_len);
   xfree(shared_secret);
   return ret;
@@ -1059,6 +1095,9 @@ int vcry_responder_verify_complete(
  * the context for each crypto engine.
  */
 void vcry_module_release(void) {
+  uint8_t *pqpub;
+  size_t pqpub_len;
+
   kex_free_peer_data(__vctx.kex, &__vctx.peer_ec_share);
   kem_mem_free(&kem_kyber_intf, __vctx.ss, __vctx.ss_len);
 
@@ -1077,6 +1116,13 @@ void vcry_module_release(void) {
   if (VCRY_FLAG_GET(_vcry_fl_kdf_set))
     kdf_dealloc(__vctx.kdf);
 
+  if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_initiator) {
+    kem_mem_free(&kem_kyber_intf, __vctx.pqpub, __vctx.pqpub_len);
+  } else if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_responder) {
+    memzero(__vctx.pqpub_peer, __vctx.pqpub_len);
+    xfree(__vctx.pqpub_peer);
+  }
+
   memzero(__vctx.authkey, __vctx.authkey_len);
   memzero(__vctx.salt, VCRY_HSHAKE_SALT_LEN);
   memzero(__vctx.skey, VCRY_SESSION_KEY_LEN);
@@ -1084,9 +1130,12 @@ void vcry_module_release(void) {
   xfree(__vctx.authkey);
 
   __vctx.authkey = NULL;
+  __vctx.pqpub = NULL;
+  __vctx.pqpub_peer = NULL;
   __vctx.ss = NULL;
 
   __vctx.authkey_len = 0;
+  __vctx.pqpub_len = 0;
   __vctx.ss_len = 0;
 
   __vctx.role = 0;

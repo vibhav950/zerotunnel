@@ -157,7 +157,7 @@ void *responder_thread(void *arg) {
   pthread_mutex_unlock(&initiator_buf->lock);
 
   /* ============ HANDSHAKE RESPONSE ============ */
-  ASSERT(vcry_handshake_response(read, read_len, &write, &write_len) == 0);
+  ASSERT(vcry_handshake_respond(read, read_len, &write, &write_len) == 0);
   xfree(read);
 
   /* Send response message */

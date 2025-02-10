@@ -75,7 +75,7 @@
  * Constant strings for key derivation
  */
 #define VCRY_HSHAKE_CONST0            "Derive the master key (K_pass)"
-#define VCRY_HSHAKE_CONST1            "Derive the shared session key (K_sess)"
+#define VCRY_HSHAKE_CONST1            "Derive the session key (K_sess)"
 
 /**
  * Constant strings for session key verification
@@ -103,7 +103,7 @@ int vcry_set_kem_from_name(const char *name);
 int vcry_set_kdf_from_name(const char *name);
 
 int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len);
-int vcry_handshake_response(const uint8_t *peerdata_theirs, size_t peerdata_theirs_len, uint8_t **peerdata_mine, size_t *peerdata_mine_len);
+int vcry_handshake_respond(const uint8_t *peerdata_theirs, size_t peerdata_theirs_len, uint8_t **peerdata_mine, size_t *peerdata_mine_len);
 int vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len);
 
 int vcry_derive_session_key(void);
