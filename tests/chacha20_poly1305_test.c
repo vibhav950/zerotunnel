@@ -1,11 +1,10 @@
-#include "crypto/aead.h"
+#include "crypto/cipher_defs.h"
 #include "crypto/cipher.h"
 #include "crypto/types.h"
 #include "test.h"
 
 int main() {
-  cipher_t chacha20_poly1305;
-  cipher_t *p_chacha20_poly1305 = &chacha20_poly1305;
+  cipher_t *p_chacha20_poly1305 = NULL;
   size_t out_len;
   uint8_t key[CHACHA20_POLY1305_KEY_LEN], iv[CHACHA20_POLY1305_IV_LEN], aad[12];
   uint8_t pt[114], ct[114 + CHACHA20_POLY1305_AUTH_TAG_LEN_LONG];
@@ -36,7 +35,7 @@ int main() {
   ASSERT(cipher_intf_alloc(&aead_intf, &p_chacha20_poly1305,
                            CHACHA20_POLY1305_KEY_LEN,
                            CHACHA20_POLY1305_AUTH_TAG_LEN_LONG,
-                           CIPHER_CHACHA20_POLY1305) == ERR_SUCCESS);
+                           AEAD_CHACHA20_POLY1305) == ERR_SUCCESS);
 
   ASSERT(cipher_init(p_chacha20_poly1305, key, CHACHA20_POLY1305_KEY_LEN,
                      CIPHER_OPERATION_ENCRYPT) == ERR_SUCCESS);
@@ -59,7 +58,7 @@ int main() {
   ASSERT(cipher_intf_alloc(&aead_intf, &p_chacha20_poly1305,
                            CHACHA20_POLY1305_KEY_LEN,
                            CHACHA20_POLY1305_AUTH_TAG_LEN_LONG,
-                           CIPHER_CHACHA20_POLY1305) == ERR_SUCCESS);
+                           AEAD_CHACHA20_POLY1305) == ERR_SUCCESS);
 
   ASSERT(cipher_init(p_chacha20_poly1305, key, CHACHA20_POLY1305_KEY_LEN,
                      CIPHER_OPERATION_DECRYPT) == ERR_SUCCESS);

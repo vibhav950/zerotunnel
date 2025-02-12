@@ -1,0 +1,33 @@
+CC := gcc
+CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -DDEBUG -DOPENSSL
+LIBS := -lcrypto -lssl
+
+all: bin/aes_ctr_192_test
+
+bin/aes_ctr_192_test: bin/aes_ctr_192_test.o bin/cipher_ossl.o bin/cipher.o bin/log.o bin/memzero.o bin/test_utils.o bin/mem.o
+	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
+
+bin/aes_ctr_192_test.o: tests/aes_ctr_192_test.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/cipher_ossl.o: crypto/cipher_ossl.c
+	$(CC) $(CFLAGS) $(LIBS) -c -o $@ $^
+
+bin/cipher.o: crypto/cipher.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/log.o: common/log.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/memzero.o: common/memzero.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/mem.o: common/mem.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/test_utils.o: tests/test_utils.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+.PHONY: clean
+clean:
+	rm -f bin/*.o bin/aes_ctr_192_test

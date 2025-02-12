@@ -3,13 +3,21 @@
 
 const char *cipher_alg_to_string(cipher_alg_t alg) {
   switch (alg) {
-  case CIPHER_AES_GCM_128:
+  case CIPHER_AES_CTR_128:
+    return "AES-128-CTR";
+  case CIPHER_AES_CTR_192:
+    return "AES-192-CTR";
+  case CIPHER_AES_CTR_256:
+    return "AES-256-CTR";
+  case CIPHER_CHACHA20:
+    return "CHACHA20";
+  case AEAD_AES_GCM_128:
     return "AES-128-GCM";
-  case CIPHER_AES_GCM_192:
+  case AEAD_AES_GCM_192:
     return "AES-192-GCM";
-  case CIPHER_AES_GCM_256:
+  case AEAD_AES_GCM_256:
     return "AES-256-GCM";
-  case CIPHER_CHACHA20_POLY1305:
+  case AEAD_CHACHA20_POLY1305:
     return "CHACHA20-POLY1305";
   default:
     return "unknown type";

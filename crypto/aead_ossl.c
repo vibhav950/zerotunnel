@@ -6,7 +6,7 @@
  * vibhav950 on GitHub
  */
 
-#include "aead.h"
+#include "cipher_defs.h"
 #include "cipher.h"
 #include "common/zerotunnel.h"
 #include "common/memzero.h"
@@ -33,19 +33,19 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
   PRINTDEBUG("key_len=%zu, tag_len=%zu alg=%s", key_len, tag_len, cipher_alg_to_string(alg));
 
   switch (alg) {
-  case CIPHER_AES_GCM_128:
+  case AEAD_AES_GCM_128:
     CHECK(key_len == AES_GCM_128_KEY_LEN);
     evp = EVP_aes_128_gcm();
     break;
-  case CIPHER_AES_GCM_192:
+  case AEAD_AES_GCM_192:
     CHECK(key_len == AES_GCM_192_KEY_LEN);
     evp = EVP_aes_192_gcm();
     break;
-  case CIPHER_AES_GCM_256:
+  case AEAD_AES_GCM_256:
     CHECK(key_len == AES_GCM_256_KEY_LEN);
     evp = EVP_aes_256_gcm();
     break;
-  case CIPHER_CHACHA20_POLY1305:
+  case AEAD_CHACHA20_POLY1305:
     CHECK(key_len == CHACHA20_POLY1305_KEY_LEN);
     evp = EVP_chacha20_poly1305();
     break;
@@ -53,7 +53,7 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
     return ERR_BAD_ARGS;
   }
 
-  if (alg == CIPHER_CHACHA20_POLY1305) {
+  if (alg == AEAD_CHACHA20_POLY1305) {
     if ((tag_len != CHACHA20_POLY1305_AUTH_TAG_LEN_LONG) &&
         (tag_len != CHACHA20_POLY1305_AUTH_TAG_LEN_SHORT)) {
       return ERR_BAD_ARGS;
@@ -135,14 +135,14 @@ static error_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
 
   switch (key_len) {
   case AES_GCM_128_KEY_LEN:
-    CHECK(alg == CIPHER_AES_GCM_128);
+    CHECK(alg == AEAD_AES_GCM_128);
     break;
   case AES_GCM_192_KEY_LEN:
-    CHECK(alg == CIPHER_AES_GCM_192);
+    CHECK(alg == AEAD_AES_GCM_192);
     break;
   case AES_GCM_256_KEY_LEN:
     // case CHACHA20_POLY1305_KEY_LEN:
-    CHECK((alg == CIPHER_AES_GCM_256) || (alg == CIPHER_CHACHA20_POLY1305));
+    CHECK((alg == AEAD_AES_GCM_256) || (alg == AEAD_CHACHA20_POLY1305));
     break;
   default:
     return ERR_BAD_ARGS;
@@ -165,7 +165,7 @@ static error_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
    * EVP_chacha20_poly1305() always expects a fixed IV length of 128 bits
    * so we directly pass the IV of required length in ossl_aead_set_iv()
    */
-  if (alg != CIPHER_CHACHA20_POLY1305) {
+  if (alg != AEAD_CHACHA20_POLY1305) {
     if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN,
                             AES_GCM_IV_LEN, NULL) != 1) {
       return ERR_INTERNAL;
@@ -196,12 +196,7 @@ static error_t ossl_aead_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   ctx = c->ctx;
   alg = c->alg;
 
-  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT) &&
-      !CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT)) {
-    return ERR_BAD_ARGS;
-  }
-
-  if ((alg == CIPHER_CHACHA20_POLY1305) && (iv_len != CHACHA20_POLY1305_IV_LEN))
+  if ((alg == AEAD_CHACHA20_POLY1305) && (iv_len != CHACHA20_POLY1305_IV_LEN))
     return ERR_BAD_ARGS;
   else if (iv_len != AES_GCM_IV_LEN)
     return ERR_BAD_ARGS;
@@ -367,5 +362,5 @@ const cipher_intf_t aead_intf = {
     .encrypt = ossl_aead_encrypt,
     .decrypt = ossl_aead_decrypt,
     .supported_algs =
-        AEAD_ALL /* CIPHER_AES_GCM_128, CIPHER_AES_GCM_192, CIPHER_AES_GCM_256, CIPHER_CHACHA20_POLY1305 */
+        AEAD_ALL /* AEAD_AES_GCM_128, AEAD_AES_GCM_192, AEAD_AES_GCM_256, AEAD_CHACHA20_POLY1305 */
 };

@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "crypto/aead.h"
+#include "crypto/cipher_defs.h"
 
 #include <stdint.h>
 

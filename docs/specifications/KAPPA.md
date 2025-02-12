@@ -272,8 +272,8 @@ This is the first state in the initiator state machine.
 - Alice then encrypts _OTPQK_ with _K<sub>pass</sub>_ using the _Cipher_ algorithm:\
   &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK<sub>enc</sub>_ = Cipher-Enc(_OTPQK_, _K<sub>pass</sub>_, salt[32:44])
 
-  > [!CAUTION]
-  > We do not use AEAD encryption here since the authentication tag would allow for an offline brute-force attack ([section 4.3](#43-protection-from-offline-brute-force-attacks)) on payload encrypted using a derivative of the master password.
+> [!CAUTION]
+> We do not use AEAD encryption here since the authentication tag would allow for an offline brute-force attack ([section 4.3](#43-protection-from-offline-brute-force-attacks)) on payload encrypted using a derivative of the master password.
 
 - Alice sends over _OTPQK<sub>enc</sub>_, _DHEK<sub>A</sub>_, and salt to Bob.
 
