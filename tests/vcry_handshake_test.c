@@ -58,7 +58,8 @@ void *initiator_thread(void *arg) {
 
   vcry_set_authkey(AUTHKEY, sizeof(AUTHKEY));
 
-  ASSERT(vcry_set_cipher_from_name("AES-GCM-256") == 0);
+  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
+  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);
   ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == 0);
   ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == 0);
   ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == 0);
@@ -139,7 +140,8 @@ void *responder_thread(void *arg) {
 
   vcry_set_authkey(AUTHKEY, sizeof(AUTHKEY));
 
-  ASSERT(vcry_set_cipher_from_name("AES-GCM-256") == 0);
+  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
+  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);
   ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == 0);
   ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == 0);
   ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == 0);

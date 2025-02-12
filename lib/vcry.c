@@ -2,7 +2,7 @@
 #include "crypto/types.h"
 
 #include "common/memzero.h"
-#include "crypto/aead.h"
+#include "crypto/cipher_defs.h"
 #include "crypto/hmac_defs.h"
 #include "crypto/kdf.h"
 #include "crypto/kem.h"
@@ -44,12 +44,14 @@ enum {
  */
 enum {
   _vcry_fl_cipher_set = (1U << 0),
-  _vcry_fl_mac_set = (1U << 1),
-  _vcry_fl_kex_set = (1U << 2),
-  _vcry_fl_kem_set = (1U << 3),
-  _vcry_fl_kdf_set = (1U << 4),
-  _vcry_fl_all_set = (_vcry_fl_cipher_set | _vcry_fl_mac_set |
-                      _vcry_fl_kex_set | _vcry_fl_kem_set | _vcry_fl_kdf_set),
+  _vcry_fl_aead_set = (1U << 1),
+  _vcry_fl_mac_set = (1U << 2),
+  _vcry_fl_kex_set = (1U << 3),
+  _vcry_fl_kem_set = (1U << 4),
+  _vcry_fl_kdf_set = (1U << 5),
+  _vcry_fl_all_set =
+      (_vcry_fl_cipher_set | _vcry_fl_aead_set | _vcry_fl_mac_set |
+       _vcry_fl_kex_set | _vcry_fl_kem_set | _vcry_fl_kdf_set),
 };
 
 /**
@@ -73,7 +75,7 @@ enum {
  * AEAD encryption.
  */
 struct __vcry_ctx_st {
-  cipher_t *cipher;
+  cipher_t *cipher, *aead;
   hmac_t *mac;
   kex_t *kex;
   kem_t *kem;
@@ -110,42 +112,94 @@ int vcry_set_cipher_from_id(int id) {
   cipher_alg_t alg;
 
   switch (id) {
-  case VCRY_AEAD_AES_GCM_128:
-    alg = CIPHER_AES_GCM_128;
-    key_len = AES_GCM_128_KEY_LEN;
+  case VCRY_CIPHER_AES_CTR_128:
+    alg = CIPHER_AES_CTR_128;
+    key_len = AES_CTR_128_KEY_LEN;
     break;
-  case VCRY_AEAD_AES_GCM_192:
-    alg = CIPHER_AES_GCM_192;
-    key_len = AES_GCM_192_KEY_LEN;
+  case VCRY_CIPHER_AES_CTR_192:
+    alg = CIPHER_AES_CTR_192;
+    key_len = AES_CTR_192_KEY_LEN;
     break;
-  case VCRY_AEAD_AES_GCM_256:
-    key_len = AES_GCM_256_KEY_LEN;
-    alg = CIPHER_AES_GCM_256;
+  case VCRY_CIPHER_AES_CTR_256:
+    alg = CIPHER_AES_CTR_256;
+    key_len = AES_CTR_256_KEY_LEN;
     break;
-  case VCRY_AEAD_CHACHA20_POLY1305:
-    key_len = CHACHA20_POLY1305_KEY_LEN;
-    alg = CIPHER_CHACHA20_POLY1305;
+  case VCRY_CIPHER_CHACHA20:
+    alg = CIPHER_CHACHA20;
+    key_len = CHACHA20_KEY_LEN;
     break;
   default:
     PRINTERROR("unknown cipher id (%d)\n", id);
     return -1;
   }
 
-  if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
+  if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
     PRINTERROR("cipher algorithm not supported\n");
     return -1;
   }
 
-  if (cipher_intf_alloc(&aead_intf, &__vctx.cipher, key_len,
-                        AES_GCM_AUTH_TAG_LEN_LONG, alg)) {
+  if (cipher_intf_alloc(&cipher_intf, &__vctx.cipher, key_len, 0, alg))
     return -1;
-  }
 
   VCRY_FLAG_SET(_vcry_fl_cipher_set);
   return 0;
 }
 
 int vcry_set_cipher_from_name(const char *name) {
+  int id = -0xfff;
+
+  if (!strcmp(name, "AES-CTR-128"))
+    id = VCRY_CIPHER_AES_CTR_128;
+  else if (!strcmp(name, "AES-CTR-192"))
+    id = VCRY_CIPHER_AES_CTR_192;
+  else if (!strcmp(name, "AES-CTR-256"))
+    id = VCRY_CIPHER_AES_CTR_256;
+  else if (!strcmp(name, "CHACHA20"))
+    id = VCRY_CIPHER_CHACHA20;
+  return vcry_set_cipher_from_id(id);
+}
+
+int vcry_set_aead_from_id(int id) {
+  size_t key_len;
+  cipher_alg_t alg;
+
+  switch (id) {
+  case VCRY_AEAD_AES_GCM_128:
+    alg = AEAD_AES_GCM_128;
+    key_len = AES_GCM_128_KEY_LEN;
+    break;
+  case VCRY_AEAD_AES_GCM_192:
+    alg = AEAD_AES_GCM_192;
+    key_len = AES_GCM_192_KEY_LEN;
+    break;
+  case VCRY_AEAD_AES_GCM_256:
+    key_len = AES_GCM_256_KEY_LEN;
+    alg = AEAD_AES_GCM_256;
+    break;
+  case VCRY_AEAD_CHACHA20_POLY1305:
+    key_len = CHACHA20_POLY1305_KEY_LEN;
+    alg = AEAD_CHACHA20_POLY1305;
+    break;
+  default:
+    PRINTERROR("unknown aead id (%d)\n", id);
+    return -1;
+  }
+
+  if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
+    PRINTERROR("aead algorithm not supported\n");
+    return -1;
+  }
+
+  if (cipher_intf_alloc(&aead_intf, &__vctx.aead, key_len,
+                        AES_GCM_AUTH_TAG_LEN_LONG, alg)) {
+    return -1;
+  }
+
+  VCRY_FLAG_SET(_vcry_fl_aead_set);
+  return 0;
+}
+
+int vcry_set_aead_from_name(const char *name) {
   int id = -0xfff;
 
   if (!strcmp(name, "AES-GCM-128"))
@@ -156,7 +210,7 @@ int vcry_set_cipher_from_name(const char *name) {
     id = VCRY_AEAD_AES_GCM_256;
   else if (!strcmp(name, "CHACHA20-POLY1305"))
     id = VCRY_AEAD_CHACHA20_POLY1305;
-  return vcry_set_cipher_from_id(id);
+  return vcry_set_aead_from_id(id);
 }
 
 int vcry_set_hmac_from_id(int id) {
@@ -370,7 +424,7 @@ int vcry_set_kdf_from_name(const char *name) {
 
 /**
  * Initialize the handshake process by generating the following components:
- * 1. The AES-encrypted PQ-KEM public key: AES-Enc(PQK, K_pass, salt=salt2)
+ * 1. The encrypted PQ-KEM public key: Cipher-Enc(PQK, K_pass, salt=salt2)
  * 2. The DHE public key: DHEK_A
  * 3. Randomly generated initiator random value: salt = salt1 || salt2 || salt3
  *
@@ -501,7 +555,8 @@ clean2:
 /**
  * Responds to a handshake initiation message by performing the following:
  *
- * 1. Decrypt the PQ-KEM public key PQK = AES-Dec(PQK_enc, K_pass, salt=salt2)
+ * 1. Decrypt the PQ-KEM public key PQK = Cipher-Dec(PQK_enc, K_pass,
+ * salt=salt2)
  * 2. Encapsulate the PQ-KEM shared secret (SS, CT) = encaps(PQK)
  * 3. Save peer's DHE public key and generate own DHE keypair and attach the
  *    public key to the response.
@@ -1104,6 +1159,9 @@ void vcry_module_release(void) {
   if (VCRY_FLAG_GET(_vcry_fl_cipher_set))
     cipher_dealloc(__vctx.cipher);
 
+  if (VCRY_FLAG_GET(_vcry_fl_aead_set))
+    cipher_dealloc(__vctx.aead);
+
   if (VCRY_FLAG_GET(_vcry_fl_mac_set))
     hmac_dealloc(__vctx.mac);
 
@@ -1149,7 +1207,7 @@ void vcry_module_release(void) {
  * Encrypt data in \p in using the selected AEAD cipher algorithm with the
  * encryption (key, iv) pair for this session and store the result in \p out.
  * Performs
- * out[in_len] = cipher(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
+ * out[in_len] = AEAD-Enc(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
  *
  * This function may only be called after the handshake is complete.
  *
@@ -1157,8 +1215,8 @@ void vcry_module_release(void) {
  *
  * Returns 0 on success, -1 on failure.
  */
-int vcry_cipher_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
-                        size_t ad_len, uint8_t *out) {
+int vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
+                      size_t ad_len, uint8_t *out) {
   uint8_t *buf;
   size_t clen;
 
@@ -1168,29 +1226,25 @@ int vcry_cipher_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
   if (VCRY_STATE() != _vcry_hs_done)
     return -1;
 
-  if (cipher_init(__vctx.cipher, vcry_enc_key(), VCRY_ENC_KEY_LEN,
+  if (cipher_init(__vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
                   CIPHER_OPERATION_ENCRYPT) != ERR_SUCCESS) {
     return -1;
   }
 
-  if (cipher_set_iv(__vctx.cipher, vcry_enc_iv(), VCRY_ENC_IV_LEN) !=
-      ERR_SUCCESS) {
+  if (cipher_set_iv(__vctx.aead, vcry_enc_iv(), VCRY_ENC_IV_LEN) != ERR_SUCCESS)
     return -1;
-  }
 
-  if (cipher_set_aad(__vctx.cipher, ad, ad_len) != ERR_SUCCESS)
+  if (cipher_set_aad(__vctx.aead, ad, ad_len) != ERR_SUCCESS)
     return -1;
 
   clen = 0;
-  if (cipher_encrypt(__vctx.cipher, NULL, 0, NULL, &clen) !=
-      ERR_BUFFER_TOO_SMALL) {
+  if (cipher_encrypt(__vctx.aead, NULL, 0, NULL, &clen) != ERR_BUFFER_TOO_SMALL)
     return -1;
-  }
 
   if (!(buf = zt_malloc(clen)))
     return -1;
 
-  if (cipher_encrypt(__vctx.cipher, in, in_len, buf, &clen) != ERR_SUCCESS) {
+  if (cipher_encrypt(__vctx.aead, in, in_len, buf, &clen) != ERR_SUCCESS) {
     zt_free(buf);
     return -1;
   }
@@ -1206,7 +1260,7 @@ int vcry_cipher_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
  * Decrypt data in \p in using the selected AEAD cipher algorithm with the
  * encryption (key, iv) pair for this session and store the result in \p out.
  * Performs
- * out[in_len] = cipher(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
+ * out[in_len] = AEAD-Dec(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
  *
  * This function may only be called after the handshake is complete.
  *
@@ -1214,8 +1268,8 @@ int vcry_cipher_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
  *
  * Returns 0 on success, -1 on failure.
  */
-int vcry_cipher_decrypt(uint8_t *in, size_t len, const uint8_t *ad,
-                        size_t ad_len, uint8_t *out) {
+int vcry_aead_decrypt(uint8_t *in, size_t len, const uint8_t *ad, size_t ad_len,
+                      uint8_t *out) {
   uint8_t *buf;
   size_t clen;
 
@@ -1225,29 +1279,25 @@ int vcry_cipher_decrypt(uint8_t *in, size_t len, const uint8_t *ad,
   if (VCRY_STATE() != _vcry_hs_done)
     return -1;
 
-  if (cipher_init(__vctx.cipher, vcry_enc_key(), VCRY_ENC_KEY_LEN,
+  if (cipher_init(__vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
                   CIPHER_OPERATION_DECRYPT) != ERR_SUCCESS) {
     return -1;
   }
 
-  if (cipher_set_iv(__vctx.cipher, vcry_enc_iv(), VCRY_ENC_IV_LEN) !=
-      ERR_SUCCESS) {
+  if (cipher_set_iv(__vctx.aead, vcry_enc_iv(), VCRY_ENC_IV_LEN) != ERR_SUCCESS)
     return -1;
-  }
 
-  if (cipher_set_aad(__vctx.cipher, ad, ad_len) != ERR_SUCCESS)
+  if (cipher_set_aad(__vctx.aead, ad, ad_len) != ERR_SUCCESS)
     return -1;
 
   clen = 0;
-  if (cipher_decrypt(__vctx.cipher, NULL, 0, NULL, &clen) !=
-      ERR_BUFFER_TOO_SMALL) {
+  if (cipher_decrypt(__vctx.aead, NULL, 0, NULL, &clen) != ERR_BUFFER_TOO_SMALL)
     return -1;
-  }
 
   if (!(buf = zt_malloc(clen)))
     return -1;
 
-  if (cipher_decrypt(__vctx.cipher, in, len, buf, &clen) != ERR_SUCCESS) {
+  if (cipher_decrypt(__vctx.aead, in, len, buf, &clen) != ERR_SUCCESS) {
     zt_free(buf);
     return -1;
   }

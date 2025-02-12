@@ -270,7 +270,7 @@ This is the first state in the initiator state machine.
   &nbsp;&nbsp;&nbsp;&nbsp;_K<sub>pass</sub>_ = KDF(_Password_ || salt[:32] || _"Derive the master key (K_pass)"_, 32)
 
 - Alice then encrypts _OTPQK_ with _K<sub>pass</sub>_ using the _Cipher_ algorithm:\
-  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK<sub>enc</sub>_ = Cipher-Enc(_OTPQK_, _K<sub>pass</sub>_, salt[32:44])
+  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK<sub>enc</sub>_ = Cipher-Enc(_OTPQK_, _K<sub>pass</sub>_, salt[32:48])
 
 > [!CAUTION]
 > We do not use AEAD encryption here since the authentication tag would allow for an offline brute-force attack ([section 4.3](#43-protection-from-offline-brute-force-attacks)) on payload encrypted using a derivative of the master password.
@@ -287,7 +287,7 @@ This is the first state in the responder state machine.
   &nbsp;&nbsp;&nbsp;&nbsp;_K<sub>pass</sub>_ = KDF(_Password_ || salt[:32] || _"Derive the master key (K_pass)"_, 32)
 
 - Bob decrypts _OTPQK<sub>enc</sub>_ using _Cipher_ with _K<sub>pass</sub>_ to get back _OTPQK_:\
-  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK_ = Cipher-Dec(_OTPQK<sub>Enc</sub>_, _K<sub>pass</sub>_, salt[32:44])
+  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK_ = Cipher-Dec(_OTPQK<sub>Enc</sub>_, _K<sub>pass</sub>_, salt[32:48])
 
 - Bob then generates a random shared secret _SS_ and encapsulates it using Alice's PQ-KEM key _OTPQK_:\
   &nbsp;&nbsp;&nbsp;&nbsp;(_CT_, _SS_) = PQKEM-Enc(_OTPQK_)
@@ -314,7 +314,7 @@ This is the third state in the initiator state machine and the second state in t
 Alice derives the session key by performing the following:
 
 1. _SS<sub>DHE</sub>_ = DH(_DHEK<sub>A</sub>_, _DHEK<sub>B</sub>_)
-2. _K<sub>sess</sub>_ = KDF(_SS_ || _SS<sub>DHE</sub>_ || _OTPQK_ || _DHEK<sub>A</sub>_ || _DHEK<sub>B</sub>_ || salt[44:76] || "Derive the session key (K_sess)", 76)
+2. _K<sub>sess</sub>_ = KDF(_SS_ || _SS<sub>DHE</sub>_ || _OTPQK_ || _DHEK<sub>A</sub>_ || _DHEK<sub>B</sub>_ || salt[48:80] || "Derive the session key (K_sess)", 76)
 3. Get the MAC key for verification and the (key, IV) pair for symmetric encryption as (_K<sub>MAC</sub>_ || _K<sub>enc</sub>_ || _IV<sub>enc</sub>_ ) = _K<sub>sess</sub>_
 
 Bob performs the same steps to derive the session key.

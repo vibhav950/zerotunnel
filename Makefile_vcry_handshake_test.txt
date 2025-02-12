@@ -6,6 +6,7 @@ all: bin/vcry_handshake_test
 
 bin/vcry_handshake_test: bin/vcry_handshake_test.o \
                     bin/vcry.o \
+                    bin/cipher_ossl.o \
                     bin/aead_ossl.o \
                     bin/cipher.o \
                     bin/hmac_ossl.o \
@@ -33,6 +34,9 @@ bin/vcry.o: lib/vcry.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/aead_ossl.o: crypto/aead_ossl.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/cipher_ossl.o: crypto/cipher_ossl.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/cipher.o: crypto/cipher.c
