@@ -1,5 +1,5 @@
-#ifndef __KYBER_KEM_OQS_H__
-#define __KYBER_KEM_OQS_H__
+#ifndef __KEM_KYBER_OQS_H__
+#define __KEM_KYBER_OQS_H__
 
 /**
  * ML-KEM/Kyber approved parameter sets (FIPS 203).
@@ -22,7 +22,11 @@
 #define KEM_KYBER_1024_CIPHERTEXT_SIZE  1568
 #define KEM_KYBER_1024_SHAREDKEY_SIZE   32
 
+// 32-byte random public rho
+#define KEM_KYBER_PUBLIC_SEED_SIZE      32
+
 #if 1 /* defined(LIBOQS) */
+
 #include <oqs/oqs.h>
 
 #if !defined(OQS_ENABLE_KEM_kyber_512) ||                                      \
@@ -36,4 +40,4 @@ typedef struct kem_oqs_ctx_st {
 } kem_oqs_ctx;
 #endif
 
-#endif /* __KYBER_KEM_OQS_H__ */
+#endif /* __KEM_KYBER_OQS_H__ */

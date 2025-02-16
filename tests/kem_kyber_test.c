@@ -1,5 +1,4 @@
 #include "crypto/kem.h"
-#include "crypto/kem_kyber_defs.h"
 #include "crypto/types.h"
 #include "test.h"
 
@@ -23,8 +22,6 @@ int main() {
            ERR_SUCCESS);
     ASSERT_EQ(ss_mine_len, ss_theirs_len);
     ASSERT_MEMEQ(ss_mine, ss_theirs, ss_mine_len);
-    printf("pubkey_len=%zu, ct_len=%zu, ss_mine_len=%zu, ss_theirs_len=%zu\n", pubkey_len, ct_len,
-           ss_mine_len, ss_theirs_len);
     kem_mem_free(&kem_kyber_intf, pubkey, pubkey_len);
     kem_mem_free(&kem_kyber_intf, ct, ct_len);
     kem_mem_free(&kem_kyber_intf, ss_mine, ss_mine_len);

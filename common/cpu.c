@@ -1,4 +1,4 @@
-#include "zerotunnel.h"
+#include "defines.h"
 
 #if defined(_WIN32)
 #define __platform_type 1

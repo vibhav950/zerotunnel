@@ -6,6 +6,7 @@
 #include "crypto/hmac_defs.h"
 #include "crypto/kdf.h"
 #include "crypto/kem.h"
+#include "crypto/kem_kyber_defs.h"
 #include "crypto/kex_ecc.h"
 #include "random/systemrand.h"
 
@@ -15,8 +16,7 @@
 #define VCRY_FLAG_SET(x) ((void)(__vctx.flags |= (x)))
 #define VCRY_FLAG_GET(x) ((int)(__vctx.flags & (x)))
 
-#define VCRY_EXPECT(cond, jmp)                                                 \
-  do { if (!(cond)) { ret = -1; goto jmp; } } while (0)
+#define VCRY_EXPECT(cond, jmp) do { if (!(cond)) { ret = -1; goto jmp; } } while (0)
 
 #define VCRY_HSHAKE_ROLE() (__vctx.role)
 
@@ -25,7 +25,7 @@
 
 #define VCRY_MAC_KEY_OFFSET 0U
 #define VCRY_ENC_KEY_OFFSET 32U
-#define VCRY_ENC_IV_OFFSET  64U
+#define VCRY_ENC_IV_OFFSET 64U
 
 #define vcry_mac_key() (__vctx.skey + VCRY_MAC_KEY_OFFSET)
 #define vcry_enc_key() (__vctx.skey + VCRY_ENC_KEY_OFFSET)
@@ -81,9 +81,9 @@ struct __vcry_ctx_st {
   kem_t *kem;
   kdf_t *kdf;
   kex_peer_share_t peer_ec_share;
-  uint8_t *authkey, *pqpub, *pqpub_peer, *ss;
+  uint8_t *authkey, *pqk, *peer_pqk, *ss;
   uint8_t salt[VCRY_HSHAKE_SALT_LEN], skey[VCRY_SESSION_KEY_LEN];
-  size_t authkey_len, pqpub_len, ss_len;
+  size_t authkey_len, pqk_len, ss_len;
   int role, state, flags;
 };
 
@@ -424,7 +424,8 @@ int vcry_set_kdf_from_name(const char *name) {
 
 /**
  * Initialize the handshake process by generating the following components:
- * 1. The encrypted PQ-KEM public key: Cipher-Enc(PQK, K_pass, salt=salt2)
+ * 1. The encrypted PQ-KEM public seed (rho) used to generate matrix (A):
+ *    PQK_enc = t_vec || Cipher-Enc(rho, K_pass, salt=salt2)
  * 2. The DHE public key: DHEK_A
  * 3. Randomly generated initiator random value: salt = salt1 || salt2 || salt3
  *
@@ -438,11 +439,11 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   kex_peer_share_t keyshare_mine;
   uint8_t *p = NULL;
   uint64_t *p64 = NULL;
-  uint8_t *encbuf = NULL;
+  uint8_t *pqk = NULL;
+  uint8_t *pqkenc = NULL;
   uint8_t *k_pass = NULL;
-  uint8_t *pqpub = NULL;
   size_t plen;
-  size_t encbuf_len, pqpub_len;
+  size_t pqk_len, pqkenc_len, rho_offs, tmp_len;
 
   if (!peerdata || !peerdata_len)
     return -1;
@@ -480,8 +481,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
               clean2);
 
   /** Generate the PQ-KEM keypair */
-  VCRY_EXPECT((kem_keygen(__vctx.kem, &pqpub, &pqpub_len) == ERR_SUCCESS),
-              clean2);
+  VCRY_EXPECT((kem_keygen(__vctx.kem, &pqk, &pqk_len) == ERR_SUCCESS), clean2);
 
   /** Generate the DHE private key */
   VCRY_EXPECT((kex_key_gen(__vctx.kex) == ERR_SUCCESS), clean2);
@@ -491,7 +491,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
               clean2);
 
   /**
-   * Encrypt the PQ-KEM public key using the master key
+   * Encrypt the PQ-KEM public seed value using the master key
    */
   VCRY_EXPECT((cipher_init(__vctx.cipher, k_pass, VCRY_MASTER_KEY_LEN,
                            CIPHER_OPERATION_ENCRYPT) == ERR_SUCCESS),
@@ -501,19 +501,25 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
                              VCRY_HSHAKE_SALT1_LEN) == ERR_SUCCESS),
               clean1);
 
-  encbuf_len = 0;
-  VCRY_EXPECT((cipher_encrypt(__vctx.cipher, NULL, pqpub_len, NULL,
-                              &encbuf_len) == ERR_BUFFER_TOO_SMALL),
+  tmp_len = 0;
+  VCRY_EXPECT((cipher_encrypt(__vctx.cipher, NULL, KEM_KYBER_PUBLIC_SEED_SIZE,
+                              NULL, &tmp_len) == ERR_BUFFER_TOO_SMALL),
               clean1);
 
-  VCRY_EXPECT((encbuf = zt_malloc(encbuf_len)), clean1);
+  rho_offs = pqk_len - KEM_KYBER_PUBLIC_SEED_SIZE; // size(t_vec)
+  pqkenc_len = rho_offs + tmp_len;                 // size(t_vec || Enc(rho))
 
-  VCRY_EXPECT((cipher_encrypt(__vctx.cipher, pqpub, pqpub_len, encbuf,
-                              &encbuf_len) == ERR_SUCCESS),
-              clean0);
+  VCRY_EXPECT((pqkenc = zt_malloc(pqkenc_len)), clean1);
+
+  VCRY_EXPECT(
+      (cipher_encrypt(__vctx.cipher, pqk + rho_offs, KEM_KYBER_PUBLIC_SEED_SIZE,
+                      pqkenc + rho_offs, &tmp_len) == ERR_SUCCESS),
+      clean0);
+
+  zt_memcpy(pqkenc, pqk, rho_offs);
 
   plen = keyshare_mine.ec_pub_len + keyshare_mine.ec_curvename_len +
-         encbuf_len + VCRY_HSHAKE_SALT_LEN;
+         pqkenc_len + VCRY_HSHAKE_SALT_LEN;
   plen += 3 * sizeof(uint64_t);
 
   VCRY_EXPECT((*peerdata = zt_malloc(plen)), clean0);
@@ -523,7 +529,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   p64 = PTR64(*peerdata);
   p64[0] = hton64((uint64_t)keyshare_mine.ec_pub_len);
   p64[1] = hton64((uint64_t)keyshare_mine.ec_curvename_len);
-  p64[2] = hton64((uint64_t)encbuf_len);
+  p64[2] = hton64((uint64_t)pqkenc_len);
 
   /** Serialize the data by copying individual members */
   p = *peerdata + (3 * sizeof(uint64_t));
@@ -531,19 +537,19 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   p += keyshare_mine.ec_pub_len;
   zt_memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
   p += keyshare_mine.ec_curvename_len;
-  zt_memcpy(p, encbuf, encbuf_len);
-  p += encbuf_len;
+  zt_memcpy(p, pqkenc, pqkenc_len);
+  p += pqkenc_len;
   zt_memcpy(p, __vctx.salt, VCRY_HSHAKE_SALT_LEN);
 
   /** This memory is freed in vcry_module_release() */
-  __vctx.pqpub = pqpub;
-  __vctx.pqpub_len = pqpub_len;
+  __vctx.pqk = pqk;
+  __vctx.pqk_len = pqk_len;
 
   VCRY_STATE_CHANGE(_vcry_hs_initiate);
 
 clean0:
-  memzero(encbuf, encbuf_len);
-  zt_free(encbuf);
+  memzero(pqkenc, pqkenc_len);
+  zt_free(pqkenc);
 clean1:
   kex_free_peer_data(__vctx.kex, &keyshare_mine);
 clean2:
@@ -555,8 +561,9 @@ clean2:
 /**
  * Responds to a handshake initiation message by performing the following:
  *
- * 1. Decrypt the PQ-KEM public key PQK = Cipher-Dec(PQK_enc, K_pass,
- * salt=salt2)
+ * 1. Extract and decrypt the public seed from the encrypted PQ-KEM key:
+ *    PQK = PQK_enc[:size(PQK)-32] ||
+ *          Cipher-Dec(PQKEM_enc[size(PQK)-32:], K_pass, salt=salt2)
  * 2. Encapsulate the PQ-KEM shared secret (SS, CT) = encaps(PQK)
  * 3. Save peer's DHE public key and generate own DHE keypair and attach the
  *    public key to the response.
@@ -571,11 +578,12 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   uint8_t *p = NULL;
   uint64_t *p64 = NULL;
   uint8_t *k_pass = NULL;
-  uint8_t *peer_pqpub_enc = NULL;
-  uint8_t *peer_pqpub = NULL;
+  uint8_t *peer_pqkenc = NULL;
+  uint8_t *peer_pqk = NULL;
   uint8_t *ct = NULL;
   size_t p_len;
-  size_t peer_pqpub_enc_len, peer_ec_pub_len, peer_ec_curvename_len;
+  size_t peer_pqkenc_len, peer_pqk_len, peer_ec_pub_len, peer_ec_curvename_len,
+      rho_offs, tmp_len;
   size_t ct_len;
 
   if (!peerdata_theirs || !peerdata_mine || !peerdata_mine_len)
@@ -601,10 +609,10 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   p64 = PTR64(peerdata_theirs);
   peer_ec_pub_len = ntoh64(p64[0]);
   peer_ec_curvename_len = ntoh64(p64[1]);
-  peer_pqpub_enc_len = ntoh64(p64[2]);
+  peer_pqkenc_len = ntoh64(p64[2]);
 
   if (peerdata_theirs_len < (3 * sizeof(uint64_t)) + peer_ec_pub_len +
-                                peer_ec_curvename_len + peer_pqpub_enc_len +
+                                peer_ec_curvename_len + peer_pqkenc_len +
                                 VCRY_HSHAKE_SALT_LEN) {
     return -1;
   }
@@ -616,10 +624,10 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
                           peer_ec_curvename_len) == ERR_SUCCESS)) {
     return -1;
   }
-  peer_pqpub_enc = (p += peer_ec_pub_len + peer_ec_curvename_len);
+  peer_pqkenc = (p += peer_ec_pub_len + peer_ec_curvename_len);
 
   /** Set the session salt */
-  p += peer_pqpub_enc_len;
+  p += peer_pqkenc_len;
   zt_memcpy(__vctx.salt, p, VCRY_HSHAKE_SALT_LEN);
 
   /** Compute K_pass */
@@ -649,11 +657,20 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
                              VCRY_HSHAKE_SALT1_LEN) == ERR_SUCCESS),
               clean1);
 
-  VCRY_EXPECT((peer_pqpub = zt_malloc(peer_pqpub_enc_len)), clean1);
+  peer_pqk_len =
+      peer_pqkenc_len - cipher_tag_len(__vctx.cipher);  // size(t_vec || rho)
+  rho_offs = peer_pqk_len - KEM_KYBER_PUBLIC_SEED_SIZE; // size(t_vec)
 
-  VCRY_EXPECT((cipher_decrypt(__vctx.cipher, peer_pqpub_enc, peer_pqpub_enc_len,
-                              peer_pqpub, &peer_pqpub_enc_len) == ERR_SUCCESS),
+  VCRY_EXPECT((peer_pqk = zt_malloc(peer_pqk_len)), clean1);
+
+  tmp_len = SIZE_MAX; // we just have to pass the minimum size check
+  VCRY_EXPECT((cipher_decrypt(__vctx.cipher, peer_pqkenc + rho_offs,
+                              KEM_KYBER_PUBLIC_SEED_SIZE, peer_pqk + rho_offs,
+                              &tmp_len) == ERR_SUCCESS),
               clean1);
+
+  zt_memcpy(peer_pqk, peer_pqkenc, rho_offs);
+
   /**
    * Encapsulate the shared secret with the peer's public key; this will
    * also place the generated shared secret into the local store
@@ -664,7 +681,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
    * closing call to vcry_module_release()
    */
   VCRY_EXPECT(
-      (kem_encapsulate(__vctx.kem, peer_pqpub, peer_pqpub_enc_len, &ct, &ct_len,
+      (kem_encapsulate(__vctx.kem, peer_pqk, peer_pqkenc_len, &ct, &ct_len,
                        &__vctx.ss, &__vctx.ss_len) == ERR_SUCCESS),
       clean1);
 
@@ -697,8 +714,8 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   zt_memcpy(p, ct, ct_len);
 
   /** This memory is freed in vcry_module_release() */
-  __vctx.pqpub_peer = peer_pqpub;
-  __vctx.pqpub_len = peer_pqpub_enc_len;
+  __vctx.peer_pqk = peer_pqk;
+  __vctx.pqk_len = peer_pqk_len;
 
   kex_free_peer_data(__vctx.kex, &keyshare_mine);
 
@@ -840,16 +857,16 @@ int vcry_derive_session_key(void) {
     dhek_a_len = tmp_len;
     dhek_b = __vctx.peer_ec_share.ec_pub;
     dhek_b_len = __vctx.peer_ec_share.ec_pub_len;
-    pqpub = __vctx.pqpub;
+    pqpub = __vctx.pqk;
   } else {
     dhek_a = __vctx.peer_ec_share.ec_pub;
     dhek_a_len = __vctx.peer_ec_share.ec_pub_len;
     dhek_b = tmp;
     dhek_b_len = tmp_len;
-    pqpub = __vctx.pqpub_peer;
+    pqpub = __vctx.peer_pqk;
   }
 
-  buf_len = __vctx.ss_len + shared_secret_len + __vctx.pqpub_len + dhek_a_len +
+  buf_len = __vctx.ss_len + shared_secret_len + __vctx.pqk_len + dhek_a_len +
             dhek_b_len;
   VCRY_EXPECT((buf = zt_malloc(buf_len)), clean1);
 
@@ -858,8 +875,8 @@ int vcry_derive_session_key(void) {
   p += __vctx.ss_len;
   zt_memcpy(p, shared_secret, shared_secret_len);
   p += shared_secret_len;
-  zt_memcpy(p, pqpub, __vctx.pqpub_len);
-  p += __vctx.pqpub_len;
+  zt_memcpy(p, pqpub, __vctx.pqk_len);
+  p += __vctx.pqk_len;
   zt_memcpy(p, dhek_a, dhek_a_len);
   p += dhek_a_len;
   zt_memcpy(p, dhek_b, dhek_b_len);
@@ -1175,10 +1192,10 @@ void vcry_module_release(void) {
     kdf_dealloc(__vctx.kdf);
 
   if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_initiator) {
-    kem_mem_free(&kem_kyber_intf, __vctx.pqpub, __vctx.pqpub_len);
+    kem_mem_free(&kem_kyber_intf, __vctx.pqk, __vctx.pqk_len);
   } else if (VCRY_HSHAKE_ROLE() == _vcry_hshake_role_responder) {
-    memzero(__vctx.pqpub_peer, __vctx.pqpub_len);
-    zt_free(__vctx.pqpub_peer);
+    memzero(__vctx.peer_pqk, __vctx.pqk_len);
+    zt_free(__vctx.peer_pqk);
   }
 
   memzero(__vctx.authkey, __vctx.authkey_len);
@@ -1188,12 +1205,12 @@ void vcry_module_release(void) {
   zt_free(__vctx.authkey);
 
   __vctx.authkey = NULL;
-  __vctx.pqpub = NULL;
-  __vctx.pqpub_peer = NULL;
+  __vctx.pqk = NULL;
+  __vctx.peer_pqk = NULL;
   __vctx.ss = NULL;
 
   __vctx.authkey_len = 0;
-  __vctx.pqpub_len = 0;
+  __vctx.pqk_len = 0;
   __vctx.ss_len = 0;
 
   __vctx.role = 0;

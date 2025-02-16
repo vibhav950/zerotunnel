@@ -6,9 +6,9 @@
  * vibhav950 on GitHub
  */
 
-#include "cipher_defs.h"
 #include "cipher.h"
-#include "common/zerotunnel.h"
+#include "cipher_defs.h"
+#include "common/defines.h"
 #include "common/memzero.h"
 
 #include <openssl/evp.h>
@@ -30,7 +30,8 @@ static error_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
   aead_ossl_ctx *aead_ctx;
   const EVP_CIPHER *evp;
 
-  PRINTDEBUG("key_len=%zu, tag_len=%zu alg=%s", key_len, tag_len, cipher_alg_to_string(alg));
+  PRINTDEBUG("key_len=%zu, tag_len=%zu alg=%s", key_len, tag_len,
+             cipher_alg_to_string(alg));
 
   switch (alg) {
   case AEAD_AES_GCM_128:
@@ -264,6 +265,9 @@ static error_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
 
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT))
+    return ERR_BAD_ARGS;
+
   if (!out_len)
     return ERR_NULL_PTR;
 
@@ -277,9 +281,6 @@ static error_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
     return ERR_NULL_PTR;
 
   ctx = c->ctx;
-
-  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT))
-    return ERR_BAD_ARGS;
 
   /* Encrypt the data */
   if (EVP_EncryptUpdate(ctx->ossl_ctx, out, &len, in, in_len) != 1)
@@ -311,16 +312,14 @@ static error_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
 
   PRINTDEBUG("in_len=%zu", in_len);
 
-  if (!in || !out || !out_len)
-    return ERR_NULL_PTR;
-
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
 
-  ctx = c->ctx;
-
   if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT))
     return ERR_BAD_ARGS;
+
+  if (!out_len)
+    return ERR_NULL_PTR;
 
   if (in_len < c->tag_len)
     return ERR_BAD_ARGS;
@@ -329,6 +328,11 @@ static error_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
     *out_len = in_len - c->tag_len;
     return ERR_BUFFER_TOO_SMALL;
   }
+
+  if (!in || !out)
+    return ERR_NULL_PTR;
+
+  ctx = c->ctx;
 
   /*
    * Set the tag and decrypt the payload
@@ -361,6 +365,6 @@ const cipher_intf_t aead_intf = {
     .set_aad = ossl_aead_set_aad,
     .encrypt = ossl_aead_encrypt,
     .decrypt = ossl_aead_decrypt,
-    .supported_algs =
-        AEAD_ALL /* AEAD_AES_GCM_128, AEAD_AES_GCM_192, AEAD_AES_GCM_256, AEAD_CHACHA20_POLY1305 */
+    .supported_algs = AEAD_ALL /* AEAD_AES_GCM_128, AEAD_AES_GCM_192,
+                                  AEAD_AES_GCM_256, AEAD_CHACHA20_POLY1305 */
 };

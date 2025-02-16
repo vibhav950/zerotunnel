@@ -1,4 +1,4 @@
-#include "zerotunnel.h"
+#include "defines.h"
 
 #include <assert.h>
 #include <limits.h>

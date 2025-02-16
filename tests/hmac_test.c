@@ -1,7 +1,7 @@
 #include "crypto/hmac.h"
 #include "crypto/hmac_defs.h"
 #include "crypto/types.h"
-#include "hmac_tvec.h"
+#include "hmac_kat.h"
 #include "test.h"
 
 static uint8_t buffer[64];

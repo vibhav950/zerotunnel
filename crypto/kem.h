@@ -1,7 +1,7 @@
 #ifndef __KEM_H__
 #define __KEM_H__
 
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 
 typedef enum {
   KEM_FLAG_ALLOC          = (1U << 0),

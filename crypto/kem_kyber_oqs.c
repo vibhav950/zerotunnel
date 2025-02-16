@@ -2,9 +2,10 @@
  * ML-KEM (Kyber) using liboqs.
  */
 
-#include "common/memzero.h"
-#include "kem.h"
 #include "kem_kyber_defs.h"
+#include "kem.h"
+#include "common/defines.h"
+#include "common/memzero.h"
 
 #include <oqs/oqs.h>
 

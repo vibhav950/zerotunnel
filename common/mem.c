@@ -3,7 +3,7 @@
  * Wrapper for LIBC memory functions.
  */
 
-#include "zerotunnel.h"
+#include "defines.h"
 #include "memzero.h"
 
 #include <assert.h>
@@ -106,38 +106,51 @@ void *zt_realloc(void *ptr, size_t size) {
   return ptr;
 }
 
-volatile void *zt_memset(volatile void *mem, int ch, size_t len) {
+void *zt_memset(void *mem, int ch, size_t len) {
+#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *p;
 
-  for (p = (volatile char *)mem; len; p[--len] = ch)
+  for (p = (volatile char *)&mem[0]; len; p[--len] = ch)
     ;
   return mem;
+#else
+  return memset(mem, ch, len);
+#endif
 }
 
-volatile void *zt_memzero(volatile void *mem, size_t len) {
+void *zt_memzero(void *mem, size_t len) {
+#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *p;
 
-  for (p = (volatile char *)mem; len; p[--len] = 0x00)
+  for (p = (volatile char *)&mem[0]; len; p[--len] = 0x00)
     ;
   return mem;
+#else
+  return memset(mem, 0x00, len);
+#endif
 }
 
-volatile void *zt_memcpy(volatile void *dst, volatile void *src, size_t len) {
+void *zt_memcpy(void *dst, void *src, size_t len) {
+#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *cdst, *csrc;
 
-  cdst = (volatile char *)dst;
-  csrc = (volatile char *)src;
+  cdst = (volatile char *)&dst[0];
+  csrc = (volatile char *)&src[0];
   while (len--)
     cdst[len] = csrc[len];
   return dst;
+#else
+  return memcpy(dst, src, len);
+#endif
 }
 
-volatile void *zt_memmove(volatile void *dst, volatile void *src, size_t len) {
+void *zt_memmove(void *dst, void *src, size_t len) {
+#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   size_t i;
   volatile char *cdst, *csrc;
 
-  cdst = (volatile char *)dst;
-  csrc = (volatile char *)src;
+  cdst = (volatile char *)&dst[0];
+  csrc = (volatile char *)&src[0];
   if (csrc > cdst && csrc < cdst + len)
     for (i = 0; i < len; i++)
       cdst[i] = csrc[i];
@@ -145,10 +158,14 @@ volatile void *zt_memmove(volatile void *dst, volatile void *src, size_t len) {
     while (len--)
       cdst[len] = csrc[len];
   return dst;
+#else
+  return memmove(dst, src, len);
+#endif
 }
 
 /* Returns zero if a[0:len-1] == b[0:len-1], otherwise non-zero. */
 unsigned int zt_memcmp(const void *a, const void *b, size_t len) {
+#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   unsigned int res = 0;
   const char *pa, *pb;
 
@@ -157,6 +174,9 @@ unsigned int zt_memcmp(const void *a, const void *b, size_t len) {
   for (; len; --len, res |= pa[len] ^ pb[len])
     ;
   return res;
+#else
+  return memcmp(a, b, len);
+#endif
 }
 
 /**

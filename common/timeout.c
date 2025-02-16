@@ -1,4 +1,4 @@
-#include "zerotunnel.h"
+#include "defines.h"
 
 void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler) {
   zt_timeval_t tnow = zt_time_now();

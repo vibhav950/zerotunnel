@@ -6,9 +6,8 @@
  * four-way handshake.
  */
 
-#include "common/zerotunnel.h"
-#include "lib/vcry.h"
 #include "test.h"
+#include "lib/vcry.h"
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -8,8 +8,8 @@
 
 #include "cipher.h"
 #include "cipher_defs.h"
+#include "common/defines.h"
 #include "common/memzero.h"
-#include "common/zerotunnel.h"
 
 #include <openssl/evp.h>
 
@@ -212,12 +212,15 @@ static error_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in,
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
 
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT))
+    return ERR_BAD_ARGS;
+
   if (!out_len)
     return ERR_NULL_PTR;
 
   /* Allow querying the buffer size */
-  if (*out_len < in_len) {
-    *out_len = in_len;
+  if (*out_len < in_len + c->tag_len) {
+    *out_len = in_len + c->tag_len;
     return ERR_BUFFER_TOO_SMALL;
   }
 
@@ -225,9 +228,6 @@ static error_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in,
     return ERR_NULL_PTR;
 
   ctx = c->ctx;
-
-  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_ENCRYPT))
-    return ERR_BAD_ARGS;
 
   if (EVP_EncryptUpdate(ctx->ossl_ctx, out, &len, in, in_len) != 1)
     return ERR_INTERNAL;
@@ -250,12 +250,17 @@ static error_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in,
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
 
+  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT))
+    return ERR_BAD_ARGS;
+
   if (!out_len)
     return ERR_NULL_PTR;
 
-  /* Allow querying the buffer size */
-  if (*out_len < in_len) {
-    *out_len = in_len;
+  if (in_len < c->tag_len)
+    return ERR_BAD_ARGS;
+
+  if (*out_len < in_len - c->tag_len) {
+    *out_len = in_len - c->tag_len;
     return ERR_BUFFER_TOO_SMALL;
   }
 
@@ -263,9 +268,6 @@ static error_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in,
     return ERR_NULL_PTR;
 
   ctx = c->ctx;
-
-  if (!CIPHER_OPERATION_GET(c, CIPHER_OPERATION_DECRYPT))
-    return ERR_BAD_ARGS;
 
   if (EVP_DecryptUpdate(ctx->ossl_ctx, out, &len, in, in_len) != 1)
     return ERR_INTERNAL;

@@ -6,7 +6,7 @@
  * vibhav950 on GitHub
  */
 
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 #include "common/memzero.h"
 #include "kdf.h"
 #include "kdf_defs.h"

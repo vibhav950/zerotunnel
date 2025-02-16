@@ -1,7 +1,7 @@
 #ifndef __HMAC_H__
 #define __HMAC_H__
 
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 
 typedef enum {
   HMAC_FLAG_ALLOC = (1U << 0),

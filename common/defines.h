@@ -2,8 +2,8 @@
  *
  */
 
-#ifndef __ZEROTUNNEL_H__
-#define __ZEROTUNNEL_H__
+#ifndef __DEFINES_H__
+#define __DEFINES_H__
 
 #if defined(__GNUC__) && defined(__GNUC_MINOR__)
 #define GCC_VERSION_AT_LEAST(major, minor)                                     \
@@ -247,7 +247,7 @@ void *zt_realloc(void *ptr, size_t size);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-volatile void *zt_memset(volatile void *mem, int ch, size_t len);
+void *zt_memset(void *mem, int ch, size_t len);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to zero.
@@ -256,7 +256,7 @@ volatile void *zt_memset(volatile void *mem, int ch, size_t len);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-volatile void *zt_memzero(volatile void *mem, size_t len);
+void *zt_memzero(void *mem, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst.
@@ -266,7 +266,7 @@ volatile void *zt_memzero(volatile void *mem, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-volatile void *zt_memcpy(volatile void *dst, volatile void *src, size_t len);
+void *zt_memcpy(void *dst, void *src, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst, even if the
@@ -277,7 +277,7 @@ volatile void *zt_memcpy(volatile void *dst, volatile void *src, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-volatile void *zt_memmove(volatile void *dst, volatile void *src, size_t len);
+void *zt_memmove(void *dst, void *src, size_t len);
 
 /**
  * Compares the first len bytes of the memory areas a and b.
@@ -397,4 +397,4 @@ short zt_sztos(size_t val);
 unsigned int zt_ssztoui(ssize_t val);
 unsigned short zt_ssztous(ssize_t val);
 
-#endif /* __ZEROTUNNEL_H__ */
+#endif /* __DEFINES_H__ */

@@ -1,7 +1,7 @@
 #ifndef __KEX_H__
 #define __KEX_H__
 
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 
 typedef enum {
   KEX_FLAG_ALLOC = (1U << 0),

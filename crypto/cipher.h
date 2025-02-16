@@ -1,7 +1,7 @@
 #ifndef __CIPHER_H__
 #define __CIPHER_H__
 
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 
 typedef enum {
   CIPHER_FLAG_ALLOC = (1U << 0),
@@ -81,6 +81,8 @@ const char *cipher_alg_to_string(cipher_alg_t alg);
 int cipher_intf_alg_is_supported(const cipher_intf_t *intf, cipher_alg_t alg);
 
 int cipher_flag_get(cipher_t *c, cipher_flag_t flag);
+
+size_t cipher_tag_len(cipher_t *c);
 
 error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
                           size_t key_len, size_t tag_len, cipher_alg_t alg);

@@ -1,5 +1,5 @@
 #include "kdf.h"
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 
 const char *kdf_alg_to_string(kdf_alg_t alg) {
   switch (alg) {

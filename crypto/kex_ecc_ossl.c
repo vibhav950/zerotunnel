@@ -1,4 +1,4 @@
-#include "common/zerotunnel.h"
+#include "common/defines.h"
 #include "common/memzero.h"
 #include "kex.h"
 #include "kex_ecc.h"
