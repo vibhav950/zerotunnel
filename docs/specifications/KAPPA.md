@@ -1,6 +1,6 @@
 # The Kyber Asymmetric Password-based Peer Authentication (KAPPA) Protocol
 
-**Revision 1.1 (special draft), 2-12-2025**\
+**Revision 1.2 (special draft), 2-16-2025**\
 **Authored by Vibhav Tiwari**
 
 > [!WARNING]
@@ -27,10 +27,10 @@
     - [3.2. Kyber KEM](#32-kyber-kem)
     - [3.3. The Decisional MLWE game](#33-the-decisional-mlwe-game)
     - [3.4. Decisional MLWE instance in Kyber](#34-decisional-mlwe-instance-in-kyber)
-    - [4. Authentication using a pre-shared key](#4-authentication-using-a-pre-shared-key)
-      - [4.1. Theoretical model](#41-theoretical-model)
-      - [4.2. Practical implementation](#42-practical-implementation)
-      - [4.3. Protection from offline brute-force attacks](#43-protection-from-offline-brute-force-attacks)
+  - [4. Authentication using a pre-shared key](#4-authentication-using-a-pre-shared-key)
+    - [4.1. Theoretical model](#41-theoretical-model)
+    - [4.2. Practical implementation](#42-practical-implementation)
+    - [4.3. Protection from offline brute-force attacks](#43-protection-from-offline-brute-force-attacks)
   - [5. The KAPPA four-way handshake](#5-the-kappa-four-way-handshake)
     - [5.1. Initiation](#51-initiation)
     - [5.2. Response](#52-response)
@@ -41,13 +41,14 @@
   - [6. Authentication levels](#6-authentication-levels)
   - [7. Security considerations](#7-security-considerations)
     - [7.1. Offline brute-force dictionary attacks](#71-offline-brute-force-dictionary-attacks)
-    - [7.2. Forward secrecy](#72-forward-secrecy)
-    - [7.3. Forced session key reuse attack](#73-forced-session-key-reuse-attack)
-    - [7.4. Passive quantum adversaries](#74-passive-quantum-adversaries)
-    - [7.5. Active quantum adversaries](#75-active-quantum-adversaries)
-    - [7.6. KEM re-encapsulation attack](#76-kem-re-encapsulation-attack)
-    - [7.7. Risks of weak random sources](#77-risks-of-weak-random-sources)
-  - [8. Acknowledgements](#8-acknowledgements)
+    - [7.2 Denial-of-Service](#72-denial-of-service)
+    - [7.3. Forward secrecy](#73-forward-secrecy)
+    - [7.4. Forced session key reuse attack](#74-forced-session-key-reuse-attack)
+    - [7.5. Passive quantum adversaries](#75-passive-quantum-adversaries)
+    - [7.6. Active quantum adversaries](#76-active-quantum-adversaries)
+    - [7.7. KEM re-encapsulation attack](#77-kem-re-encapsulation-attack)
+    - [7.8. Risks of weak random sources](#78-risks-of-weak-random-sources)
+  - [8. Acknowledgments](#8-acknowledgments)
   - [9. References](#9-references)
 
 ---
@@ -108,7 +109,11 @@ The following notation is used in this document:
 
 - _**AEAD-Dec(CT, AAD, tag, K, iv)**_ represents the byte sequence from an AEAD decryption of ciphertext CT with key K and IV. If the tag calculated during decryption does not match the tag received from the encryption, the operation fails.
 
-- _**(data1 || data2)**_ represents a byte sequence that is the concatenation of the byte sequences data1 and data2.
+- _**(data1 || data2)**_ represents a byte sequence that is the concatenation of two byte sequences or bitstrings data1 and data2.
+
+- _**len(data)**_ is the length of data in bytes, represented as an unsigned integer.
+
+- _**data[a:b]**_ represents the byte sequence that is the 'substring' of the byte sequence data, spanning indices a through b-1. Thus, len(data[a:b]) = len(data) - (b-a).
 
 ### 2.3. Roles
 
@@ -118,7 +123,7 @@ The KAPPA handshake involves two parties: an **initiator**, say, **Alice** and a
 
 - **Bob** wants to allow parties like **Alice** to send him encrypted data only if **Alice** knows the password, and must also prove to **Alice** that he knows the password.
 
-There may be a **Server** involved in relaying data between **Alice** and **Bob** but this is solely to enable application-level features like peer-discovery and communication across NATs. Such a **Server** has no participation in the handshake. The handshake enforces cryptographic techniques that make it extremely difficult for any third party who does not know the password (such as a relay server) to compromise the security of the communication. However, if such an interfering third party is able to alter data from the sender in transit and relay it to the recipient, such an effort will cause a handshake failure between **Alice** and **Bob** causing a sort of Denial-Of-Service.
+There may be a **Server** involved in relaying data between **Alice** and **Bob** but this is solely to enable application-level features like peer discovery and communication across NATs. Such a **Server** has no participation in the handshake. The handshake enforces cryptographic techniques that make it extremely difficult for any third party who does not know the password (such as a relay server) to compromise the security of the communication. However, if such an interfering third party is able to alter data from the sender in transit and relay it to the recipient, such an effort will cause a handshake failure between **Alice** and **Bob** causing a sort of Denial-Of-Service.
 
 ### 2.4 Named key pairs
 
@@ -142,21 +147,21 @@ The Module-LWE problem generalizes the standard Learning-with-Errors (LWE) probl
 
 1. Choose a prime $q$ and a power of two $n$. Define the polynomial quotient ring:
 
-   $$R_q = \mathbb{Z}_q[x] / (x^n + 1)$$
+  $$R_q = \mathbb{Z}_q[x] / (x^n + 1)$$
 
- This ring consists of polynomials with coefficients in $\mathbb{Z}_q$, reduced modulo $x^n + 1$.
+  This ring consists of polynomials with coefficients in $\mathbb{Z}_q$, reduced modulo $x^n + 1$.
 
 2. Sample a uniformly random matrix $A \in R_q^{k \times k}$, a secret vector $s \in R_q^k$, and an error vector $e \in R_q^k$, where elements of $s$ and $e$ are small polynomials drawn from a centered binomial distribution $\beta_\eta$.
 
 3. Compute:
 
-   $$t = A s + e$$
+ $$t = A \cdot s + e$$
 
  The challenge is to distinguish the pair $(A, t)$ from a uniformly random pair $(A', t') \in R_q^{k \times k} \times R_q^k$. This problem is assumed to be hard under worst-case lattice assumptions, even on quantum computers.
 
 #### 3.1.2. Hardness assumption
 
-If the error vector $e$ were absent, solving for $s$ would be trivial using Gaussian elimination. However, the presence of the small error makes the problem as hard as certain lattice problems, which are believed to be resistant to quantum attacks.
+If the error vector $e$ were absent, solving for $s$ would be trivial using Gaussian elimination. However, the presence of the small error makes the problem as hard as certain lattice problems, which are believed to be resistant to brute-force attacks on a quantum computer.
 
 ### 3.2. Kyber KEM
 
@@ -179,7 +184,7 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
    - A secret vector $s \in R_q^k$ and an error vector $e \in R_q^k$ are drawn from a small error distribution (e.g., the centered binomial distribution $\beta_{\eta}$).  
    - The challenger computes:
 
-     $$t = A s + e$$
+ $$t = A s + e$$
 
    - Alternatively, the challenger picks a random vector $t' \in R_q^k$, independent of $A$.  
 
@@ -192,61 +197,70 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
    - The adversary must guess whether $b = 0$ or $b = 1$.  
    - If the adversary can distinguish between the two distributions with non-negligible probability, it breaks the MLWE assumption.  
 
-### 3.4. Decisional MLWE instance in Kyber  
+### 3.4. Decisional MLWE instance in Kyber
 
 1. **Key Generation**  
-   - The matrix $A$ is publicly known and sampled randomly from $R_q^{k \times k}$.  
-   - A small secret vector $s$ and error vector $e$ are generated using **$\beta_{\eta}$**.  
-   - The public key is computed as:
+   - The matrix $A$ is publicly known and randomly sampled from $R_q^{k \times k}$.  
+   - A small secret vector $s$ and an error vector $e$ are sampled from **$\beta_{\eta}$**.  
+   - The public key is computed as:  
 
-     $$(A,t)=key \textunderscore gen(A,s,e) = A s + e$$
+ $$(A, t) = key \textunderscore gen(A, s, e) = A \cdot s + e$$
+
+ This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $\rho$ is a 32-byte randomly generated seed used to deterministically derive $A$ via a special form of rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.  
+
+ Therefore, the encapsulation key is given by:  
+
+ $$(\rho, t) = key \textunderscore gen(A, s, e), \text{where } A = \text{SampleMatrixNTT}(\rho)$$
 
 2. **Indistinguishability argument:**  
-   - If $(A, t)$ is an MLWE instance, then $t$ contains the secret $s$ and error $e$, making its structure non-random but masked by small noise.  
-   - If $(A', t')$ is random, then $t'$ is chosen independently of $A'$ and does not contain structured secrets.  
-   - The security of Kyber relies on the fact that no efficient algorithm can distinguish between these two cases with a non-negligible probability.  
+   - If $(A, t)$ is an MLWE instance, then $t$ has been derived from the secret vector $s$ and error vector $e$, making its structure non-random but masked by small noise.  
+   - If $(A, t')$ is a "random" tuple, then $t'$ is chosen independently of $A$ and does not contain structured secrets.  
+   - The security of Kyber relies on the fact that no efficient algorithm can distinguish between these two cases  with a non-negligible probability, i.e., decide whether $t'$ is related to $A$ (that is, $t ' = t$) given an arbitrary tuple $(A,t') \in R_q^{k \times k} \times R_q^k$.
 
-Thus, the MLWE-based public key in Kyber is computationally indistinguishable from a random vector, ensuring security under the Decisional MLWE assumption. In the remaining part of this document, the terms MLWE and DMLWE will be used interchangeably.
+Thus, the MLWE-based public key in Kyber is computationally indistinguishable from a random vector with elements in $R_q$, ensuring security under the Decisional MLWE assumption. In the remaining part of this document, the terms MLWE and DMLWE will be used interchangeably.
 
-### 4. Authentication using a pre-shared key
+## 4. Authentication using a pre-shared key
 
-#### 4.1. Theoretical model
+### 4.1. Theoretical model
 
-We define a keyed function $T_k$ which transforms a valid MLWE instance $(A,t)$ into random data $(A',t')$ represented as $(A,t) \xrightarrow[]{T_k} (A',t')$. We also define the inverse transform $(A',t') \xrightarrow[]{T^{-1}_k} (A,t)$ on the random data that yields back the original MLWE tuple when operated with the same key $k$. It is imperative that $T_k$ has strong pseudorandom properties.
+We define a keyed function $T_k$ which transforms a valid MLWE instance $(A,t)$ into a random tuple $(A,t')$ represented as $(A,t) \xrightarrow[]{T_k} (A,t')$. We also define the inverse transform $(A,t') \xrightarrow[]{T^{-1}_k} (A,t)$ on the random data that yields back the original MLWE tuple when operated with the same key $k$. It is imperative that $T_k$ has strong pseudorandom properties.
 
 1. **Alice** and **Bob** decide on a shared key $k$ securely out-of-band and intend to use this key to authenticate each other preceding bidirectional encrypted data transfer.
 
-2. **Alice** generates her public key using the Kyber key generation step $(A,t)=key \textunderscore gen(A,s,e)$. She then applies the transform $T_k[(A,t)]$ and sends over the resulting tuple $(A',t')$ to **Bob** over an insecure network.
+2. **Alice** generates her public key using the Kyber key generation step $(A,t)=key \textunderscore gen(A,s,e)$. She then applies the transform $T_k[(A,t)]$ and sends over the resulting tuple $(A,t')$ to **Bob** over an insecure network.
 
-3. In order to encapsulate a shared secret using the public key $(A,t)$, **Bob** must apply the inverse transform $T^{-1}_{k}[(A',t')]$ to get back the public key $(A, t)$. Since he has the correct key $k$, he is able to retrieve the public key and encapsulate the shared secret as $ct=encaps(ss, (A, t))$ and sends over $ct$ to **Alice**.
+3. In order to encapsulate a shared secret using the public key $(A,t)$, **Bob** must apply the inverse transform $T^{-1}_{k}[(A,t')]$ to get back the public key $(A, t)$. Since he has the correct key $k$, he is able to retrieve the public key and encapsulate the shared secret as $ct=encaps(ss, (A, t))$ and sends over $ct$ to **Alice**.
 
 4. **Alice** decapsulates the shared secret using her private component as $ss=decaps(ct, (A,t,s,e))$. Alice and Bob have now established the shared secret $ss$.
 
-#### 4.2. Practical implementation
+### 4.2. Practical implementation
 
 In practice, we replace the transformation $T_k$ and its inverse $T_k^{-1}$ respectively with encryption and decryption operations of with a symmetric cipher such as AES.
 
 ![](./kappa_authentication.png)
 
-- **Alice** encrypts her Kyber public key $(A, t)$ using AES with the pre-shared key $k$:
+- **Alice** encrypts her Kyber public share $(\rho, t)$ where public matrix $A = \text{SampleMatrixNTT}(\rho)$ using AES with the pre-shared key $k$:
 
-  $$(A', t') = \text{AES-Enc}_k(A, t)$$
+ $$(\rho', t) = (\text{AES-Enc}_k(\rho),t)$$
 
- and sends the ciphertext $(A', t')$ to **Bob**.  
+ She sends over the ciphertext $(\rho', t)$ to **Bob**.  
 
-- **Bob** decrypts using the same key $k$ to retrieve the original MLWE tuple:
+> [!NOTE]
+> Encrypting $\rho$ essentially masks the relationship between $A$ and $t$. Due to the properties of the underlying setup, we can be certain that $t \neq A' \cdot s + e \text{, where } A'=\text{SampleMatrixNTT}(\rho ')$. However due to the DMLWE argument, this is only known to the party with possession of the private key; whereas to everybody else, the tuple $(\rho ',t)$ looks like a valid public key, since $\rho '$ is essentially a random bitstring and $t$ appears as a random vector in $R_q^k$.
 
-  $$(A, t) = \text{AES-Dec}_k(A', t')$$
+- **Bob** decrypts the encrypted share using the same key $k$ to retrieve the original MLWE tuple:
 
- Since AES ciphertexts are computationally indistinguishable from ideal random byte sequences, an attacker intercepting $(A', t')$ sees only random noise.
+ $$(\rho, t) = (\text{AES-Dec}_k(\rho '), t)$$
 
-#### 4.3. Protection from offline brute-force attacks
+ Since AES ciphertexts are computationally indistinguishable from ideal random byte sequences, an attacker intercepting $\rho '$ sees only random noise.
+
+### 4.3. Protection from offline brute-force attacks
+
+Assume that an attacker, **Charlie** is listening in on the communication and records the handshake before going offline. He can then use one or more computers to try multiple keys against the recorded handshake until he finds the one that gives the correct $(\rho,t)$. Although **Charlie** has guessed the correct key, it is infeasible for him to verify his guess. This is because in order to validate his guess offline, he must decide whether some $(\rho '',t)$ obtained from a candidate decryption key $k'$ is a valid MLWE instance or not, which is hard under the DMLWE argument.
 
 ![](./kappa_offline_attack.png)
 
-Assume that an attacker, **Charlie** is listening in on the communication and records the handshake before going offline. He can then use one or more computers to try multiple keys against the recorded handshake until he finds the one that gives the correct $(A,t)$. Although **Charlie** has guessed the correct key, it is infeasible for him to verify his guess. This is because in order to validate his guess, he must distinguish $(A,t)$, a valid MLWE instance, from the random tuples $(A',t')$ obtained from all the other keys he tried which would involve solving the MLWE problem.
-
-Thus **Charlie** will have to issue a different query (start a new handshake) with **Alice** for every key he wants to check. This can be easily prevented by issuing tokens to limit the maximum number of unsuccessful handshake attempts.
+Therefore, **Charlie** is forced to verify his guess online, i.e., to verify each password guess, he must issue a new query to either of the honest parties while impersonating the other. Such an attack is detectable and can be easily prevented by issuing tokens to limit the maximum number of successive failed handshake attempts.
 
 ## 5. The KAPPA four-way handshake
 
@@ -269,8 +283,8 @@ This is the first state in the initiator state machine.
 - Alice derives the master key from the master password using a key derivation function:\
   &nbsp;&nbsp;&nbsp;&nbsp;_K<sub>pass</sub>_ = KDF(_Password_ || salt[:32] || _"Derive the master key (K_pass)"_, 32)
 
-- Alice then encrypts _OTPQK_ with _K<sub>pass</sub>_ using the _Cipher_ algorithm:\
-  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK<sub>enc</sub>_ = Cipher-Enc(_OTPQK_, _K<sub>pass</sub>_, salt[32:48])
+- Alice then encrypts the _OTPQK_ public seed substring with _K<sub>pass</sub>_ using the _Cipher_ algorithm:\
+  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK<sub>enc</sub>_ = OTPQK[:len(OTPQK) - 32] || Cipher-Enc(OTPQK[len(OTPQK) - 32:], _K<sub>pass</sub>_, salt[32:48])
 
 > [!CAUTION]
 > We do not use AEAD encryption here since the authentication tag would allow for an offline brute-force attack ([section 4.3](#43-protection-from-offline-brute-force-attacks)) on payload encrypted using a derivative of the master password.
@@ -286,8 +300,8 @@ This is the first state in the responder state machine.
 - Bob derives the master key from the master password using a key derivation function:\
   &nbsp;&nbsp;&nbsp;&nbsp;_K<sub>pass</sub>_ = KDF(_Password_ || salt[:32] || _"Derive the master key (K_pass)"_, 32)
 
-- Bob decrypts _OTPQK<sub>enc</sub>_ using _Cipher_ with _K<sub>pass</sub>_ to get back _OTPQK_:\
-  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK_ = Cipher-Dec(_OTPQK<sub>Enc</sub>_, _K<sub>pass</sub>_, salt[32:48])
+- Bob decrypts the _OTPQK<sub>enc</sub>_ seed substring using _Cipher_ with _K<sub>pass</sub>_ to get back _OTPQK_:\
+  &nbsp;&nbsp;&nbsp;&nbsp;_OTPQK_ = OTPQK<sub>enc</sub>[:len(OTPQK<sub>enc</sub>) - 32] || Cipher-Dec(OTPQK<sub>enc</sub>[len(OTPQK) - 32:], _K<sub>pass</sub>_, salt[32:48])
 
 - Bob then generates a random shared secret _SS_ and encapsulates it using Alice's PQ-KEM key _OTPQK_:\
   &nbsp;&nbsp;&nbsp;&nbsp;(_CT_, _SS_) = PQKEM-Enc(_OTPQK_)
@@ -328,11 +342,11 @@ This is the fourth state in the initiator state machine and the third state in t
 
 - Alice generates her proof message as follows and sends it to Bob:
 
-  _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
+ _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
 
 - Bob generates his proof message as follows and sends it to Alice:
   
-  _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
+ _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
 
 ### 5.6. Verification completion
 
@@ -368,51 +382,55 @@ Please note that this protocol is still under development and requires further r
 
 ### 7.1. Offline brute-force dictionary attacks
 
-The proposed scheme is resistant to such an attack by an attacker attempting to crack the master password against a recorded handshake using multiple computers and accelerated. This is mainly ensured by three things:
+The proposed scheme is resistant to such an attack by an attacker attempting to crack the master password against a recorded handshake using multiple computers and accelerated hardware. This is mainly ensured by three things:
 
-- Conversion of a potentially low-entropy master password to a high-entropy master key which is derived for each session with random values using several thousand iterations of a memory-hard hash-based key derivation function.
+- Encryption keys are derived from the master password using a memory-hard key derivation function which uses several iterations of an approved hash algorithm (such as SHA-256) to produce the final encryption key. This greatly reduces the 'hash rate' of brute-force attacks on the password.
 
-- An attacker can only validate a password guess by performing a complete handshake with the initiator since validating the guess without this would involve solving the MLWE problem which is NP-hard in the average case, as established in a proof by Langlois and Stehlé. This can be avoided by enforcing an upper limit on the allowed number of successive failed handshake attempts.
+- An attacker trying to impersonate Alice, for example, cannot efficiently verify a password guess without interacting with Bob (or Alice), and such an interaction is detectable ([section 4.3](#43-protection-from-offline-brute-force-attacks)). In order to limit this possibility of online attacks, a rate-limiting behavior must be enforced on the number of authentication attempts.
 
-### 7.2. Forward secrecy
+### 7.2 Denial-of-Service 
 
-- If an attacker learns an active master password at any point in time, the _K<sub>sess</sub>_ values from past exchanges authenticated with this password will still appear as random data to the attacker. This is because K_sess is derived from key material that is independent of _Password_.
+It is well known that most practical PAKE-like schemes are susceptible to denial-of-service (DoS) attacks. KAPPA is no exception, as it does not impose restrictions on who can initiate a handshake. In this scheme, an honest party engaged in an active handshake only aborts upon detecting an authentication failure. An adversary can exploit this by repeatedly initiating failed handshakes, forcing one or both honest parties attempting to communicate to incrementally increase the cooldown period between handshake attempts. This ultimately results in a successful DoS attack, preventing legitimate communication.
+
+### 7.3. Forward secrecy
+
+- If an attacker learns an active master password at any point in time, the _K<sub>sess</sub>_ values from past exchanges authenticated with this password will still appear as random data to the attacker. This is because K<sub>sess</sub> is derived from one-time-use key material that is independent of _Password_.
 
 - If the authentication level [(Section 6)](#6-authentication-levels) is set to KAPPA0 (static), no break-in recovery is provided between sessions. That is, an adversary who learns the master password at any point can impersonate either party to the other in subsequent connections. This can be avoided by using KAPPA1 or KAPPA2 authentication levels.
 
-### 7.3. Forced session key reuse attack
+### 7.4. Forced session key reuse attack
 
-Except for the master password, all key material used for deriving the session key is use-and-throw in nature, i.e., generated for each session from a secure random number generator. This includes the data originating from the initiator: the PQ-KEM public key, DH key, and salt, as well as the data from the responder: DH key and shared secret. Even if an adversary attempts to replay previously used data, the fresh random values contributed by the honest party will ensure statistical independence of the session key from those in prior sessions. Since both parties introduce new randomness into the key generation process, the handshake remains secure against key reuse and replay attacks.
+Except for the master password, all key material used for deriving the session key is ephemeral in nature, i.e., generated for each session from a secure random number generator, and discarded when the session ends. This includes the data originating from the initiator: the PQ-KEM public key, DH key, and salt, as well as the data from the responder: DH key and shared secret. Even if an adversary attempts to replay previously used data, the fresh random values contributed by the honest party will ensure statistical independence of the session key from those in prior sessions. Since both parties introduce new randomness into the key generation process, the handshake remains secure against key reuse and replay attacks.
 
-### 7.4. Passive quantum adversaries
+### 7.5. Passive quantum adversaries
 
-This scheme is designed to prevent "store now, decrypt later" attacks by adversaries with access to quantum computers in the future. While this security is primarily provided by PQ-KEM, it also relies on the cipher algorithms using a 256-bit key (AES-256 and ChaCha20) and the MAC algorithms using at least a 256-bit key (Poly1305, SHA256, etc.) providing a currently known post-quantum security level of $2^{k/2}$ for a $k$ bit key against Grover's quantum search algorithm. Considering the NIST evaluation criteria for post-quantum cryptography submissions [[2]](#9-references), which classifies a key-search attack on AES-256 at the highest security level, the aforementioned _Cipher_ and _AEAD_ algorithms will suffice for data encryption.
+This scheme is designed to prevent "store now, decrypt later" attacks by adversaries with access to quantum computers in the future. While this security is primarily provided by PQ-KEM, it also relies on the cipher algorithms using a 256-bit key (AES-256 and ChaCha20) and the MAC algorithms using at least a 256-bit key (Poly1305, SHA-256, etc.) providing the currently known post-quantum security level of $2^{k/2}$ for a $k$ bit key against Grover's quantum search algorithm. Considering the NIST evaluation criteria for post-quantum cryptography submissions [[2]](#9-references), which classifies a key-search attack on AES-256 at the highest security level, the aforementioned _Cipher_ and _AEAD_ algorithms will suffice for data encryption.
 
 Following are some noteworthy security properties of KAPPA in this setting:
 
-- If an adversary has recorded the public information and the messages sent between Alice and Bob during the handshake, even access to a quantum computer will not compromise the session key _K<sub>sess</sub>_.
+- If an adversary has recorded the public information and the messages sent between Alice and Bob during the handshake, even future access to a quantum computer will not compromise the session keys _K<sub>sess</sub>_ of past sessions since the shared secret computed from the PQ-KEM scheme is directly incorporated into the session key setup.
 
 - If the private key corresponding to the post-quantum one-time key _OTPQK_ is compromised while _Password_ remains secure, it would compromise _K<sub>sess</sub>_ of the corresponding session but the security of other sessions will still remain intact since _AEAD_ has IND-CPA post-quantum security.
 
-### 7.5. Active quantum adversaries
+### 7.6. Active quantum adversaries
 
-- KAPPA provides protection against active quantum adversaries. An active attacker with access to a quantum computer capable of computing discrete logarithms in the curve corresponding to _DHE_ and can compute _DH(PK1, PK2)_ for all EC keys _DHEK<sub>A</sub>_ and _DHEK<sub>A</sub>_. However, in order to compute the PQ-KEM public key _OTPQK_ after it has been destroyed from its publically broadcasted AES-encrypted form _OTPQK<sub>enc</sub>_, such an adversary would need to perform a brute force quantum search of the 256-bit _K<sub>pass</sub>_ in $2^{128}$ steps.
+KAPPA is designed to withstand attacks from active quantum adversaries. An attacker with access to a quantum computer capable of solving the discrete logarithm problem in the elliptic curve group used for _DHE_ could compute _DH(PK1, PK2)_ for both the EC keys _DHEK<sub>A</sub>_ and _DHEK<sub>B</sub>_. However, the post-quantum security of KAPPA is ensured by the NP-hardness of the Module Learning With Errors (MLWE) problem, which underpins the security of the PQ-KEM ephemeral keys. This ensures that an adversary cannot impersonate a legitimate party or feasibly perform brute-force attacks on previously established session keys.
 
-- As long as an active master password is not compromised out-of-band, it is impossible for an attacker to impersonate Alice or Bob and perform a successful handshake from public data collected from past handshakes run using the master password.
+The minimum security level provided by Kyber (Kyber-512) is equivalent to AES-128 security, with Kyber-1024 offering security comparable to AES-256 [[1]](#9-references).
 
-### 7.6. KEM re-encapsulation attack
+### 7.7. KEM re-encapsulation attack
 
 An attacker who has compromised an _OTPQK_ from a previous KAPPA session without compromising _Password_ can replay the compromised key (_OTPQK<sub>Enc</sub>_) to the responder and de-encapsulate the _SS_. However, such an attacker is unable to re-encapsulate the _SS_ with the fresh PQ-KEM public key of the session under attack, since he only has this key in encrypted form.
 
-### 7.7. Risks of weak random sources
+### 7.8. Risks of weak random sources
 
-The security of the key generation process depends on the presence of a cryptographically strong random number generator, seeded with sufficient entropy. This is crucial during the generation of Alice's PQ-KEM public key, Bob’s PQ-KEM encapsulated shared secret (PQKEM-Enc), and the Diffie-Hellman Ephemeral (DHE) key pairs for both Alice and Bob.
+The security of the key generation process depends on the presence of a cryptographically strong random number generator for all stages, seeded with sufficient entropy. This is crucial during the generation of Alice's PQ-KEM public key and salt, Bob’s PQ-KEM shared secret (_ss_), and the Diffie-Hellman Ephemeral (_DHE_) key pairs for both Alice and Bob.
 
 In Kyber, Bob’s public key is hashed together with Alice’s random bits to derive the shared secret, ensuring that both Alice’s and Bob’s keys contribute to the final key similar to how they would in a Diffie-Hellman exchange. Hence, both parties share the burden of contributing high-entropy random values to the final key derivation.
 
-## 8. Acknowledgements
+## 8. Acknowledgments
 
-The KAPPA protocol was developed by Vibhav Tiwari, with contributions from Samar Garg and Samarth Bhat Y. Special thanks to Samar Garg for devising the encryption-based Kyber authentication and to Samarth Bhat Y for valuable discussions on the protocol's design.
+The KAPPA protocol was developed by Vibhav Tiwari, with contributions from Samar Garg and Samarth Bhat Y. Special thanks to Samar Garg for devising the baseline encryption-based Kyber authentication scheme, and to Samarth Bhat Y for valuable discussions on the protocol's design.
 
 ## 9. References
 
@@ -436,4 +454,4 @@ Memory-hard function, Wikipedia https://en.wikipedia.org/wiki/Memory-hard_functi
 
 ---
 
-Written and placed in the public domain by [vibhav950](https://github.com/vibhav950) for the [ZeroTunnel](https://github.com/vibhav950/zerotunnel) project
+Written and placed in the public domain by [vibhav950](https://github.com/vibhav950) for the [zerotunnel](https://github.com/vibhav950/zerotunnel) project
