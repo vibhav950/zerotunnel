@@ -4,7 +4,7 @@
 /**
  * Default port numbers
  */
-#define SERVICE_PORT_SECFTP          9595   /* Port for this service */
+#define SERVICE_PORT_SECFTP             9595   /* Port for this service */
 
 /**
  * Timeouts waiting periods
@@ -32,5 +32,9 @@ struct zt_addrinfo {
   struct sockaddr       *ai_addr;
   struct zt_addrinfo    *ai_next;
 };
+
+void zt_addrinfo_free(struct zt_addrinfo *ai);
+
+void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port);
 
 #endif // __CONN_DEFS_H__

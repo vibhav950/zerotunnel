@@ -51,7 +51,7 @@
 /**
  * Salt length
  * len(SALT) = len(SALT0) + len(SALT1) + len(SALT2)
-*/
+ */
 #define VCRY_HSHAKE_SALT_LEN           80UL
 #define VCRY_HSHAKE_SALT0_LEN          32UL
 #define VCRY_HSHAKE_SALT1_LEN          16UL
@@ -62,9 +62,10 @@
 
 /**
  * The session key consists of the MAC key (K_mac),
- * the encryption/decryption key (K_enc), and the
- * encryption/decryption IV (IV_enc) for the current
- * session.
+ * the encryption key (K_enc), and the encryption
+ * initialization vector (IV_enc).
+ *
+ * K_sess = K_mac || K_enc || IV_enc
  *
  * len(K_sess) = len(K_mac) + len(K_enc) + len(IV_enc)
  */
@@ -112,7 +113,9 @@ int vcry_set_kem_from_name(const char *name);
 int vcry_set_kdf_from_name(const char *name);
 
 int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len);
+
 int vcry_handshake_respond(const uint8_t *peerdata_theirs, size_t peerdata_theirs_len, uint8_t **peerdata_mine, size_t *peerdata_mine_len);
+
 int vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len);
 
 int vcry_derive_session_key(void);

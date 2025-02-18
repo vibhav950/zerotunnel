@@ -13,23 +13,24 @@
 #include <pthread.h>
 #include <string.h>
 
-#define VCRY_FLAG_SET(x) ((void)(__vctx.flags |= (x)))
-#define VCRY_FLAG_GET(x) ((int)(__vctx.flags & (x)))
+#define VCRY_MAC_KEY_OFFSET           0U
+#define VCRY_ENC_KEY_OFFSET           32U
+#define VCRY_ENC_IV_OFFSET            64U
 
-#define VCRY_EXPECT(cond, jmp) do { if (!(cond)) { ret = -1; goto jmp; } } while (0)
+#define VCRY_FLAG_SET(x)              ((void)(__vctx.flags |= (x)))
+#define VCRY_FLAG_GET(x)              ((int)(__vctx.flags & (x)))
 
-#define VCRY_HSHAKE_ROLE() (__vctx.role)
+#define VCRY_EXPECT(cond, jmp) \
+  do { if (!(cond)) { ret = -1; goto jmp; } } while (0)
 
-#define VCRY_STATE() (__vctx.state)
-#define VCRY_STATE_CHANGE(nextstate) ((void)(__vctx.state = (nextstate)))
+#define VCRY_HSHAKE_ROLE()            (__vctx.role)
 
-#define VCRY_MAC_KEY_OFFSET 0U
-#define VCRY_ENC_KEY_OFFSET 32U
-#define VCRY_ENC_IV_OFFSET 64U
+#define VCRY_STATE()                  (__vctx.state)
+#define VCRY_STATE_CHANGE(nextstate)  ((void)(__vctx.state = (nextstate)))
 
-#define vcry_mac_key() (__vctx.skey + VCRY_MAC_KEY_OFFSET)
-#define vcry_enc_key() (__vctx.skey + VCRY_ENC_KEY_OFFSET)
-#define vcry_enc_iv() (__vctx.skey + VCRY_ENC_IV_OFFSET)
+#define vcry_mac_key()                (__vctx.skey + VCRY_MAC_KEY_OFFSET)
+#define vcry_enc_key()                (__vctx.skey + VCRY_ENC_KEY_OFFSET)
+#define vcry_enc_iv()                 (__vctx.skey + VCRY_ENC_IV_OFFSET)
 
 /**
  * Roles
@@ -44,47 +45,65 @@ enum {
  */
 enum {
   _vcry_fl_cipher_set = (1U << 0),
-  _vcry_fl_aead_set = (1U << 1),
-  _vcry_fl_mac_set = (1U << 2),
-  _vcry_fl_kex_set = (1U << 3),
-  _vcry_fl_kem_set = (1U << 4),
-  _vcry_fl_kdf_set = (1U << 5),
-  _vcry_fl_all_set =
-      (_vcry_fl_cipher_set | _vcry_fl_aead_set | _vcry_fl_mac_set |
-       _vcry_fl_kex_set | _vcry_fl_kem_set | _vcry_fl_kdf_set),
+  _vcry_fl_aead_set   = (1U << 1),
+  _vcry_fl_mac_set    = (1U << 2),
+  _vcry_fl_kex_set    = (1U << 3),
+  _vcry_fl_kem_set    = (1U << 4),
+  _vcry_fl_kdf_set    = (1U << 5),
+  _vcry_fl_all_set    = (_vcry_fl_cipher_set |
+                         _vcry_fl_aead_set |
+                         _vcry_fl_mac_set |
+                         _vcry_fl_kex_set |
+                         _vcry_fl_kem_set |
+                         _vcry_fl_kdf_set)
 };
 
 /**
  * The handshake state machine
  */
 enum {
-  _vcry_hs_none = 0,
-  _vcry_hs_initiate = (1U << 0),
-  _vcry_hs_response = (1U << 1),
-  _vcry_hs_complete = (1U << 2),
-  _vcry_hs_verify_initiate = (1U << 3),
-  _vcry_hs_verify_complete = (1U << 4),
-  _vcry_hs_done = (1U << 5),
+  _vcry_hs_none             = 0,
+  _vcry_hs_initiate         = (1U << 0),
+  _vcry_hs_response         = (1U << 1),
+  _vcry_hs_complete         = (1U << 2),
+  _vcry_hs_verify_initiate  = (1U << 3),
+  _vcry_hs_verify_complete  = (1U << 4),
+  _vcry_hs_done             = (1U << 5)
 };
 
-/**
- * @struct __vcry_ctx_st
- *
- * Keeps context for the underlying cryptographic engines providing
- * key exchange, Message Authentication Codes (MACs), and symmetric
- * AEAD encryption.
- */
 struct __vcry_ctx_st {
+  /**
+   * handles for the crypto engine
+   */
+
   cipher_t *cipher, *aead;
   hmac_t *mac;
   kex_t *kex;
   kem_t *kem;
   kdf_t *kdf;
+
+  /** the peer's EC share */
   kex_peer_share_t peer_ec_share;
-  uint8_t *authkey, *pqk, *peer_pqk, *ss;
-  uint8_t salt[VCRY_HSHAKE_SALT_LEN], skey[VCRY_SESSION_KEY_LEN];
-  size_t authkey_len, pqk_len, ss_len;
-  int role, state, flags;
+
+  uint8_t
+    *authkey,  /** master password */
+    *pqk,      /** own PQ-KEM public key */
+    *peer_pqk, /** peer's PQ-KEM public key */
+    *ss;       /** PQ-KEM shared secret  */
+
+  uint8_t
+    salt[VCRY_HSHAKE_SALT_LEN], /** initiator salt */
+    skey[VCRY_SESSION_KEY_LEN]; /** session key */
+
+  size_t
+    authkey_len,
+    pqk_len, /** len(pqk) for initiator and len(pqk_peer) for responder */
+    ss_len;
+
+  int
+    role,  /** role in handshake */
+    state, /** most recent state marked 'complete' */
+    flags; /** flags for validating the global config */
 };
 
 /** The global thread-local context for this module */
@@ -465,7 +484,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     return -1;
 
   uint8_t ctr128[16];
-  memset(ctr128, 0xef, sizeof(ctr128)); /* trivial counter for kdf_init() */
+  zt_memset(ctr128, 0xef, sizeof(ctr128)); /* trivial counter for kdf_init() */
   if (kdf_init(__vctx.kdf, __vctx.authkey, __vctx.authkey_len, __vctx.salt,
                VCRY_HSHAKE_SALT0_LEN, ctr128) != ERR_SUCCESS) {
     return -1;

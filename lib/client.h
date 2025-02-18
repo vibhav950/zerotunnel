@@ -10,16 +10,17 @@
 #include <sys/types.h>
 
 typedef enum {
-  ZT_CLIENTSTATE_CONN_INIT,
-  ZT_CLIENTSTATE_AUTH_INIT,
-  ZT_CLIENTSTATE_CONN_DONE,
-  ZT_CLIENTSTATE_PEERAUTH_WAIT,
-  ZT_CLIENTSTATE_TRANSFER,
-  ZT_CLIENTSTATE_DONE
-} ZT_CLIENTSTATE;
+  CLIENT_NONE,
+  CLIENT_CONN_INIT,
+  CLIENT_AUTH_INIT,
+  CLIENT_AUTH_WAIT,
+  CLIENT_CONN_DONE,
+  CLIENT_TRANSFER,
+  CLIENT_DONE
+} ZT_CLIENT_STATE;
 
 typedef struct {
-  ZT_CLIENTSTATE
+  ZT_CLIENT_STATE
     state;
   struct zt_addrinfo
     *ai_estab;
@@ -39,32 +40,27 @@ typedef struct {
     sockfd,
     sock_flags,
     serv_port;
-  // TODO make sure uninitialized values are set to -1
   int
     resolve_timeout,
     connect_timeout,
     send_timeout,
     recv_timeout;
-  int
-    tcp_fastopen : 1;
-  // TODO move the config flags to a separate struct and only keep
-  // status flags here (e.g. `ipv6_enabled : 1` indicating ipv6 enabled)
   bool
-    config_ipv6 : 1, /* enable IPv6 addressing */
-    config_port : 1, /* use explicit port */
-    config_tcp_nodelay : 1, /* enable TCP_NODELAY */
-    config_tcp_fastopen : 1, /* enable TCP_FASTOPEN */
-    config_live_read : 1; /* live read enabled */
-} cconnctx;
+    fl_tcp_fastopen : 1,  /* is TCP fastopen enabled */
+    fl_ipv6 : 1,          /* use IPv6 addressing */
+    fl_explicit_port : 1, /* use explicit port */
+    fl_tcp_nodelay : 1,   /* is TCP_NODELAY enabled */
+    fl_live_read : 1;     /* is live read enabled */
+} zt_client_connection_t;
 
-int zt_client_do(cconnctx *ctx, void *args, bool *done);
+error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn, struct zt_addrinfo **ai_list, timediff_t timeout_sec);
 
-error_t zt_client_resolve_host_timeout(cconnctx *ctx, struct zt_addrinfo **ai_head, zt_timeout_t timeout_sec);
+error_t zt_client_tcp_conn0(zt_client_connection_t *conn, struct zt_addrinfo *ai_list);
 
-void zt_addrinfo_free(struct zt_addrinfo *ai);
+error_t zt_client_tcp_conn1(zt_client_connection_t *conn);
 
-void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port);
+error_t zt_client_tcp_verify(zt_client_connection_t *conn, timediff_t timeout_msec);
 
-error_t zt_client_tcp_conn0(cconnctx *ctx, struct zt_addrinfo *ai_list);
+int zt_client_do(zt_client_connection_t *conn, void *args, bool *done);
 
 #endif /* __CLIENT_H__ */
