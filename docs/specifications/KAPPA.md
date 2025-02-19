@@ -27,7 +27,7 @@
     - [3.2. Kyber KEM](#32-kyber-kem)
     - [3.3. The Decisional MLWE game](#33-the-decisional-mlwe-game)
     - [3.4. Decisional MLWE instance in Kyber](#34-decisional-mlwe-instance-in-kyber)
-  - [4. Authentication using a pre-shared key](#4-authentication-using-a-pre-shared-key)
+  - [4. Authentication using a pre-shared password](#4-authentication-using-a-pre-shared-password)
     - [4.1. Theoretical model](#41-theoretical-model)
     - [4.2. Practical implementation](#42-practical-implementation)
     - [4.3. Protection from offline brute-force attacks](#43-protection-from-offline-brute-force-attacks)
@@ -206,7 +206,7 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
 
  $$(A, t) = key \textunderscore gen(A, s, e) = A \cdot s + e$$
 
- This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $\rho$ is a 32-byte randomly generated seed used to deterministically derive $A$ via a special form of rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.  
+ This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $`\rho \in \{ 0, 1 \} ^{256}`$ is a randomly generated seed used to deterministically form the public matrix $A$ in the NTT domain via rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.
 
  Therefore, the encapsulation key is given by:  
 
@@ -219,23 +219,23 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
 
 Thus, the MLWE-based public key in Kyber is computationally indistinguishable from a random vector with elements in $R_q$, ensuring security under the Decisional MLWE assumption. In the remaining part of this document, the terms MLWE and DMLWE will be used interchangeably.
 
-## 4. Authentication using a pre-shared key
+## 4. Authentication using a pre-shared password
 
 ### 4.1. Theoretical model
 
-We define a keyed function $T_k$ which transforms a valid MLWE instance $(A,t)$ into a random tuple $(A,t')$ represented as $(A,t) \xrightarrow[]{T_k} (A,t')$. We also define the inverse transform $(A,t') \xrightarrow[]{T^{-1}_k} (A,t)$ on the random data that yields back the original MLWE tuple when operated with the same key $k$. It is imperative that $T_k$ has strong pseudorandom properties.
+We define a keyed function $T_{pass}$ which transforms a valid MLWE instance $(A,t)$ into a random tuple $(A,t')$ represented as $(A,t) \xrightarrow[]{T_{pass}} (A,t')$. We also define the inverse transform $(A,t') \xrightarrow[]{T_{pass}^{-1}} (A,t)$ on the random data that yields back the original MLWE tuple when operated with the same $pass$. It is imperative that $T_{pass}$ has strong pseudorandom properties.
 
-1. **Alice** and **Bob** decide on a shared key $k$ securely out-of-band and intend to use this key to authenticate each other preceding bidirectional encrypted data transfer.
+1. **Alice** and **Bob** decide on a shared password $pass$ securely out-of-band and intend to use this password to authenticate each other preceding bidirectional encrypted data transfer.
 
-2. **Alice** generates her public key using the Kyber key generation step $(A,t)=key \textunderscore gen(A,s,e)$. She then applies the transform $T_k[(A,t)]$ and sends over the resulting tuple $(A,t')$ to **Bob** over an insecure network.
+2. **Alice** generates her public key using the Kyber key generation step $(A,t)=key \textunderscore gen(A,s,e)$. She then applies the transform $T_{pass}[(A,t)]$ and sends over the resulting tuple $(A,t')$ to **Bob** over an insecure network.
 
-3. In order to encapsulate a shared secret using the public key $(A,t)$, **Bob** must apply the inverse transform $T^{-1}_{k}[(A,t')]$ to get back the public key $(A, t)$. Since he has the correct key $k$, he is able to retrieve the public key and encapsulate the shared secret as $ct=encaps(ss, (A, t))$ and sends over $ct$ to **Alice**.
+3. In order to encapsulate a shared secret using the public key $(A,t)$, **Bob** must apply the inverse transform $T^{-1}_{pass}[(A,t')]$ to get back the public key $(A, t)$. Since he has the correct $pass$, he is able to retrieve the public key and encapsulate the shared secret as $ct=encaps(ss, (A, t))$ and sends over $ct$ to **Alice**.
 
 4. **Alice** decapsulates the shared secret using her private component as $ss=decaps(ct, (A,t,s,e))$. Alice and Bob have now established the shared secret $ss$.
 
 ### 4.2. Practical implementation
 
-In practice, we replace the transformation $T_k$ and its inverse $T_k^{-1}$ respectively with encryption and decryption operations of with a symmetric cipher such as AES.
+In practice, we replace the transformation $T_{pass}$ and its inverse $T_{pass}^{-1}$ respectively with encryption and decryption operations of with a symmetric cipher such as AES.
 
 ![](./kappa_authentication.png)
 
@@ -291,7 +291,7 @@ This is the first state in the initiator state machine.
 
 - Alice sends over _OTPQK<sub>enc</sub>_, _DHEK<sub>A</sub>_, and salt to Bob.
 
-- To support cipher suites Alice also sends a `Settings` string (concatenation of the string representations of the KAPPA parameters separated by the <span style="color:lightcoral">`"_"`</span> string, for e.g. <span style="color:lightcoral">`"KAPPA_KYBER512_DHE-X25519_PBKDF2_AES-GCM-256_AES-CTR-256_HMAC-SHA512"`</span>). If Bob does not support the cipher suite offered by Alice, he sends her an `ERR_CIPHERSUITE_NOT_SUPPORTED` response code, and the handshake cannot proceed.
+- To support cipher suites Alice also sends a _Settings_ string (concatenation of the string representations of the KAPPA parameters separated by the <span style="color:lightcoral">`"_"`</span> string, for e.g. <span style="color:lightcoral">`"KAPPA_KYBER512_DHE-X25519_PBKDF2_AES-GCM-256_AES-CTR-256_HMAC-SHA512"`</span>). If Bob does not support the cipher suite offered by Alice, he sends her an `ERR_CIPHERSUITE_NOT_SUPPORTED` response code, and the handshake cannot proceed.
 
 ### 5.2. Response
 
