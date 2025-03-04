@@ -115,6 +115,7 @@ static inline int base64_decode(const char *table, const char *src, int srclen,
   }
   if (ac & ((1 << bits) - 1))
     return -1;
+  return bp - dst;
 }
 
 /**

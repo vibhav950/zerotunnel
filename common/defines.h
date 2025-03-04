@@ -41,6 +41,12 @@
 #define ATTRIBUTE_UNUSED
 #endif
 
+#if GCC_VERSION_AT_LEAST(7, 1)
+#define ATTRIBUTE_FALLTHROUGH __attribute__((fallthrough))
+#else
+#define ATTRIBUTE_FALLTHROUGH
+#endif
+
 #elif defined(__clang__) /* __GNUC__ && !__clang__ */
 
 #define ATTRIBUTE_ALWAYS_INLINE
@@ -122,8 +128,8 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
 #endif
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-#ifdef COUNTF
-#undef COUNTF
+#ifdef COUNTOF
+#undef COUNTOF
 #endif
 #define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
