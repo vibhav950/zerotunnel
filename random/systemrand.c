@@ -1,4 +1,6 @@
 #include "systemrand.h"
+#include "common/x86_cpuid.h"
+#include "rdrand.h"
 
 #if defined(_WIN32)
 #if defined(_MSC_VER)
@@ -73,10 +75,13 @@ int zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
 
 /**
  * For a request where the size is a multiple of 4 bytes, it is advised to use
- * this function over zt_systemrand_bytes() if the underlying architecture is x86.
- * This function uses a runtime check performed by DetectX86Rand() at program
- * startup to determine if we can get random data from the RDRAND instruction;
- * if this check fails, we naturally fall back to zt_systemrand_bytes().
+ * this function over zt_systemrand_bytes() if the underlying architecture is
+ * x86. This function uses a runtime check performed by DetectX86CPUFeatures()
+ * at program startup as a prerequisite to determine if the RDRAND instruction
+ * is available; if this check fails, we naturally fall back to
+ * zt_systemrand_bytes().
+ *
+ * Note: DetectX86CPUFeatures() must be called before.
  *
  * Returns 0 on success, -1 on failure.
  */
@@ -95,8 +100,8 @@ fallback:
 }
 
 /**
- * For a request where the size is a multiple of 8 bytes, it is advised to use
- * this function over zt_systemrand_bytes() if the underlying architecture is x86.
+ * For a request where the size is a multiple of 8 bytes, it is advised
+ * to use this function over zt_systemrand_bytes() on an x86 machine.
  *
  * Returns 0 on success, -1 on failure.
  */
@@ -159,7 +164,7 @@ const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
  * zero if \p charset is null). If 1 is passed, the default char set is used.
  */
 int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
-                     size_t charset_len) {
+                    size_t charset_len) {
   const char *p;
   uint8_t rand;
 

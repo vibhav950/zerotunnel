@@ -11,6 +11,7 @@
 
 #include "hex.h"
 #include "common/defines.h"
+#include "common/x86_cpuid.h"
 
 #if defined(__GNUC__) // GCC, clang
 #ifdef __clang__
@@ -318,15 +319,20 @@ size_t zt_hex_encode(const uint8_t *src, size_t len, uint8_t **dst) {
   assert(src != NULL);
   assert(dst != NULL);
 
-  buflen = len * 2;
+  buflen = (len * 2) + 1;
   if (!(*dst = zt_malloc(buflen)))
     return 0;
+  (*dst)[buflen - 1] = '\0';
 
 #if defined(__AVX2__)
-  encodeHexVec(*dst, src, len);
+  // do the runtime check for the AVX2 CPU feature flag (the program might intend to disable it)
+  if (HasAVX2())
+    encodeHexVec(*dst, src, len);
+  else
+    encodeHex(*dst, src, len);
 #else
   encodeHex(*dst, src, len);
 #endif
 
-  return buflen;
+  return buflen - 1;
 }

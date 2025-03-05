@@ -4,20 +4,6 @@
 
 #include <stdint.h>
 
-extern volatile int g_HasRDRAND;
-extern volatile int g_HasRDSEED;
-
-/** Check for RDSEED */
-#define HasRDSEED() g_HasRDSEED
-/** Check for RDRAND */
-#define HasRDRAND() g_HasRDRAND
-
-/**
- * Check for RDRAND and RDSEED instruction support on this CPU;
- * This function must be called once at the start of the program.
- */
-void DetectX86Rand();
-
 /**
  * Get 16-bit random number with RDRAND
  * and write the value to *therand.
