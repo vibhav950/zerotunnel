@@ -132,16 +132,13 @@ static inline int line_read_uint(const char *line, uint32_t *val,
 
 static ssize_t auth_sha256_idhash(const char *peer_id, uint8_t **idhash) {
   ssize_t len;
-  sha256_char_t hashbuf[SHA256_BLOCK_SIZE];
-  sha256_ctx_t sha256;
+  uint8_t hashbuf[SHA256_DIGEST_LEN];
 
   assert(peer_id != NULL);
 
-  sha256_init(&sha256);
-  sha256_update(&sha256, peer_id, strlen(peer_id));
-  sha256_final(&sha256, hashbuf);
+  (void)SHA256(peer_id, strlen(peer_id), hashbuf); // TODO: this can return -1
 
-  len = zt_hex_encode(hashbuf, SHA256_BLOCK_SIZE, idhash);
+  len = zt_hex_encode(hashbuf, SHA256_DIGEST_LEN, idhash);
   return len ? (ssize_t)len : -1;
 }
 
@@ -211,7 +208,7 @@ passwd_id_t auth_passwd_load(const char *passwddb_file, const char *peer_id,
     // read "::<idhash>"
     if (*linep && !found) {
       if (line_read_hex(linep, "::", bufx1) !=
-          SHA256_BLOCK_SIZE * 2 /* hex chars */) {
+          SHA256_DIGEST_LEN * 2 /* hex chars */) {
         continue;
       }
 
@@ -219,7 +216,7 @@ passwd_id_t auth_passwd_load(const char *passwddb_file, const char *peer_id,
         continue;
       found = true;
 
-      linep += SHA256_BLOCK_SIZE * 2 + 2;
+      linep += SHA256_DIGEST_LEN * 2 + 2;
     }
 
     // read ":<pwid>:<'x'/' '>:<pw>:"
@@ -326,7 +323,7 @@ int auth_passwd_delete(const char *passwddb_file, const char *peer_id,
     // read "::<idhash>"
     if (*linep && !found) {
       if (line_read_hex(linep, "::", bufx1) !=
-          SHA256_BLOCK_SIZE * 2 /* hex chars */) {
+          SHA256_DIGEST_LEN * 2 /* hex chars */) {
         continue;
       }
 
@@ -334,7 +331,7 @@ int auth_passwd_delete(const char *passwddb_file, const char *peer_id,
         continue;
       found = true;
 
-      linep += SHA256_BLOCK_SIZE * 2 + 2;
+      linep += SHA256_DIGEST_LEN * 2 + 2;
     }
 
     // read ":<pwid>:<'x'/' '>:<pw>:" and delete the password

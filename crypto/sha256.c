@@ -1,166 +1,169 @@
-/*********************************************************************
-* Filename:   sha256.c
-* Author:     Brad Conte (brad AT bradconte.com)
-* Copyright:
-* Disclaimer: This code is presented "as is" without any guarantees.
-* Details:    Implementation of the SHA-256 hashing algorithm.
-              SHA-256 is one of the three algorithms in the SHA2
-              specification. The others, SHA-384 and SHA-512, are not
-              offered in this implementation.
-              Algorithm specification can be found here:
-               * http://csrc.nist.gov/publications/fips/fips180-2/fips180-2withchangenotice.pdf
-              This implementation uses little endian sha256_char_t order.
-
- =====================================================================
-
- CHANGELOG:
- [2-19-25] Modified by vibhav950 for zerotunnel
-
-*********************************************************************/
-
-/*************************** HEADER FILES ***************************/
-#include <stdlib.h>
-#include <memory.h>
 #include "sha256.h"
+#include "common/defines.h"
+#include "common/endianness.h"
+#include "common/memzero.h"
+#include "common/x86_cpuid.h"
 
-/****************************** MACROS ******************************/
-#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
-#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
+#if defined(__GNUC__)
+#include <stdint.h>
+#include <x86intrin.h>
+#elif defined(_MSC_VER)
+#include <immintrin.h>
+#else
+#error "unsupported platform"
+#endif
 
-#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
-#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
-#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
-#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
+#include <assert.h>
+#include <string.h>
 
-/**************************** VARIABLES *****************************/
-static const sha256_word_t k[64] = {
-	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-	0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-	0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-	0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-	0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-	0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
-};
+#define U32(x) x##UL
 
-/*********************** FUNCTION DEFINITIONS ***********************/
-void sha256_transform(sha256_ctx_t *ctx, const sha256_char_t data[])
-{
-	sha256_word_t a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+extern void sha256_process_alg(uint32_t state[8], const uint8_t data[],
+                               uint32_t length);
 
-	for (i = 0, j = 0; i < 16; ++i, j += 4)
-		m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
-	for ( ; i < 64; ++i)
-		m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
+extern void sha256_process_x86(uint32_t state[8], const uint8_t data[],
+                               uint32_t length);
 
-	a = ctx->state[0];
-	b = ctx->state[1];
-	c = ctx->state[2];
-	d = ctx->state[3];
-	e = ctx->state[4];
-	f = ctx->state[5];
-	g = ctx->state[6];
-	h = ctx->state[7];
-
-	for (i = 0; i < 64; ++i) {
-		t1 = h + EP1(e) + CH(e,f,g) + k[i] + m[i];
-		t2 = EP0(a) + MAJ(a,b,c);
-		h = g;
-		g = f;
-		f = e;
-		e = d + t1;
-		d = c;
-		c = b;
-		b = a;
-		a = t1 + t2;
-	}
-
-	ctx->state[0] += a;
-	ctx->state[1] += b;
-	ctx->state[2] += c;
-	ctx->state[3] += d;
-	ctx->state[4] += e;
-	ctx->state[5] += f;
-	ctx->state[6] += g;
-	ctx->state[7] += h;
+static inline void sha256_process(uint32_t state[8], const uint8_t data[],
+                                  uint32_t length) {
+#if defined(__SSE4_1__) && defined(__SHA__)
+  if (HasSHA()) {
+    sha256_process_x86(state, data, length);
+#else
+  if (0) {
+#endif
+  } else {
+    sha256_process_alg(state, data, length);
+  }
 }
 
-void sha256_init(sha256_ctx_t *ctx)
-{
-	ctx->datalen = 0;
-	ctx->bitlen = 0;
-	ctx->state[0] = 0x6a09e667;
-	ctx->state[1] = 0xbb67ae85;
-	ctx->state[2] = 0x3c6ef372;
-	ctx->state[3] = 0xa54ff53a;
-	ctx->state[4] = 0x510e527f;
-	ctx->state[5] = 0x9b05688c;
-	ctx->state[6] = 0x1f83d9ab;
-	ctx->state[7] = 0x5be0cd19;
+/** Initiate the SHA-256 state */
+int sha256_init(sha256_ctx_t *ctx) {
+  if (!ctx)
+    return -1;
+
+  ctx->len = ctx->rem_len = 0;
+
+  ctx->state[0] = U32(0x6a09e667);
+  ctx->state[1] = U32(0xbb67ae85);
+  ctx->state[2] = U32(0x3c6ef372);
+  ctx->state[3] = U32(0xa54ff53a);
+  ctx->state[4] = U32(0x510e527f);
+  ctx->state[5] = U32(0x9b05688c);
+  ctx->state[6] = U32(0x1f83d9ab);
+  ctx->state[7] = U32(0x5be0cd19);
+  return 0;
 }
 
-void sha256_update(sha256_ctx_t *ctx, const sha256_char_t data[], size_t len)
-{
-	sha256_word_t i;
+/** Update SHA-256 state with message blocks  */
+int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
+  if (!ctx)
+    return -1;
 
-	for (i = 0; i < len; ++i) {
-		ctx->data[ctx->datalen] = data[i];
-		ctx->datalen++;
-		if (ctx->datalen == 64) {
-			sha256_transform(ctx, ctx->data);
-			ctx->bitlen += 512;
-			ctx->datalen = 0;
-		}
-	}
+  if (len && !data)
+    return -1;
+
+  // Accumulate overall input size
+  ctx->len += len;
+
+  // Buffer data that is less than a block
+  if ((ctx->rem_len != 0) && (ctx->rem_len + len < SHA256_BLOCK_LEN)) {
+    zt_memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, len);
+    ctx->rem_len += len;
+    return 0;
+  }
+
+  // Complete and process a previously stored block
+  if (ctx->rem_len != 0) {
+    const size_t clen = SHA256_BLOCK_LEN - ctx->rem_len;
+
+    zt_memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, clen);
+    sha256_process(ctx->state, ctx->rem_data, SHA256_BLOCK_LEN);
+
+    data += clen;
+    len -= clen;
+
+    ctx->rem_len = 0;
+    memzero(ctx->rem_data, SHA256_BLOCK_LEN);
+  }
+
+  // Compress whole blocks
+  if (len >= SHA256_BLOCK_LEN) {
+    // const size_t full_blocks_len = len & ~(SHA256_BLOCK_LEN - 1);
+    const size_t full_blocks_len = (len / SHA256_BLOCK_LEN) * SHA256_BLOCK_LEN;
+
+    sha256_process(ctx->state, data, full_blocks_len);
+
+    data += full_blocks_len;
+    len -= full_blocks_len;
+  }
+
+  // Store the remaining data
+  zt_memcpy(ctx->rem_data, (void *)data, len);
+  ctx->rem_len = len;
+  return 0;
 }
 
-void sha256_final(sha256_ctx_t *ctx, sha256_char_t hash[])
-{
-	sha256_word_t i;
+/** Finalize the SHA-256 hash and reset the context */
+int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
+  if (!ctx || !hash)
+    return -1;
 
-	i = ctx->datalen;
+  // Sanity check
+  assert(ctx->rem_len < SHA256_BLOCK_LEN);
 
-	// Pad whatever data is left in the buffer.
-	if (ctx->datalen < 56) {
-		ctx->data[i++] = 0x80;
-		while (i < 56)
-			ctx->data[i++] = 0x00;
-	}
-	else {
-		ctx->data[i++] = 0x80;
-		while (i < 64)
-			ctx->data[i++] = 0x00;
-		sha256_transform(ctx, ctx->data);
-		memset(ctx->data, 0, 56);
-	}
+  // Length of the original message in bits in big-endian format
+#if defined(__LITTLE_ENDIAN__)
+  uint64_t len_bits = bswap64(ctx->len << 3);
+#else
+  uint64_t len_bits = ctx->len << 3;
+#endif
 
-	// Append to the padding the total message's length in bits and transform.
-	ctx->bitlen += ctx->datalen * 8;
-	ctx->data[63] = ctx->bitlen;
-	ctx->data[62] = ctx->bitlen >> 8;
-	ctx->data[61] = ctx->bitlen >> 16;
-	ctx->data[60] = ctx->bitlen >> 24;
-	ctx->data[59] = ctx->bitlen >> 32;
-	ctx->data[58] = ctx->bitlen >> 40;
-	ctx->data[57] = ctx->bitlen >> 48;
-	ctx->data[56] = ctx->bitlen >> 56;
-	sha256_transform(ctx, ctx->data);
+  // Append bit '1'
+  ctx->rem_data[ctx->rem_len++] = 0x80;
 
-	// Since this implementation uses little endian sha256_char_t ordering and SHA uses big endian,
-	// reverse all the sha256_char_ts when copying the final state to the output hash.
-	for (i = 0; i < 4; ++i) {
-		hash[i]      = (ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 4]  = (ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 8]  = (ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 20] = (ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
-	}
+  if (ctx->rem_len > SHA256_BLOCK_LEN - 8 /* 64 bits */) {
+    zt_memset(&ctx->rem_data[ctx->rem_len], 0, SHA256_BLOCK_LEN - ctx->rem_len);
+
+    sha256_process(ctx->state, ctx->rem_data, SHA256_BLOCK_LEN);
+
+    zt_memset(ctx->rem_data, 0, SHA256_BLOCK_LEN);
+  } else {
+    zt_memset(&ctx->rem_data[ctx->rem_len], 0,
+              SHA256_BLOCK_LEN - ctx->rem_len - 8);
+  }
+
+  // Append the length as a 64-bit BE integer
+  zt_memcpy(&ctx->rem_data[SHA256_BLOCK_LEN - 8], PTR8(&len_bits), 8);
+
+  // Process the final block
+  sha256_process(ctx->state, ctx->rem_data, SHA256_BLOCK_LEN);
+
+  // Convert to big-endian ordering
+#if defined(__LITTLE_ENDIAN__)
+  ctx->state[0] = bswap32(ctx->state[0]);
+  ctx->state[1] = bswap32(ctx->state[1]);
+  ctx->state[2] = bswap32(ctx->state[2]);
+  ctx->state[3] = bswap32(ctx->state[3]);
+  ctx->state[4] = bswap32(ctx->state[4]);
+  ctx->state[5] = bswap32(ctx->state[5]);
+  ctx->state[6] = bswap32(ctx->state[6]);
+  ctx->state[7] = bswap32(ctx->state[7]);
+#endif
+
+  zt_memcpy(hash, ctx->state, SHA256_DIGEST_LEN);
+  memzero(ctx, sizeof(sha256_ctx_t));
+  return 0;
+}
+
+int SHA256(const uint8_t data[], size_t len, uint8_t hash[32]) {
+  int ret = 0;
+  sha256_ctx_t ctx;
+
+  ret += sha256_init(&ctx);
+  ret += sha256_update(&ctx, data, len);
+  ret += sha256_finalize(&ctx, hash);
+  return ret == 0 ? 0 : -1;
 }
 
 /**
@@ -168,42 +171,42 @@ void sha256_final(sha256_ctx_t *ctx, sha256_char_t hash[])
  * https://github.com/B-Con/crypto-algorithms/blob/master/sha256_test.c
  */
 int sha256_self_test(void) {
-  sha256_char_t text1[] = {"abc"};
-  sha256_char_t text2[] = {
+  uint8_t text1[] = {"abc"};
+  uint8_t text2[] = {
       "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"};
-  sha256_char_t text3[] = {"aaaaaaaaaa"};
-  sha256_char_t hash1[SHA256_BLOCK_SIZE] = {
+  uint8_t text3[] = {"aaaaaaaaaa"};
+  uint8_t hash1[SHA256_DIGEST_LEN] = {
       0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40,
       0xde, 0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17,
       0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
-  sha256_char_t hash2[SHA256_BLOCK_SIZE] = {
+  uint8_t hash2[SHA256_DIGEST_LEN] = {
       0x24, 0x8d, 0x6a, 0x61, 0xd2, 0x06, 0x38, 0xb8, 0xe5, 0xc0, 0x26,
       0x93, 0x0c, 0x3e, 0x60, 0x39, 0xa3, 0x3c, 0xe4, 0x59, 0x64, 0xff,
       0x21, 0x67, 0xf6, 0xec, 0xed, 0xd4, 0x19, 0xdb, 0x06, 0xc1};
-  sha256_char_t hash3[SHA256_BLOCK_SIZE] = {
+  uint8_t hash3[SHA256_DIGEST_LEN] = {
       0xcd, 0xc7, 0x6e, 0x5c, 0x99, 0x14, 0xfb, 0x92, 0x81, 0xa1, 0xc7,
       0xe2, 0x84, 0xd7, 0x3e, 0x67, 0xf1, 0x80, 0x9a, 0x48, 0xa4, 0x97,
       0x20, 0x0e, 0x04, 0x6d, 0x39, 0xcc, 0xc7, 0x11, 0x2c, 0xd0};
-  sha256_char_t buf[SHA256_BLOCK_SIZE];
+  uint8_t buf[SHA256_DIGEST_LEN];
   sha256_ctx_t ctx;
   int idx;
   int pass = 1;
 
-  sha256_init(&ctx);
-  sha256_update(&ctx, text1, strlen(text1));
-  sha256_final(&ctx, buf);
-  pass = pass && !memcmp(hash1, buf, SHA256_BLOCK_SIZE);
+  assert(sha256_init(&ctx) == 0);
+  assert(sha256_update(&ctx, text1, strlen(text1)) == 0);
+  assert(sha256_finalize(&ctx, buf) == 0);
+  pass = pass && !memcmp(hash1, buf, SHA256_DIGEST_LEN);
 
-  sha256_init(&ctx);
-  sha256_update(&ctx, text2, strlen(text2));
-  sha256_final(&ctx, buf);
-  pass = pass && !memcmp(hash2, buf, SHA256_BLOCK_SIZE);
+  assert(sha256_init(&ctx) == 0);
+  assert(sha256_update(&ctx, text2, strlen(text2)) == 0);
+  assert(sha256_finalize(&ctx, buf) == 0);
+  pass = pass && !memcmp(hash2, buf, SHA256_DIGEST_LEN);
 
-  sha256_init(&ctx);
+  assert(sha256_init(&ctx) == 0);
   for (idx = 0; idx < 100000; ++idx)
-    sha256_update(&ctx, text3, strlen(text3));
-  sha256_final(&ctx, buf);
-  pass = pass && !memcmp(hash3, buf, SHA256_BLOCK_SIZE);
+    assert(sha256_update(&ctx, text3, strlen(text3)) == 0);
+  assert(sha256_finalize(&ctx, buf) == 0);
+  pass = pass && !memcmp(hash3, buf, SHA256_DIGEST_LEN);
 
   return pass;
 }

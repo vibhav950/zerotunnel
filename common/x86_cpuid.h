@@ -2,7 +2,7 @@
 #ifndef __X86_CPUID_H__
 #define __X86_CPUID_H__
 
-volatile struct _x86_cpuid_features_st {
+typedef struct _x86_cpuid_features_st {
   int fl_cpu_Intel  : 1;
   int fl_cpu_AMD    : 1;
   int fl_AVX        : 1;
@@ -17,17 +17,17 @@ volatile struct _x86_cpuid_features_st {
   int fl_SHA        : 1;
   int fl_RDSEED     : 1;
   int fl_RDRAND     : 1;
-};
+} x86_cpuid_features_t;
 
-extern volatile struct _x86_cpuid_features_st x86_cpuid_features;
+extern volatile x86_cpuid_features_t x86_cpuid_features;
 
 /** Called once at program entry */
 void DetectX86CPUFeatures(void);
 
 void DisableCPUExtendedFeatures(void);
 
-#define CheckIntel()  x86_cpuid_features.fl_cpu_Intel
-#define CheckAMD()    x86_cpuid_features.fl_cpu_AMD
+#define IsIntel()     x86_cpuid_features.fl_cpu_Intel
+#define IsAMD()       x86_cpuid_features.fl_cpu_AMD
 
 #define HasSSE()      x86_cpuid_features.fl_SSE
 #define HasSSE2()     x86_cpuid_features.fl_SSE2
