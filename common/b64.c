@@ -125,13 +125,14 @@ static inline int base64_decode(const char *table, const char *src, int srclen,
  * Note: you must zt_free() the output buffer when you are done with it
  *
  * @param src: the data or NUL-terminated string to be encoded
- * @param srclen: the length of the input data (for strings use strlen())
+ * @param srclen: the length of the input data (for strings use strlen()). If
+ * zero, the length is calculated using strlen()
  * @param dst: pointer to pointer to the output buffer that the base-64 encoded
  * string is placed in
  * @param dstlen: the length of allocated buffer at least equal to the length of
  * the encoded string (including the NUL-terminator)
  *
- * @return: the actual length of the encoded string
+ * @return The actual length of the encoded string, or -1 on error
  */
 int zt_b64_encode(const char *src, int srclen, char **dst, int *dstlen) {
   if (!src || !dst || !dstlen)
@@ -156,13 +157,14 @@ int zt_b64_encode(const char *src, int srclen, char **dst, int *dstlen) {
  * Note: you must zt_free() the output buffer when you are done with it
  *
  * @param src: the base-64 encoded string
- * @param srclen: the length of the input data (for strings use strlen())
+ * @param srclen: the length of the input data (for strings use strlen()). If
+ * zero, the length is calculated using strlen()
  * @param dst: pointer to pointer to the output buffer that the decoded string
  * is placed in
  * @param dstlen: the length of allocated buffer at least equal to the length of
  * the decoded string
  *
- * @return: the actual length of the decoded string, or -1 on error
+ * @return The actual length of the decoded string, or -1 on error
  */
 int zt_b64_decode(const char *src, int srclen, char **dst, int *dstlen) {
   if (!src || !dst || !dstlen)
@@ -193,7 +195,7 @@ int zt_b64_decode(const char *src, int srclen, char **dst, int *dstlen) {
  * @param dstlen: the length of allocated buffer at least equal to the length of
  * the encoded string (including the NUL-terminator)
  *
- * @return: the actual length of the encoded string
+ * @return The actual length of the encoded string
  */
 int zt_b64_urlencode(const char *src, int srclen, char **dst, int *dstlen) {
   if (!src || !dst || !dstlen)
@@ -224,7 +226,7 @@ int zt_b64_urlencode(const char *src, int srclen, char **dst, int *dstlen) {
  * @param dstlen: the length of allocated buffer at least equal to the length of
  * the decoded string
  *
- * @return: the actual length of the decoded string, or -1 on error
+ * @return the actual length of the decoded string, or -1 on error
  */
 int zt_b64_urldecode(const char *src, int srclen, char **dst, int *dstlen) {
   if (!src || !dst || !dstlen)

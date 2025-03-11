@@ -190,14 +190,13 @@ ATTRIBUTE_NORETURN static inline void __FKILL(void) {
   // Visual Studio
   __fastfail(0);
 #else
-  // Hacky way to trigger a segfault
-  *(char *)0 = 0;
+  exit(EXIT_FAILURE);
 #endif
 #if __has_builtin(__builtin_unreachable)
   __builtin_unreachable();
 #endif
 #else // __has_builtin
-  *(char *)0 = 0;
+  exit(EXIT_FAILURE)
 #endif
 }
 

@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -L/usr/local/lib -fsanitize=address -fsanitize=leak -DDEBUG -DLIBOQS
+CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -L/usr/local/lib -fsanitize=address -fsanitize=leak -DDEBUG -DLIBOQS
 LIBS := -loqs -lm -lcrypto -pthread
 
 all: bin/kem_kyber_test

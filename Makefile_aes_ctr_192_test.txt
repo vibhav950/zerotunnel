@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=c23 -ggdb -I./ -DDEBUG -DOPENSSL
+CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL
 LIBS := -lcrypto -lssl
 
 all: bin/aes_ctr_192_test

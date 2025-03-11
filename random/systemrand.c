@@ -1,6 +1,9 @@
 #include "systemrand.h"
+#include "common/defines.h"
 #include "common/x86_cpuid.h"
 #include "rdrand.h"
+
+#include <assert.h>
 
 #if defined(_WIN32)
 #if defined(_MSC_VER)
@@ -119,69 +122,109 @@ fallback:
   return zt_systemrand_bytes((uint8_t *)buf, bytes8 * 8);
 }
 
-int zt_rand_u8(uint8_t *rand) {
+inline uint8_t zt_rand_u8(void) {
+  uint8_t rand;
 #if defined(HAVE_ARC4RANDOM)
-  *rand = arc4random_uniform(UINT8_MAX + 1);
-  return 0;
+  rand = arc4random_uniform(UINT8_MAX + 1);
 #else
-  return zt_systemrand_bytes(rand, 1);
+  if (zt_systemrand_bytes(&rand, 1) != 0) {
+    PRINTERROR("System RNG failure");
+    __FKILL();
+  }
+#endif
+  return rand;
+}
+
+inline uint16_t zt_rand_u16(void) {
+  uint16_t rand;
+#if defined(HAVE_ARC4RANDOM)
+  rand = arc4random_uniform(UINT16_MAX + 1);
+#else
+  if (zt_systemrand_bytes((uint8_t *)&rand, 2) != 0) {
+    PRINTERROR("System RNG failure");
+    __FKILL();
+  }
+#endif
+  return rand;
+}
+
+inline uint32_t zt_rand_u32(void) {
+  uint32_t rand;
+#if defined(HAVE_ARC4RANDOM)
+  rand = arc4random();
+#else
+  if (zt_systemrand_4bytes(&rand, 1) != 0) {
+    PRINTERROR("System RNG failure");
+    __FKILL();
+  }
+#endif
+  return rand;
+}
+
+inline uint64_t zt_rand_u64(void) {
+  uint64_t rand;
+  if (zt_systemrand_8bytes(&rand, 1) != 0) {
+    PRINTERROR("System RNG failure");
+    __FKILL();
+  }
+  return rand;
+}
+
+#if defined(_MSC_VER)
+#include <intrin.h> // _BitScanReverse64
+#endif
+
+/* number of bits in x */
+static inline int nbits(uint64_t x) {
+  assert(x > 0);
+#if defined(_MSC_VER)
+  int lz;
+  _BitScanReverse64(&lz, x);
+  return lz + 1;
+#elif defined(__has_builtin) && __has_builtin(__builtin_clzll)
+  return 64U - __builtin_clzll(x);
+#else
+  int n = 0;
+  for (; x; x >>= 1, n++)
+    ;
+  return n;
 #endif
 }
 
-int zt_rand_u16(uint16_t *rand) {
-#if defined(HAVE_ARC4RANDOM)
-  *rand = arc4random_uniform(UINT16_MAX + 1);
-  return 0;
-#else
-  return zt_systemrand_bytes((uint8_t *)rand, 2);
-#endif
+inline int64_t zt_rand_ranged(int64_t max) {
+  uint64_t r;
+  int nbitsv;
+
+  assert(max > 0);
+
+  nbitsv = nbits(max);
+  do {
+    r = zt_rand_u64();
+    r &= (1 << nbitsv) - 1;
+  } while (r > max);
+  return r;
 }
 
-int zt_rand_u32(uint32_t *rand) {
-#if defined(HAVE_ARC4RANDOM)
-  *rand = arc4random();
-  return 0;
-#else
-  return zt_systemrand_4bytes(rand, 1);
-#endif
-}
-
-int zt_rand_u64(uint64_t *rand) { return zt_systemrand_8bytes(rand, 1); }
-
-const char rand_default_charset[90] = "abcdefghijklmnopqrstuvwxyz"
-                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                                      "0123456789!@#$%^&*()_+-=[]"
-                                      "{}|;:,.<>?\\";
-
-/**
- * Randomly generate a null-terminated string and place it in \p rstr.
- *
- * \param rstr Buffer for the random string.
- * \param rstr_len Length of \p rstr INCLUDING the null terminator.
- * \param charset A null-terminated string containing the UTF-8 character set.
- * If null is passed, then the default character set is used.
- * \param charset_len Length of \p charset EXCLUDING the null terminator (can be
- * zero if \p charset is null). If 1 is passed, the default char set is used.
- */
 int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
                     size_t charset_len) {
   const char *p;
-  uint8_t rand;
 
-  if (!charset && charset_len)
+  if (!charset && (charset_len > 1))
+    return -1;
+
+  if (rstr_len < 2)
     return -1;
 
   if (!charset || (charset_len == 1)) {
-    p = rand_default_charset;
-    charset_len = sizeof(rand_default_charset);
+    p = RAND_DEFAULT_CHARSET;
+    charset_len = sizeof(RAND_DEFAULT_CHARSET) - 2;
   } else {
     p = charset;
+    charset_len -= 1;
   }
 
   for (size_t i = 0; i < rstr_len - 1; i++) {
-    if (zt_rand_u8(&rand))
-      return -1;
-    rstr[i] = p[rand % charset_len];
+    rstr[i] = p[zt_rand_ranged(charset_len)];
   }
   rstr[rstr_len - 1] = 0;
 

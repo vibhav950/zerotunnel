@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -fgnu89-inline -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS
+CFLAGS := -Wno-pedantic -std=gnu17 -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS
 LIBS := -lcrypto -lssl -loqs -lm -pthread
 
 all: bin/vcry_handshake_test
@@ -17,6 +17,7 @@ bin/vcry_handshake_test: bin/vcry_handshake_test.o \
                     bin/kem.o \
                     bin/kex_ecc_ossl.o \
 										bin/kex.o \
+                    bin/x86_cpuid.o \
 										bin/log.o \
 										bin/memzero.o \
 										bin/test_utils.o \
@@ -64,6 +65,9 @@ bin/kex_ecc_ossl.o: crypto/kex_ecc_ossl.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/kex.o: crypto/kex.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/x86_cpuid.o: common/x86_cpuid.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/log.o: common/log.c
