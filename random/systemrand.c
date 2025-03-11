@@ -84,8 +84,6 @@ int zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
  * is available; if this check fails, we naturally fall back to
  * zt_systemrand_bytes().
  *
- * Note: DetectX86CPUFeatures() must be called before.
- *
  * Returns 0 on success, -1 on failure.
  */
 int zt_systemrand_4bytes(uint32_t *buf, size_t bytes4) {

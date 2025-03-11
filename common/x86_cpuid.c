@@ -106,10 +106,16 @@ void DetectX86CPUFeatures(void) {
 }
 
 void DisableCPUExtendedFeatures(void) {
-  x86_cpuid_features.fl_AES = 0;
-  x86_cpuid_features.fl_SHA = 0;
+  x86_cpuid_features.fl_SSE3 = 0;
+  x86_cpuid_features.fl_SSE4_1 = 0;
+  x86_cpuid_features.fl_SSE4_2 = 0;
+  x86_cpuid_features.fl_SSSE3 = 0;
   x86_cpuid_features.fl_AVX = 0;
-  x86_cpuid_features.fl_AVX2 = 0;
+  x86_cpuid_features.fl_AES = 0;
   x86_cpuid_features.fl_RDRAND = 0;
+  x86_cpuid_features.fl_SSE = 0;
+  x86_cpuid_features.fl_SSE2 = 0;
+  x86_cpuid_features.fl_AVX2 = 0;
+  x86_cpuid_features.fl_SHA = 0;
   x86_cpuid_features.fl_RDSEED = 0;
 }
