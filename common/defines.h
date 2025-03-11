@@ -56,6 +56,8 @@
 #endif
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
 
@@ -163,9 +165,9 @@ extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...);
 extern void zt_info_vprintf(const char *fmt, ...);
 
 #if defined(DEBUG)
-  #define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
+#define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
 #else
-  #define PRINTDEBUG(fmt, ...)
+#define PRINTDEBUG(fmt, ...)
 #endif
 
 #define PRINTERROR(fmt, ...)                                                   \
@@ -173,12 +175,11 @@ extern void zt_info_vprintf(const char *fmt, ...);
 
 #define PRINTINFO(fmt, ...) zt_info_vprintf(fmt, ##__VA_ARGS__)
 
-#define PRINTWARN(fmt, ...)                                                    \
-  PRINTERROR("[WARNING] " fmt, ##__VA_ARGS__)
+#define PRINTWARN(fmt, ...) PRINTERROR("[WARNING] " fmt, ##__VA_ARGS__)
 
 #if defined(_MSC_VER)
-  #include <intrin.h> // __fastfail
-  #pragma intrinsic(__fastfail)
+#include <intrin.h> // __fastfail
+#pragma intrinsic(__fastfail)
 #endif
 
 ATTRIBUTE_NORETURN static inline void __FKILL(void) {
