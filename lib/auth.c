@@ -42,9 +42,8 @@ static char *auth_passwd_prompt(const char *prompt,
   return ret;
 }
 
-static inline ssize_t line_read_hex(const char *linep, const char *prefix,
-                                    char buf[1025]) {
-  char *line = (char *)linep;
+static inline ssize_t line_read_hex(const char *line, const char *prefix,
+                                    char buf[]) {
   ssize_t len = 0;
 
   while (isspace((unsigned char)*line))
@@ -57,11 +56,9 @@ static inline ssize_t line_read_hex(const char *linep, const char *prefix,
     line += prefix_len;
   }
 
-  while (*line && *line != '\r' && *line != '\n' &&
-         len < 1024) { // reserve 1 byte for the null terminator
+  while (*line) {
     if (!isxdigit((unsigned char)*line))
       return -1; // invalid hex character
-
     buf[len++] = *line++;
   }
 
@@ -69,12 +66,10 @@ static inline ssize_t line_read_hex(const char *linep, const char *prefix,
   return len;
 }
 
-static inline ssize_t line_read_decode_b64(const char *linep,
-                                           const char *prefix, char **buf,
-                                           ssize_t *enc_len) {
+static inline ssize_t line_read_decode_b64(const char *line, const char *prefix,
+                                           char **buf, ssize_t *enc_len) {
   int len;
   ssize_t elen;
-  char *line = (char *)linep;
 
   while (isspace((unsigned char)*line))
     line++;
@@ -86,11 +81,8 @@ static inline ssize_t line_read_decode_b64(const char *linep,
     line += prefix_len;
   }
 
-  if (!line || !*line)
-    return -1;
-
-  for (linep = (char *)line, elen = 0;
-       *linep && *linep != '\r' && *linep != '\n'; linep++, elen++)
+  elen = 0;
+  for (const char *linep = line; *linep; linep++, elen++)
     ;
   if (enc_len)
     *enc_len = elen;
@@ -102,13 +94,14 @@ static inline int line_read_uint(const char *line, uint32_t *val,
   return (sscanf(line, fmt, val) != 1) ? -1 : 1;
 }
 
-static ssize_t auth_sha256_idhash(const char *peer_id, uint8_t **idhash) {
+static ssize_t auth_sha256_idhash_hex(const char *peer_id, uint8_t **idhash) {
   ssize_t len;
   uint8_t hashbuf[SHA256_DIGEST_LEN];
 
   assert(peer_id != NULL);
+  assert(idhash != NULL);
 
-  (void)SHA256(peer_id, strlen(peer_id), hashbuf); // TODO: this can return -1
+  (void)SHA256(peer_id, strlen(peer_id), hashbuf);
 
   len = zt_hex_encode(hashbuf, SHA256_DIGEST_LEN, idhash);
   return len ? (ssize_t)len : -1;
@@ -121,14 +114,14 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   struct flock fl;
   char *buf = NULL, *linep;
   uint8_t *idhash;
-  uint8_t bufx1[1024 + 1] = {0};
+  uint8_t bufx1[400] = {0};
   size_t bufsize = 0;
   ssize_t nread, pwlen;
   passwd_id_t pwid_cmp;
   bool found = false;
 
-  assert(passwddb_file != NULL);
-  assert(peer_id != NULL);
+  if (passwddb_file == NULL || peer_id == NULL)
+    return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
     PRINTERROR("open: could not open %s (%s)", passwddb_file, strerror(errno));
@@ -155,14 +148,14 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
     return -1;
   }
 
-  if (auth_sha256_idhash(peer_id, &idhash) < 0)
+  if (auth_sha256_idhash_hex(peer_id, &idhash) < 0)
     goto cleanup;
 
   *passwd = NULL;
   while ((nread = getline(&buf, &bufsize, fp)) != -1) {
     // enforce a max length on the line size
     // so that we don't read outside the buf
-    if (nread > 1018)
+    if (nread > 390)
       continue;
     linep = buf;
 
@@ -243,14 +236,14 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   struct flock fl;
   char *buf = NULL, *linep, *linep_save;
   uint8_t *idhash;
-  uint8_t bufx1[1024 + 1] = {0};
+  uint8_t bufx1[400] = {0};
   size_t bufsize = 0;
   ssize_t nread;
   passwd_id_t pwid_cmp;
   bool found = false;
 
-  assert(passwddb_file != NULL);
-  assert(peer_id != NULL);
+  if (passwddb_file == NULL || peer_id == NULL)
+    return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
     PRINTERROR("open: could not open %s (%s)", passwddb_file, strerror(errno));
@@ -277,11 +270,11 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
     return -1;
   }
 
-  if (auth_sha256_idhash(peer_id, &idhash) < 0)
+  if (auth_sha256_idhash_hex(peer_id, &idhash) < 0)
     goto cleanup;
 
   while ((nread = getline(&buf, &bufsize, fp)) != -1) {
-    if (nread > 1018)
+    if (nread > 390)
       continue;
     linep = buf;
 
@@ -363,7 +356,8 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
   passwd_id_t id = -1;
   struct passwd *passwd;
 
-  assert(peer_id != NULL);
+  if (passwddb_file == NULL || peer_id == NULL)
+    return NULL;
 
   if (!(passwd = zt_malloc(sizeof(struct passwd))))
     return NULL;
@@ -405,7 +399,8 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
   char *pw;
   struct passwd *passwd;
 
-  assert(peer_id != NULL);
+  if (passwddb_file == NULL || peer_id == NULL)
+    return NULL;
 
   if (!(passwd = zt_malloc(sizeof(struct passwd))))
     return NULL;
@@ -423,11 +418,11 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
                  pwid);
       goto err;
     }
+    break;
   default:
     PRINTERROR("Unknown auth type %d", auth_type);
     goto err;
   }
-
   passwd->id = pwid;
   passwd->pw = pw;
   passwd->pwlen = strlen(pw);
@@ -448,8 +443,8 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
   size_t idhash_hex_len;
   int passwd_b64_len;
 
-  assert(passwddb_file != NULL);
-  assert(peer_id != NULL);
+  if (passwddb_file == NULL || peer_id == NULL)
+    return -1;
 
   if (!n_passwords || n_passwords > 256) {
     PRINTERROR("Requested password bundle of invalid size", n_passwords);
@@ -461,7 +456,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     return -1;
   }
 
-  (void)SHA256(peer_id, strlen(peer_id), idhash); // TOOD: this can return -1
+  (void)SHA256(peer_id, strlen(peer_id), idhash);
 
   if ((idhash_hex_len =
            zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex)) == 0) {
@@ -512,6 +507,10 @@ void zt_auth_passwd_free(struct passwd *pass, ...) {
   va_start(args, pass);
 
   while (pass != NULL) {
+    if (pass->pw != NULL) {
+      memzero(pass->pw, pass->pwlen);
+      zt_free(pass->pw);
+    }
     memzero(pass, sizeof(struct passwd));
     zt_free(pass);
     pass = va_arg(args, struct passwd *);
