@@ -29,7 +29,6 @@
 #include <intrin.h>
 #endif
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -296,9 +295,9 @@ static inline void encodeHexVec(uint8_t* __restrict__ dest, const uint8_t* __res
 size_t zt_hex_decode(const uint8_t *src, size_t len, uint8_t **dst) {
   size_t buflen;
 
-  assert(src != NULL);
-  assert(dst != NULL);
-  assert(len % 2 == 0);
+  ASSERT(src != NULL);
+  ASSERT(dst != NULL);
+  ASSERT(len % 2 == 0);
 
   buflen = len / 2;
   if (!(*dst = zt_malloc(buflen)))
@@ -316,8 +315,8 @@ size_t zt_hex_decode(const uint8_t *src, size_t len, uint8_t **dst) {
 size_t zt_hex_encode(const uint8_t *src, size_t len, uint8_t **dst) {
   size_t buflen;
 
-  assert(src != NULL);
-  assert(dst != NULL);
+  ASSERT(src != NULL);
+  ASSERT(dst != NULL);
 
   buflen = (len * 2) + 1;
   if (!(*dst = zt_malloc(buflen)))

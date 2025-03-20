@@ -30,7 +30,8 @@ inline void zt_debug_vprintf(const char *func, const char *fmt, ...) {
   printf("\n");
 }
 
-inline void zt_error_vprintf(const char *file, const int line, const char *fmt, ...) {
+inline void zt_error_vprintf(const char *file, const int line, const char *fmt,
+                             ...) {
   va_list args;
 
   fprintf(LOG_FP_ERROR, "%s[ERROR %s:%d]%s ", FG_RED, file, line, FG_CLEAR);
@@ -38,6 +39,18 @@ inline void zt_error_vprintf(const char *file, const int line, const char *fmt, 
   vfprintf(LOG_FP_DEBUG, fmt, args);
   va_end(args);
   printf("\n");
+}
+
+ATTRIBUTE_NORETURN inline void
+zt_error_vprintf_exit(const char *file, const int line, const char *fmt, ...) {
+  va_list args;
+
+  fprintf(LOG_FP_ERROR, "%s[ERROR %s:%d]%s ", FG_RED, file, line, FG_CLEAR);
+  va_start(args, fmt);
+  vfprintf(LOG_FP_DEBUG, fmt, args);
+  va_end(args);
+  printf("\n");
+  exit(EXIT_FAILURE);
 }
 
 inline void zt_info_vprintf(const char *fmt, ...) {

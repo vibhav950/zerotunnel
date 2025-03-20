@@ -27,7 +27,9 @@ int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]);
 
 int SHA256(const uint8_t data[], size_t len, uint8_t hash[32]);
 
+#if defined(DEBUG)
 /** Built-in KAT self tests */
 int sha256_self_test(void);
+#endif
 
 #endif /* __SHA256_H__ */

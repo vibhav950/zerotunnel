@@ -6,7 +6,6 @@
 #include "defines.h"
 #include "memzero.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <malloc.h>
 #include <stdio.h>
@@ -24,7 +23,7 @@
 void *zt_malloc(size_t size) {
   void *ptr;
 
-  assert(size > 0);
+  ASSERT(size > 0);
 
 #ifdef __SECURE_LARGE_ALLOC
   if (size >= __LARGE_ALLOC_SIZE) {
@@ -50,8 +49,8 @@ void *zt_malloc(size_t size) {
 void *zt_calloc(size_t nmemb, size_t size) {
   void *ptr;
 
-  assert(nmemb > 0);
-  assert(size > 0);
+  ASSERT(nmemb > 0);
+  ASSERT(size > 0);
 
 #ifdef __SECURE_LARGE_ALLOC
   if (size * nmemb >= __LARGE_ALLOC_SIZE) {
@@ -72,7 +71,7 @@ void zt_free(void *ptr) {
   if (!ptr)
     return;
 
-  assert(malloc_usable_size(ptr) > 0);
+  ASSERT(malloc_usable_size(ptr) > 0);
 
 #ifdef __SECURE_LARGE_ALLOC
   size_t size = malloc_usable_size(ptr);
@@ -94,7 +93,7 @@ void zt_free(void *ptr) {
 }
 
 void *zt_realloc(void *ptr, size_t size) {
-  assert(size > 0);
+  ASSERT(size > 0);
 
   memzero(ptr, size);
 #ifdef __SECURE_LARGE_ALLOC

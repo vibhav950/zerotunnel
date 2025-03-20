@@ -1,10 +1,18 @@
 #ifndef __CONN_DEFS_H__
 #define __CONN_DEFS_H__
 
+/* TCP socket writability */
+#define ZT_NETIO_WRITABLE               0x01
+/* TCP socket readability */
+#define ZT_NETIO_READABLE               0x02
+
+/* Size of the biggest I/O buffer; max payload chunk size */
+#define ZT_MAX_IO_TRANSFER_SIZE         (1UL << 17)
+
 /**
  * Default port numbers
  */
-#define SERVICE_PORT_SECFTP             9595   /* Port for this service */
+#define ZT_DEFAULT_LISTEN_PORT          9595   /* Default service port */
 
 /**
  * Timeouts waiting periods
@@ -18,7 +26,7 @@
 // #define SERVER_TIMEOUT_TRANSFER 30U  /* Timeout to abort ongoing transfer (sec) */
 
 
-#define CLIENT_RESOLVE_RETRIES       5   /* Host resolution retries */
+#define CLIENT_RESOLVE_RETRIES          5   /* Host resolution retries */
 
 #include <sys/socket.h>
 

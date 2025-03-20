@@ -99,8 +99,6 @@ static void ossl_kdf_dealloc(kdf_t *kdf) {
   kdf = NULL;
 }
 
-#include <assert.h>
-
 /** Helper function for Scrypt KDF */
 static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
                            size_t pw_len, const uint8_t *salt, size_t salt_len,
@@ -108,13 +106,13 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   OSSL_PARAM params[7], *p = params;
   unsigned int scrypt_n, scrypt_r, scrypt_p, scrypt_maxmem;
 
-  assert(kdf_ctx);
-  assert(pw);
-  assert(pw_len);
-  assert(salt);
-  assert(salt_len);
-  assert(key);
-  assert(key_len);
+  ASSERT(kdf_ctx);
+  ASSERT(pw);
+  ASSERT(pw_len);
+  ASSERT(salt);
+  ASSERT(salt_len);
+  ASSERT(key);
+  ASSERT(key_len);
 
   scrypt_n = KDF_SCRYPT_CFABLE_N;
   scrypt_r = KDF_SCRYPT_CFABLE_R;
@@ -142,13 +140,13 @@ static int _kdf_hlp_argon2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   uint32_t memory_cost, iteration_cost, lanes;
   unsigned int threads;
 
-  assert(kdf_ctx);
-  assert(pw);
-  assert(pw_len);
-  assert(salt);
-  assert(salt_len);
-  assert(key);
-  assert(key_len);
+  ASSERT(kdf_ctx);
+  ASSERT(pw);
+  ASSERT(pw_len);
+  ASSERT(salt);
+  ASSERT(salt_len);
+  ASSERT(key);
+  ASSERT(key_len);
 
   if (OSSL_set_max_threads(NULL, KDF_ARGON2_CFABLE_THREADS) != 1)
     threads = 1; /* Bummer, can't do anything about it :/ */
@@ -179,13 +177,13 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   OSSL_PARAM params[5], *p = params;
   unsigned int iter;
 
-  assert(kdf_ctx);
-  assert(pw);
-  assert(pw_len);
-  assert(salt);
-  assert(salt_len);
-  assert(key);
-  assert(key_len);
+  ASSERT(kdf_ctx);
+  ASSERT(pw);
+  ASSERT(pw_len);
+  ASSERT(salt);
+  ASSERT(salt_len);
+  ASSERT(key);
+  ASSERT(key_len);
 
   iter = KDF_PBKDF2_CFABLE_ITER;
   *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, pw, pw_len);

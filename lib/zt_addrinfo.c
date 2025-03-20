@@ -1,7 +1,7 @@
 #include "conn_defs.h"
+#include "common/defines.h"
 
 #include <arpa/inet.h>
-#include <assert.h>
 
 void zt_addrinfo_free(struct zt_addrinfo *ai) {
   struct zt_addrinfo *ai_cur, *ai_next;
@@ -19,8 +19,8 @@ void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port) {
   struct sockaddr_in6 *addr6;
 #endif
 
-  assert(ai);
-  assert(port > 0);
+  ASSERT(ai);
+  ASSERT(port > 0);
 
   for (ai_cur = ai; ai_cur; ai_cur = ai_cur->ai_next) {
     switch (ai_cur->ai_family) {

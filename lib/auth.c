@@ -6,7 +6,6 @@
 #include "crypto/sha256.h"
 #include "ztlib.h"
 
-#include <assert.h>
 #include <bsd/readpassphrase.h>
 #include <ctype.h>
 #include <errno.h>
@@ -29,7 +28,7 @@ static char *auth_passwd_prompt(const char *prompt,
   int rppflags;
   char buf[MAX_PASSWD_LEN + 1], *ret;
 
-  assert(prompt != NULL);
+  ASSERT(prompt != NULL);
 
   rppflags = RPP_ECHO_OFF | RPP_REQUIRE_TTY;
   if (readpassphrase(prompt, buf, sizeof(buf), rppflags) == NULL) {
@@ -98,8 +97,8 @@ static ssize_t auth_sha256_idhash_hex(const char *peer_id, uint8_t **idhash) {
   ssize_t len;
   uint8_t hashbuf[SHA256_DIGEST_LEN];
 
-  assert(peer_id != NULL);
-  assert(idhash != NULL);
+  ASSERT(peer_id != NULL);
+  ASSERT(idhash != NULL);
 
   (void)SHA256(peer_id, strlen(peer_id), hashbuf);
 
@@ -356,11 +355,13 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
   passwd_id_t id = -1;
   struct passwd *passwd;
 
-  if (passwddb_file == NULL || peer_id == NULL)
+  if (auth_type == KAPPA_AUTHTYPE_1 && passwddb_file == NULL)
     return NULL;
 
-  if (!(passwd = zt_malloc(sizeof(struct passwd))))
+  if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
+    PRINTERROR("Out of memory");
     return NULL;
+  }
 
   switch (auth_type) {
   case KAPPA_AUTHTYPE_0:
@@ -402,8 +403,10 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
   if (passwddb_file == NULL || peer_id == NULL)
     return NULL;
 
-  if (!(passwd = zt_malloc(sizeof(struct passwd))))
+  if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
+    PRINTERROR("Out of memory");
     return NULL;
+  }
 
   switch (auth_type) {
   /* One-time use passwords */
@@ -531,15 +534,15 @@ int main() {
   const char *peer_id = "peer1";
   char *pw;
 
-  // assert(zt_auth_passwddb_new(passwddb_file, peer_id, 10) == 0);
+  // ASSERT(zt_auth_passwddb_new(passwddb_file, peer_id, 10) == 0);
 
   for (int i = 1; i <= 10; ++i) {
-    assert(zt_auth_passwd_load(passwddb_file, peer_id, i, &pw) > 0);
+    ASSERT(zt_auth_passwd_load(passwddb_file, peer_id, i, &pw) > 0);
     printf("Password: %s\n", pw);
     zt_free(pw);
   }
 
-  // assert(zt_auth_passwd_delete(passwddb_file, peer_id, -1) == 0);
+  // ASSERT(zt_auth_passwd_delete(passwddb_file, peer_id, -1) == 0);
 
   return 0;
 }

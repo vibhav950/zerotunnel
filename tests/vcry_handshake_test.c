@@ -55,7 +55,7 @@ void *initiator_thread(void *arg) {
 
   vcry_set_role_initiator();
 
-  vcry_set_authkey(AUTHKEY, sizeof(AUTHKEY));
+  vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY));
 
   ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
   ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);
@@ -137,7 +137,7 @@ void *responder_thread(void *arg) {
 
   vcry_set_role_responder();
 
-  vcry_set_authkey(AUTHKEY, sizeof(AUTHKEY));
+  vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY));
 
   ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
   ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);

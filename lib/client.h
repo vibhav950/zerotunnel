@@ -10,7 +10,7 @@
 #include <sys/types.h>
 
 typedef enum {
-  CLIENT_NONE,
+  CLIENT_NONE = 0,
   CLIENT_CONN_INIT,
   CLIENT_AUTH_INIT,
   CLIENT_AUTH_WAIT,
@@ -34,6 +34,9 @@ typedef struct {
   zt_timeval_t
     created_at;
 #endif
+  /* Note: this buffer must not be used in `client_do()` */
+  unsigned char
+    *buf;
   char
     *hostname;
   int

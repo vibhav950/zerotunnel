@@ -86,7 +86,7 @@ struct __vcry_ctx_st {
   kex_peer_share_t peer_ec_share;
 
   uint8_t
-    *authkey,  /** master password */
+    *authpass, /** master password */
     *pqk,      /** own PQ-KEM public key */
     *peer_pqk, /** peer's PQ-KEM public key */
     *ss;       /** PQ-KEM shared secret  */
@@ -117,11 +117,11 @@ void vcry_set_role_responder(void) {
   __vctx.role = _vcry_hshake_role_responder;
 }
 
-int vcry_set_authkey(const uint8_t *authkey, size_t authkey_len) {
-  if (!authkey || !authkey_len)
+int vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
+  if (!authpass || !authkey_len)
     return -1;
 
-  __vctx.authkey = zt_memdup(authkey, authkey_len);
+  __vctx.authpass = zt_memdup(authpass, authkey_len);
   __vctx.authkey_len = authkey_len;
   return 0;
 }
@@ -485,7 +485,7 @@ int vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
 
   uint8_t ctr128[16];
   zt_memset(ctr128, 0xef, sizeof(ctr128)); /* trivial counter for kdf_init() */
-  if (kdf_init(__vctx.kdf, __vctx.authkey, __vctx.authkey_len, __vctx.salt,
+  if (kdf_init(__vctx.kdf, __vctx.authpass, __vctx.authkey_len, __vctx.salt,
                VCRY_HSHAKE_SALT0_LEN, ctr128) != ERR_SUCCESS) {
     return -1;
   }
@@ -652,7 +652,7 @@ int vcry_handshake_respond(const uint8_t *peerdata_theirs,
   /** Compute K_pass */
   uint8_t ctr128[16];
   memset(ctr128, 0xef, sizeof(ctr128));
-  if (!(kdf_init(__vctx.kdf, __vctx.authkey, __vctx.authkey_len, __vctx.salt,
+  if (!(kdf_init(__vctx.kdf, __vctx.authpass, __vctx.authkey_len, __vctx.salt,
                  VCRY_HSHAKE_SALT0_LEN, ctr128) == ERR_SUCCESS)) {
     return -1;
   }
@@ -1217,13 +1217,13 @@ void vcry_module_release(void) {
     zt_free(__vctx.peer_pqk);
   }
 
-  memzero(__vctx.authkey, __vctx.authkey_len);
+  memzero(__vctx.authpass, __vctx.authkey_len);
   memzero(__vctx.salt, VCRY_HSHAKE_SALT_LEN);
   memzero(__vctx.skey, VCRY_SESSION_KEY_LEN);
 
-  zt_free(__vctx.authkey);
+  zt_free(__vctx.authpass);
 
-  __vctx.authkey = NULL;
+  __vctx.authpass = NULL;
   __vctx.pqk = NULL;
   __vctx.peer_pqk = NULL;
   __vctx.ss = NULL;
@@ -1240,10 +1240,19 @@ void vcry_module_release(void) {
 }
 
 /**
- * Encrypt data in \p in using the selected AEAD cipher algorithm with the
- * encryption (key, iv) pair for this session and store the result in \p out.
+ * Encrypt data in \p in of size \p in_len using the selected AEAD cipher
+ * algorithm with the encryption (key, iv) pair for this session and store the
+ * result in \p out.
+ * \p out_len must contain the length of the buffer pointed to by \p out,
+ * sufficient to store the encrypted data and the tag.
+ *
+ * The caller must check for the combined length of the encrypted data and the
+ * tag is stored in \p out_len after the function returns successfully.
+ *
  * Performs
- * out[in_len] = AEAD-Enc(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
+ * out[in_len] = AEAD-Enc(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len])
+ * and returns out[in_len] || tag[Tag_len].
+ *
  *
  * This function may only be called after the handshake is complete.
  *
@@ -1252,14 +1261,17 @@ void vcry_module_release(void) {
  * Returns 0 on success, -1 on failure.
  */
 int vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
-                      size_t ad_len, uint8_t *out) {
+                      size_t ad_len, uint8_t *out, size_t *out_len) {
   uint8_t *buf;
   size_t clen;
 
-  if (!in || !in_len || !out)
+  if (!in || !in_len || !out || !out_len)
     return 0;
 
   if (VCRY_STATE() != _vcry_hs_done)
+    return -1;
+
+  if (*out_len < in_len + cipher_tag_len(__vctx.aead))
     return -1;
 
   if (cipher_init(__vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
@@ -1284,6 +1296,7 @@ int vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
     zt_free(buf);
     return -1;
   }
+  *out_len = clen;
 
   zt_memcpy(out, buf, clen);
   memzero(buf, clen);
@@ -1293,8 +1306,15 @@ int vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
 }
 
 /**
- * Decrypt data in \p in using the selected AEAD cipher algorithm with the
- * encryption (key, iv) pair for this session and store the result in \p out.
+ * Decrypt data in \p in of size \p in_len using the selected AEAD cipher
+ * algorithm with the encryption (key, iv) pair for this session and store the
+ * result in \p out.
+ * \p out_len must contain the length of the buffer pointed to by \p out,
+ * sufficient to store the plaintext.
+ *
+ * The caller must check for the length of the decrypted data stored in \p
+ * out_len after the function returns successfully.
+ *
  * Performs
  * out[in_len] = AEAD-Dec(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
  *
@@ -1304,15 +1324,22 @@ int vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
  *
  * Returns 0 on success, -1 on failure.
  */
-int vcry_aead_decrypt(uint8_t *in, size_t len, const uint8_t *ad, size_t ad_len,
-                      uint8_t *out) {
+int vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
+                      size_t ad_len, uint8_t *out, size_t *out_len) {
   uint8_t *buf;
   size_t clen;
 
-  if (!in || !len || !out)
+  if (!in || !out || !out_len)
     return 0;
 
   if (VCRY_STATE() != _vcry_hs_done)
+    return -1;
+
+  /* Invalid message */
+  if (in_len < cipher_tag_len(__vctx.aead))
+    return -1;
+
+  if (*out_len < in_len - cipher_tag_len(__vctx.aead))
     return -1;
 
   if (cipher_init(__vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
@@ -1333,10 +1360,11 @@ int vcry_aead_decrypt(uint8_t *in, size_t len, const uint8_t *ad, size_t ad_len,
   if (!(buf = zt_malloc(clen)))
     return -1;
 
-  if (cipher_decrypt(__vctx.aead, in, len, buf, &clen) != ERR_SUCCESS) {
+  if (cipher_decrypt(__vctx.aead, in, in_len, buf, &clen) != ERR_SUCCESS) {
     zt_free(buf);
     return -1;
   }
+  *out_len = clen;
 
   zt_memcpy(out, buf, clen);
   memzero(buf, clen);

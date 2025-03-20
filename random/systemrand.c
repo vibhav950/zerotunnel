@@ -3,8 +3,6 @@
 #include "common/x86_cpuid.h"
 #include "rdrand.h"
 
-#include <assert.h>
-
 #if defined(_WIN32)
 #if defined(_MSC_VER)
 #pragma comment(lib, "bcrypt.lib")
@@ -174,7 +172,7 @@ inline uint64_t zt_rand_u64(void) {
 
 /* number of bits in x */
 static inline int nbits(uint64_t x) {
-  assert(x > 0);
+  ASSERT(x > 0);
 #if defined(_MSC_VER)
   int lz;
   _BitScanReverse64(&lz, x);
@@ -193,7 +191,7 @@ inline int64_t zt_rand_ranged(int64_t max) {
   uint64_t r;
   int nbitsv;
 
-  assert(max > 0);
+  ASSERT(max > 0);
 
   nbitsv = nbits(max);
   do {

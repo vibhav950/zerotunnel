@@ -13,7 +13,6 @@
 #error "unsupported platform"
 #endif
 
-#include <assert.h>
 #include <string.h>
 
 #define U32(x) x##UL
@@ -110,7 +109,7 @@ int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
     return -1;
 
   // Sanity check
-  assert(ctx->rem_len < SHA256_BLOCK_LEN);
+  ASSERT(ctx->rem_len < SHA256_BLOCK_LEN);
 
   // Length of the original message in bits in big-endian format
 #if defined(__LITTLE_ENDIAN__)
@@ -166,6 +165,8 @@ int SHA256(const uint8_t data[], size_t len, uint8_t hash[32]) {
   return ret == 0 ? 0 : -1;
 }
 
+
+#if defined(DEBUG)
 /**
  * Self-test routine against SHA-256 KATs; sourced from:
  * https://github.com/B-Con/crypto-algorithms/blob/master/sha256_test.c
@@ -192,21 +193,22 @@ int sha256_self_test(void) {
   int idx;
   int pass = 1;
 
-  assert(sha256_init(&ctx) == 0);
-  assert(sha256_update(&ctx, text1, strlen(text1)) == 0);
-  assert(sha256_finalize(&ctx, buf) == 0);
+  ASSERT(sha256_init(&ctx) == 0);
+  ASSERT(sha256_update(&ctx, text1, strlen(text1)) == 0);
+  ASSERT(sha256_finalize(&ctx, buf) == 0);
   pass = pass && !memcmp(hash1, buf, SHA256_DIGEST_LEN);
 
-  assert(sha256_init(&ctx) == 0);
-  assert(sha256_update(&ctx, text2, strlen(text2)) == 0);
-  assert(sha256_finalize(&ctx, buf) == 0);
+  ASSERT(sha256_init(&ctx) == 0);
+  ASSERT(sha256_update(&ctx, text2, strlen(text2)) == 0);
+  ASSERT(sha256_finalize(&ctx, buf) == 0);
   pass = pass && !memcmp(hash2, buf, SHA256_DIGEST_LEN);
 
-  assert(sha256_init(&ctx) == 0);
+  ASSERT(sha256_init(&ctx) == 0);
   for (idx = 0; idx < 100000; ++idx)
-    assert(sha256_update(&ctx, text3, strlen(text3)) == 0);
-  assert(sha256_finalize(&ctx, buf) == 0);
+    ASSERT(sha256_update(&ctx, text3, strlen(text3)) == 0);
+  ASSERT(sha256_finalize(&ctx, buf) == 0);
   pass = pass && !memcmp(hash3, buf, SHA256_DIGEST_LEN);
 
   return pass;
 }
+#endif

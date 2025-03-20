@@ -47,11 +47,22 @@
 #define ATTRIBUTE_FALLTHROUGH
 #endif
 
+#if GCC_VERSION_AT_LEAST(3, 0)
+#define unlikely(expr) __builtin_expect(!!(expr), 0)
+#define likely(expr) __builtin_expect(!!(expr), 1)
+#else
+#define unlikely(expr) (expr)
+#define likely(expr) (expr)
+#endif
+
 #elif defined(__clang__) /* __GNUC__ && !__clang__ */
 
 #define ATTRIBUTE_ALWAYS_INLINE
 #define ATTRIBUTE_NORETURN
 #define ATTRIBUTE_UNUSED
+#define ATTRIBUTE_FALLTHROUGH
+#define unlikely(expr) (x)
+#define likely(expr) (x)
 
 #endif
 
@@ -150,7 +161,9 @@ typedef enum {
   ERR_TIMEOUT,
   ERR_INVALID,
   ERR_NORESOLVE,
-  ERR_CONNECT,
+  ERR_TCP_CONNECT,
+  ERR_TCP_SEND,
+  ERR_TCP_RECV,
   ERR_ALREADY,
 } error_t;
 
@@ -164,10 +177,23 @@ extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...);
 
 extern void zt_info_vprintf(const char *fmt, ...);
 
+extern void zt_error_vprintf_exit(const char *file, int line, const char *fmt,
+                                  ...);
+
+#ifdef ASSERT
+#undef ASSERT
+#endif
+
 #if defined(DEBUG)
 #define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
-#else
+
+#define ASSERT(cond)                                                           \
+  ((cond) ? (void)0                                                            \
+          : zt_error_vprintf_exit(__FILE__, __LINE__,                          \
+                                  "Assertion failed `" #cond "`"))
+#else /* !defined(DEBUG) */
 #define PRINTDEBUG(fmt, ...)
+#define ASSERT(cond) { } /* NOP */
 #endif
 
 #define PRINTERROR(fmt, ...)                                                   \
