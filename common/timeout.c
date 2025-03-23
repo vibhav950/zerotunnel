@@ -2,7 +2,7 @@
 
 void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler) {
   zt_timeval_t tnow = zt_time_now();
-  if (timeout) {
+  if (likely(timeout)) {
     timeout->begin = tnow;
     timeout->expire_in_usec = usec;
     timeout->handler = handler;
@@ -11,7 +11,7 @@ void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler
 
 void zt_timeout_reset(zt_timeout_t *timeout) {
   zt_timeval_t tnow = zt_time_now();
-  if (timeout) {
+  if (likely(timeout)) {
     timeout->begin = tnow;
   }
 }
