@@ -9,6 +9,8 @@
 
 #define PASSWD_HASH_LEN 32U
 
+#define AUTHID_LEN_BYTES 16U
+
 typedef int32_t passwd_id_t;
 
 typedef enum {
@@ -22,6 +24,13 @@ struct passwd {
   passwd_id_t id;
   char *pw;
   size_t pwlen;
+};
+
+struct authid {
+  union {
+    uint8_t bytes[AUTHID_LEN_BYTES];
+    uint32_t words[AUTHID_LEN_BYTES/4];
+  };
 };
 
 passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
@@ -41,5 +50,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
                          int n_passwords);
 
 void zt_auth_passwd_free(struct passwd *pass, ...);
+
+int zt_get_hostid(struct authid *hostid);
 
 #endif /* __AUTH_H__ */

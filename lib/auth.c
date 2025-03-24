@@ -4,6 +4,7 @@
 #include "common/hex.h"
 #include "common/memzero.h"
 #include "crypto/sha256.h"
+#include "lib/client.h"
 #include "ztlib.h"
 
 #include <bsd/readpassphrase.h>
@@ -16,7 +17,14 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <systemd/sd-id128.h>
 #include <unistd.h>
+
+// "kappaxzerotunnel"
+#define ZT_APP_AUTHID128()                                                     \
+  SD_ID128_MAKE(6b, 61, 70, 70, 61, 78, 7a, 65, 72, 6f, 74, 75, 6e, 6e, 65, 6c)
+
+#define ZT_NULL_PEERID_STR "zerotunnel-null-peerid"
 
 extern char *auth_passwd_generate_phonetic(int count, char sep,
                                            bool have_digits);
@@ -358,8 +366,11 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
   if (auth_type == KAPPA_AUTHTYPE_1 && passwddb_file == NULL)
     return NULL;
 
+  if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
+    peer_id = ZT_NULL_PEERID_STR;
+
   if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
-    PRINTERROR("Out of memory");
+    PRINTERROR("out of memory");
     return NULL;
   }
 
@@ -381,7 +392,7 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
       goto err;
     break;
   default:
-    PRINTERROR("Unknown auth type %d", auth_type);
+    PRINTERROR("unknown auth type %d", auth_type);
     goto err;
   }
   passwd->id = id;
@@ -400,11 +411,14 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
   char *pw;
   struct passwd *passwd;
 
-  if (passwddb_file == NULL || peer_id == NULL)
+  if (passwddb_file == NULL)
     return NULL;
 
+  if (peer_id == NULL)
+    peer_id = ZT_NULL_PEERID_STR;
+
   if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
-    PRINTERROR("Out of memory");
+    PRINTERROR("out of memory");
     return NULL;
   }
 
@@ -417,13 +431,13 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
     break;
   case KAPPA_AUTHTYPE_1:
     if (zt_auth_passwd_load(passwddb_file, peer_id, pwid, &pw) < 0) {
-      PRINTERROR("Found no matching entries (peer_id=%s, pwid=%d)", peer_id,
+      PRINTERROR("found no matching entries (peer_id=%s, pwid=%d)", peer_id,
                  pwid);
       goto err;
     }
     break;
   default:
-    PRINTERROR("Unknown auth type %d", auth_type);
+    PRINTERROR("unknown auth type %d", auth_type);
     goto err;
   }
   passwd->id = pwid;
@@ -450,7 +464,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     return -1;
 
   if (!n_passwords || n_passwords > 256) {
-    PRINTERROR("Requested password bundle of invalid size", n_passwords);
+    PRINTERROR("requested password bundle of invalid size", n_passwords);
     return -1;
   }
 
@@ -463,7 +477,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
 
   if ((idhash_hex_len =
            zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex)) == 0) {
-    PRINTERROR("zt_hex_encode: out of memory");
+    PRINTERROR("out of memory");
     ret = -1;
     goto cleanup;
   }
@@ -483,7 +497,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     }
 
     if (zt_b64_encode(buf, 32, &passwd_b64, &passwd_b64_len) == -1) {
-      PRINTERROR("zt_b64_encode: out of memory");
+      PRINTERROR("out of memory");
       ret = -1;
       goto cleanup;
     }
@@ -521,10 +535,45 @@ void zt_auth_passwd_free(struct passwd *pass, ...) {
   va_end(args);
 }
 
+/**
+ * Places a unique identifier in \p authid which can be used to uniquely
+ * identify this machine for a zerotunnel session.
+ * This value remains persistent across boots.
+ *
+ * Returns 0 on success, -1 on failure.
+ *
+ * Note: the caller MUST explicitly check for a 0 return value to make sure
+ * garbage value is not used as the authid.
+ *
+ * - This authenticator can be securely sent over an untrusted network in
+ * plaintext; and MUST BE sent as part of the first message to a peer (i.e., in
+ * the first TCP message from the initiator or the first TCP response from the
+ * responder).
+ * - For KAPPA verification, this the initiator and responder authid are used to
+ * derive the `VERIFICATION_MSG`.
+ */
+int zt_get_hostid(struct authid *authid) {
+  sd_id128_t base, ret;
+
+  if (unlikely(!authid))
+    return -1;
+
+  base = ZT_APP_AUTHID128();
+
+  if (sd_id128_get_machine_app_specific(base, &ret) != 0) {
+    PRINTERROR("failed to get system ID");
+    return -1;
+  }
+
+  zt_memcpy((void *)&authid->bytes[0], (void *)&ret.bytes[0], AUTHID_LEN_BYTES);
+  return 0;
+}
+
 // cd lib
-// gcc -I../ -lbsd auth.c passgen.c ../random/systemrand.c ../common/memzero.c\
-// ../common/mem.c ../common/x86_cpuid.c ../common/log.c ../random/rdrand.c\
-// ../common/hex.c ../common/b64.c ../crypto/sha256.c ../crypto/sha256_alg.c\
+// gcc -I../ -lbsd -lsystemd auth.c passgen.c ../random/systemrand.c
+// ../common/memzero.c \
+// ../common/mem.c ../common/x86_cpuid.c ../common/log.c ../random/rdrand.c \
+// ../common/hex.c ../common/b64.c ../crypto/sha256.c ../crypto/sha256_alg.c \
 // ../crypto/sha256_x86.c
 
 #include <stdio.h>
