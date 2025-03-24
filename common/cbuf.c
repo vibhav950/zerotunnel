@@ -1,7 +1,6 @@
 #include "cbuf.h"
 #include "time_utils.h"
 
-#include <limits.h>
 #include <time.h>
 
 /**
@@ -15,7 +14,7 @@ int cbuf_init(cbuf_t *cbuf, size_t capacity) {
   if (!cbuf)
     return -1;
 
-  if (capacity > (size_t)SSIZE_MAX)
+  if ((capacity < CBUF_MIN_CAPACITY) || (capacity > CBUF_MAX_CAPACITY))
     return -1;
 
   cbuf->buf = zt_malloc(capacity);
@@ -45,7 +44,62 @@ void cbuf_free(cbuf_t *cbuf) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An uninitialized cbuf instance.
+ * @param[in] buf The buffer to use.
+ * @param[in] len The length of the buffer.
+ * @return 0 on success, -1 for invalid arguments.
+ *
+ * @brief Initialize a @p cbuf with an existing buffer.
+ *
+ * - `CBUF_MIN_CAPACITY <= len <= CBUF_MAX_CAPACITY`
+ *
+ * - The ownership of the pointer @p buf is transferred to @p cbuf. If @p buf is
+ * accessed externally, the behavior is undefined.
+ *
+ * - To release this buffer for external use again, use `cbuf_release()`.
+ */
+int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len) {
+  if (!cbuf || !buf || (len < CBUF_MIN_CAPACITY) || (len > CBUF_MAX_CAPACITY))
+    return -1;
+
+  cbuf->buf = buf;
+  cbuf->capacity = len;
+  atomic_init(&cbuf->readp, cbuf->buf);
+  atomic_init(&cbuf->writep, cbuf->buf);
+
+  return 0;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
+ * @param[out] buf The pointer to the released buffer.
+ * @return The capacity of @p *buf.
+ *
+ * @brief Release the buffer from @p cbuf for external use. This function will
+ * transfer ownership of internal buffer of this @p cbuf to the caller.
+ *
+ * After calling this function,
+ *
+ * - The caller is responsible for freeing (if necessary) this buffer.
+ *
+ * - This @p cbuf CANNOT be used before calling `cbuf_make()` or `cbuf_init()`.
+ */
+size_t cbuf_release(cbuf_t *cbuf, uint8_t **buf) {
+  if (!cbuf || !buf)
+    return 0;
+
+  *buf = cbuf->buf;
+  cbuf->capacity = 0;
+  atomic_store(&cbuf->readp, NULL);
+  atomic_store(&cbuf->writep, NULL);
+
+  return cbuf->capacity;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @return The capacity of @p cbuf.
  *
  * @brief Get the write capacity of @p cbuf.
@@ -58,7 +112,8 @@ size_t cbuf_get_capacity(cbuf_t *cbuf) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @return >0 if the buffer is empty, 0 if @p cbuf is not empty,
  * -1 for invalid arguments.
  *
@@ -77,7 +132,8 @@ int cbuf_is_empty(cbuf_t *cbuf) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @return >0 if the buffer is full, 0 if @p cbuf is not full,
  * -1 for invalid arguments.
  *
@@ -102,7 +158,8 @@ int cbuf_is_full(cbuf_t *cbuf) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @return The number of bytes available to read, or -1 for invalid arguments.
  *
  * @brief Get the number of bytes available to read from @p cbuf.
@@ -125,7 +182,8 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @param[in] nbytes The number of bytes that must become readable.
  * @param[in] timeout_msec The wait timeout (in ms).
  * @return >0 if @p nbytes are readable, 0 if the timeout expired,
@@ -162,7 +220,8 @@ int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @param[in] buf The buffer to write.
  * @param[in] nbytes The maximum number of bytes to write.
  * @param[in] timeout_msec The wait timeout (in ms).
@@ -248,7 +307,8 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @param[out] buf The buffer to read into.
  * @param[in] nbytes The maximum number of bytes to read.
  * @param[in] timeout_msec The wait timeout (in ms).
@@ -336,7 +396,8 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @param[out] buf The buffer to read into.
  * @param[in] nbytes The size of the @p buf.
  * @return The number of bytes read, or -1 for invalid arguments.
@@ -373,7 +434,8 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
 }
 
 /**
- * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
+ * `cbuf_make()`.
  * @param[in] nbytes The maximum number of bytes to delete.
  * @return The number of bytes deleted, or -1 for invalid arguments.
  *

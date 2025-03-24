@@ -4,6 +4,12 @@
 #include "defines.h"
 
 #include <stdatomic.h>
+#include <limits.h>
+
+/* Min capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
+#define CBUF_MIN_CAPACITY 512
+/* Max capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
+#define CBUF_MAX_CAPACITY SSIZE_MAX
 
 /**
  * @struct cbuf_t
@@ -23,7 +29,7 @@
  * == writep`.
  */
 typedef struct cbuf_st {
-  uint8_t *buf;
+  uint8_t *restrict buf;
   _Atomic(uint8_t *) readp;
   _Atomic(uint8_t *) writep;
   size_t capacity;
@@ -32,6 +38,10 @@ typedef struct cbuf_st {
 int cbuf_init(cbuf_t *cbuf, size_t capacity);
 
 void cbuf_free(cbuf_t *cbuf);
+
+int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len);
+
+size_t cbuf_release(cbuf_t *cbuf, uint8_t **buf);
 
 size_t cbuf_get_capacity(cbuf_t *cbuf);
 
