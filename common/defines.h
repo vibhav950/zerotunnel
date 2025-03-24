@@ -153,13 +153,15 @@ typedef enum {
   ERR_NULL_PTR,
   ERR_BAD_ARGS,
   ERR_MEM_FAIL,
-  ERR_AUTH_FAIL,
   ERR_BUFFER_TOO_SMALL,
-  ERR_AGAIN,
+  ERR_REQUEST_TOO_LARGE,
   ERR_NOT_SUPPORTED,
   ERR_INTERNAL,
-  ERR_TIMEOUT,
   ERR_INVALID,
+  ERR_INVALID_DATUM,
+  ERR_AUTH_FAIL,
+  ERR_AGAIN,
+  ERR_TIMEOUT,
   ERR_NORESOLVE,
   ERR_TCP_CONNECT,
   ERR_TCP_SEND,
@@ -185,15 +187,22 @@ extern void zt_error_vprintf_exit(const char *file, int line, const char *fmt,
 #endif
 
 #if defined(DEBUG)
+
 #define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
 
 #define ASSERT(cond)                                                           \
-  ((cond) ? (void)0                                                            \
-          : zt_error_vprintf_exit(__FILE__, __LINE__,                          \
-                                  "Assertion failed `" #cond "`"))
+  do {                                                                         \
+    ((cond) ? (void)0                                                          \
+            : zt_error_vprintf_exit(__FILE__, __LINE__,                        \
+                                    "Assertion failed `" #cond "`"));          \
+  } while (0)
+
 #else /* !defined(DEBUG) */
 #define PRINTDEBUG(fmt, ...)
-#define ASSERT(cond) { } /* NOP */
+#define ASSERT(cond)                                                           \
+  do {                                                                         \
+    (void)(cond);                                                              \
+  } while (0) /* NOP */
 #endif
 
 #define PRINTERROR(fmt, ...)                                                   \
