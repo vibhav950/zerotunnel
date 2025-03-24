@@ -19,10 +19,13 @@ bin/vcry_handshake_test: bin/vcry_handshake_test.o \
 										bin/kex.o \
                     bin/x86_cpuid.o \
 										bin/log.o \
+                    bin/time_utils.o \
+                    bin/timeout.o \
 										bin/memzero.o \
 										bin/test_utils.o \
 										bin/mem.o \
                     bin/cpu.o \
+                    bin/cbuf.o \
                     bin/rdrand.o \
                     bin/systemrand.o
 
@@ -73,6 +76,12 @@ bin/x86_cpuid.o: common/x86_cpuid.c
 bin/log.o: common/log.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
+bin/time_utils.o: common/time_utils.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/timeout.o: common/timeout.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
 bin/memzero.o: common/memzero.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
@@ -85,12 +94,14 @@ bin/mem.o: common/mem.c
 bin/cpu.o: common/cpu.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
+bin/cbuf.o: common/cbuf.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
 bin/rdrand.o: random/rdrand.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/systemrand.o: random/systemrand.c
 	$(CC) $(CFLAGS) -c -o $@ $^
-
 
 .PHONY: clean
 clean:

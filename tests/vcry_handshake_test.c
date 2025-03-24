@@ -6,8 +6,8 @@
  * four-way handshake.
  */
 
-#include "test.h"
 #include "lib/vcry.h"
+#include "test.h"
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -57,15 +57,15 @@ void *initiator_thread(void *arg) {
 
   vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY));
 
-  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
-  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);
-  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == 0);
-  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == 0);
-  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == 0);
-  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == 0);
+  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == ERR_SUCCESS);
+  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == ERR_SUCCESS);
+  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == ERR_SUCCESS);
+  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == ERR_SUCCESS);
+  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == ERR_SUCCESS);
+  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == ERR_SUCCESS);
 
   /* ============ HANDSHAKE INITIATE ============ */
-  ASSERT(vcry_handshake_initiate(&write, &write_len) == 0);
+  ASSERT(vcry_handshake_initiate(&write, &write_len) == ERR_SUCCESS);
 
   /* Send initiation message */
   pthread_mutex_lock(&initiator_buf->lock);
@@ -88,13 +88,13 @@ void *initiator_thread(void *arg) {
   pthread_mutex_unlock(&responder_buf->lock);
 
   /* ============ HANDSHAKE COMPLETE ============ */
-  ASSERT(vcry_handshake_complete(read, read_len) == 0);
+  ASSERT(vcry_handshake_complete(read, read_len) == ERR_SUCCESS);
   zt_free(read); // free after use
 
   /* We are now in the right state to derive the session key */
   pthread_barrier_wait(&barrier);
 
-  ASSERT(vcry_derive_session_key() == 0);
+  ASSERT(vcry_derive_session_key() == ERR_SUCCESS);
 
   /* ============ VERIFY INITIATE ============ */
   vcry_initiator_verify_initiate(&write, &write_len, "Alice", "Bob");
@@ -120,7 +120,7 @@ void *initiator_thread(void *arg) {
   pthread_mutex_unlock(&responder_buf->lock);
 
   /* ============ VERIFY COMPLETE ============ */
-  ASSERT(vcry_initiator_verify_complete(read, "Alice", "Bob") == 0);
+  ASSERT(vcry_initiator_verify_complete(read, "Alice", "Bob") == ERR_SUCCESS);
   zt_free(read); // free after use
 
   vcry_module_release();
@@ -139,12 +139,12 @@ void *responder_thread(void *arg) {
 
   vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY));
 
-  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == 0);
-  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == 0);
-  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == 0);
-  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == 0);
-  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == 0);
-  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == 0);
+  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == ERR_SUCCESS);
+  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == ERR_SUCCESS);
+  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == ERR_SUCCESS);
+  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == ERR_SUCCESS);
+  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == ERR_SUCCESS);
+  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == ERR_SUCCESS);
 
   /* Wait for initiation message */
   pthread_mutex_lock(&initiator_buf->lock);
@@ -158,7 +158,8 @@ void *responder_thread(void *arg) {
   pthread_mutex_unlock(&initiator_buf->lock);
 
   /* ============ HANDSHAKE RESPONSE ============ */
-  ASSERT(vcry_handshake_respond(read, read_len, &write, &write_len) == 0);
+  ASSERT(vcry_handshake_respond(read, read_len, &write, &write_len) ==
+         ERR_SUCCESS);
   zt_free(read);
 
   /* Send response message */
@@ -173,11 +174,11 @@ void *responder_thread(void *arg) {
   /* We are now in the right state to derive the session key */
   pthread_barrier_wait(&barrier);
 
-  ASSERT(vcry_derive_session_key() == 0);
+  ASSERT(vcry_derive_session_key() == ERR_SUCCESS);
 
   /* ============ VERIFY INITIATE ============ */
   ASSERT(vcry_responder_verify_initiate(&write, &write_len, "Alice", "Bob") ==
-         0);
+         ERR_SUCCESS);
 
   /* Send responder verify message */
   pthread_mutex_lock(&responder_buf->lock);
@@ -200,7 +201,7 @@ void *responder_thread(void *arg) {
   pthread_mutex_unlock(&initiator_buf->lock);
 
   /* ============ VERIFY COMPLETE ============ */
-  ASSERT(vcry_responder_verify_complete(read, "Alice", "Bob") == 0);
+  ASSERT(vcry_responder_verify_complete(read, "Alice", "Bob") == ERR_SUCCESS);
   zt_free(read);
 
   vcry_module_release();
