@@ -9,7 +9,7 @@
  * @param[in] capacity The capacity in bytes.
  * @return 0 on success, -1 on failure.
  *
- * Allocate memory for a cbuf.
+ * @brief Allocate memory for a cbuf.
  */
 int cbuf_init(cbuf_t *cbuf, size_t capacity) {
   if (!cbuf)
@@ -32,7 +32,7 @@ int cbuf_init(cbuf_t *cbuf, size_t capacity) {
 /**
  * @param[in] cbuf The cbuf to free
  *
- * Free the memory allocated for @p cbuf.
+ * @brief Free the memory allocated for @p cbuf.
  */
 void cbuf_free(cbuf_t *cbuf) {
   if (!cbuf)
@@ -46,13 +46,28 @@ void cbuf_free(cbuf_t *cbuf) {
 
 /**
  * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @return The capacity of @p cbuf.
+ *
+ * @brief Get the write capacity of @p cbuf.
+ */
+size_t cbuf_get_capacity(cbuf_t *cbuf) {
+  if (unlikely(!cbuf))
+    return 0;
+
+  return cbuf->capacity - 1;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
  * @return >0 if the buffer is empty, 0 if @p cbuf is not empty,
  * -1 for invalid arguments.
+ *
+ * @brief Check if the buffer is empty.
  */
 int cbuf_is_empty(cbuf_t *cbuf) {
   uint8_t *readp, *writep;
 
-  if (!cbuf)
+  if (unlikely(!cbuf))
     return -1;
 
   readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
@@ -65,12 +80,14 @@ int cbuf_is_empty(cbuf_t *cbuf) {
  * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
  * @return >0 if the buffer is full, 0 if @p cbuf is not full,
  * -1 for invalid arguments.
+ *
+ * @brief Check if the buffer is full.
  */
 int cbuf_is_full(cbuf_t *cbuf) {
   uint8_t *writep, *readp;
   ssize_t offs;
 
-  if (!cbuf)
+  if (unlikely(!cbuf))
     return -1;
 
   readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
@@ -88,13 +105,13 @@ int cbuf_is_full(cbuf_t *cbuf) {
  * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
  * @return The number of bytes available to read, or -1 for invalid arguments.
  *
- * Get the number of bytes available to read from @p cbuf.
+ * @brief Get the number of bytes available to read from @p cbuf.
  */
 ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
   uint8_t *writep, *readp;
   ssize_t offs;
 
-  if (!cbuf)
+  if (unlikely(!cbuf))
     return 0;
 
   readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
@@ -109,16 +126,59 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
 
 /**
  * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] nbytes The number of bytes that must become readable.
+ * @param[in] timeout_msec The wait timeout (in ms).
+ * @return >0 if @p nbytes are readable, 0 if the timeout expired,
+ * -1 for invalid arguments.
+ *
+ * @brief Wait for at most @p timeout_msec ms for @p nbytes to become readable
+ * in @p cbuf.
+ *
+ * The following values of @p timeout_msec are special:
+ *
+ * - `0`: return immediately
+ *
+ * - `-1`: wait indefinitely
+ */
+int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
+                          timediff_t timeout_msec) {
+  zt_timeout_t timeout;
+  // 800us sleep
+  const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
+
+  if (!cbuf || !nbytes)
+    return -1;
+
+  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
+  for (;;) {
+    if (cbuf_get_readable_size(cbuf) >= nbytes)
+      return 1;
+
+    if (zt_timeout_expired(&timeout, NULL))
+      return 0;
+
+    clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
+  }
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
  * @param[in] buf The buffer to write.
  * @param[in] nbytes The maximum number of bytes to write.
  * @param[in] timeout_msec The wait timeout (in ms).
  * @return The number of bytes written, or -1 for invalid arguments.
  *
- * Lock-free blocking write for this SPSC @p cbuf.
+ * @brief Lock-free blocking write for this SPSC @p cbuf.
  * This function will block using busy-waiting until some space becomes
  * available or @p timeout_msec ms have elapsed. Once any amount of free space
  * is available to write, the function writes as much as possible and returns
  * the number of bytes written.
+ *
+ * The following values of @p timeout_msec are special:
+ *
+ * - `0`: return immediately
+ *
+ * - `-1`: wait indefinitely
  */
 ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
                             timediff_t timout_msec) {
@@ -195,9 +255,9 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  * @param[in] all Enforce all-or-nothing behaviour.
  * @return The number of bytes read into @p buf, or -1 for invalid arguments.
  *
- * Lock-free blocking read for this SPSC @p cbuf. This function will block for
- * at most @p timeout_msec ms using busy-waiting until @p nbytes are readable.
- * Data is read with FIFO ordering.
+ * @brief Lock-free blocking read for this SPSC @p cbuf. This function will
+ * block for at most @p timeout_msec ms using busy-waiting until @p nbytes are
+ * readable. Data is read with FIFO ordering.
  *
  * - If @p all is set to `true`, the function will read exactly @p nbytes bytes
  * from @p cbuf. If there are not enough bytest to read, the function returns 0;
@@ -207,6 +267,12 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  * @p timeout_msec ms until @p nbytes are available to read. If the timeout
  * expires before the data becomes available, the function reads whatever bytes
  * are available and returns the number of bytes read.
+ *
+ * The following values of @p timeout_msec are special:
+ *
+ * - `0`: return immediately
+ *
+ * - `-1`: wait indefinitely
  */
 ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
                            timediff_t timeout_msec, bool all) {
@@ -275,7 +341,7 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
  * @param[in] nbytes The size of the @p buf.
  * @return The number of bytes read, or -1 for invalid arguments.
  *
- * Read data from @p cbuf into @p buf without consuming it.
+ * @brief Read data from @p cbuf into @p buf without consuming it.
  * Data is read with FIFO ordering.
  */
 ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
@@ -311,7 +377,7 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
  * @param[in] nbytes The maximum number of bytes to delete.
  * @return The number of bytes deleted, or -1 for invalid arguments.
  *
- * Delete no more than @p nbytes bytes from the @p cbuf in FIFO order.
+ * @brief Delete no more than @p nbytes bytes from the @p cbuf in FIFO order.
  */
 ssize_t cbuf_remove(cbuf_t *cbuf, size_t nbytes) {
   uint8_t *readp, *writep;

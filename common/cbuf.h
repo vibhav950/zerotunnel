@@ -33,11 +33,15 @@ int cbuf_init(cbuf_t *cbuf, size_t capacity);
 
 void cbuf_free(cbuf_t *cbuf);
 
+size_t cbuf_get_capacity(cbuf_t *cbuf);
+
 int cbuf_is_empty(cbuf_t *cbuf);
 
 int cbuf_is_full(cbuf_t *cbuf);
 
 ssize_t cbuf_get_readable_size(cbuf_t *cbuf);
+
+int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes, timediff_t timeout_msec);
 
 ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
                             timediff_t timeout_msec);
