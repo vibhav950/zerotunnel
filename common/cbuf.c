@@ -44,9 +44,55 @@ void cbuf_free(cbuf_t *cbuf) {
   zt_free(cbuf->buf);
 }
 
-ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
-  ssize_t offs;
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @return >0 if the buffer is empty, 0 if @p cbuf is not empty,
+ * -1 for invalid arguments.
+ */
+int cbuf_is_empty(cbuf_t *cbuf) {
+  uint8_t *readp, *writep;
+
+  if (!cbuf)
+    return -1;
+
+  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+
+  return readp == writep;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @return >0 if the buffer is full, 0 if @p cbuf is not full,
+ * -1 for invalid arguments.
+ */
+int cbuf_is_full(cbuf_t *cbuf) {
   uint8_t *writep, *readp;
+  ssize_t offs;
+
+  if (!cbuf)
+    return -1;
+
+  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+
+  if (readp <= writep)
+    offs = writep - readp;
+  else
+    offs = cbuf->capacity - (ssize_t)(readp - writep);
+
+  return offs == cbuf->capacity - 1;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @return The number of bytes available to read, or -1 for invalid arguments.
+ *
+ * Get the number of bytes available to read from @p cbuf.
+ */
+ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
+  uint8_t *writep, *readp;
+  ssize_t offs;
 
   if (!cbuf)
     return 0;
@@ -76,8 +122,8 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
  */
 ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
                             timediff_t timout_msec) {
-  ssize_t capacity, nwrite, len, rem;
   uint8_t *writep, *readp;
+  ssize_t capacity, nwrite, len, rem;
   zt_timeout_t timeout;
   // 800us sleep
   const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
@@ -151,6 +197,7 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  *
  * Lock-free blocking read for this SPSC @p cbuf. This function will block for
  * at most @p timeout_msec ms using busy-waiting until @p nbytes are readable.
+ * Data is read with FIFO ordering.
  *
  * - If @p all is set to `true`, the function will read exactly @p nbytes bytes
  * from @p cbuf. If there are not enough bytest to read, the function returns 0;
@@ -163,8 +210,8 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  */
 ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
                            timediff_t timeout_msec, bool all) {
-  ssize_t capacity, nread, len, rem;
   uint8_t *writep, *readp;
+  ssize_t capacity, nread, len, rem;
   zt_timeout_t timeout;
   // 800us sleep
   const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
@@ -229,10 +276,11 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
  * @return The number of bytes read, or -1 for invalid arguments.
  *
  * Read data from @p cbuf into @p buf without consuming it.
+ * Data is read with FIFO ordering.
  */
 ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
-  ssize_t nread, capacity, len, rem;
   uint8_t *readp, *writep;
+  ssize_t nread, capacity, len, rem;
 
   if (!cbuf || !buf)
     return -1;
@@ -256,4 +304,28 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
     zt_memcpy(buf + len, cbuf->buf, rem);
 
   return nread;
+}
+
+/**
+ * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()`.
+ * @param[in] nbytes The maximum number of bytes to delete.
+ * @return The number of bytes deleted, or -1 for invalid arguments.
+ *
+ * Delete no more than @p nbytes bytes from the @p cbuf in FIFO order.
+ */
+ssize_t cbuf_remove(cbuf_t *cbuf, size_t nbytes) {
+  uint8_t *readp, *writep;
+  ssize_t n;
+
+  if (!cbuf)
+    return -1;
+
+  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+
+  n = MIN(cbuf_get_readable_size(cbuf), nbytes);
+  readp = cbuf->buf + (readp - cbuf->buf + n) % cbuf->capacity;
+
+  atomic_store_explicit(&cbuf->readp, readp, memory_order_release);
+  return n;
 }
