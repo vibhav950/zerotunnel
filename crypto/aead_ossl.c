@@ -340,8 +340,7 @@ static error_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
    * Explicitly cast away the const of in
    */
   if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_AEAD_SET_TAG, c->tag_len,
-                          (void *)(ptrdiff_t)(in + (in_len - c->tag_len))) !=
-      1) {
+                          (void *)(in + (in_len - c->tag_len))) != 1) {
     return ERR_INTERNAL;
   }
 

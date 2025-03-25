@@ -3,8 +3,8 @@
 
 #include "defines.h"
 
-#include <stdatomic.h>
 #include <limits.h>
+#include <stdatomic.h>
 
 /* Min capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
 #define CBUF_MIN_CAPACITY 512
@@ -15,12 +15,11 @@
  * @struct cbuf_t
  * @brief Lock-free single-producer single-consumer (SPSC) circular buffer.
  *
- * This structure represents a circular (ring) buffer designed for concurrent
- * read and write access by one reader and one writer thread.
+ * A circular (ring) buffer designed for concurrent read and write access by one
+ * reader and one writer thread.
  *
- * - Thread-safe for concurrent use by one reader and one writer thread,
- * NOT SAFE if multiple threads attempt to read or write simultaneously. All
- * synchronization is handled internally using atomic memory operations.
+ * - Thread-safe for concurrent use by one reader and one writer thread, NOT safe
+ * for multiple synchronouse readers/writers.
  *
  * - `readp` and `writep` are atomic pointers that "chase" each other. Readable
  * data is available between `readp` and `writep`. The buffer is considered full

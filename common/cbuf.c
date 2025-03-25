@@ -283,7 +283,7 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
     clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
   }
 
-  // ASSERT(nwrite > 0);
+  ASSERT(nwrite > 0);
   nwrite = MIN(nbytes, nwrite);
 
   /* Two-phase copy; write up to the end of the buffer */
