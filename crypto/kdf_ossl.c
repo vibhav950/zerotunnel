@@ -6,6 +6,11 @@
  * vibhav950 on GitHub
  */
 
+// DO NOT REMOVE/MOVE THIS
+#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
+#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
+#endif
+
 #include "common/defines.h"
 #include "common/memzero.h"
 #include "kdf.h"
@@ -118,8 +123,8 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   scrypt_r = KDF_SCRYPT_CFABLE_R;
   scrypt_p = MAX(MIN(KDF_SCRYPT_CFABLE_P, zt_cpu_get_processor_count()), 1);
   scrypt_maxmem = KDF_SCRYPT_CFABLE_MAXMEM;
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_N, &scrypt_n);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_R, &scrypt_r);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_P, &scrypt_p);
@@ -156,8 +161,8 @@ static int _kdf_hlp_argon2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   iteration_cost = KDF_ARGON2_CFABLE_ITER;
   lanes = KDF_ARGON2_CFABLE_LANES;
 
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
   *p++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ITER, &iteration_cost);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_THREADS, &threads);
   *p++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ARGON2_LANES, &lanes);
@@ -186,8 +191,8 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   ASSERT(key_len);
 
   iter = KDF_PBKDF2_CFABLE_ITER;
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_ITER, &iter);
   *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, SN_sha512, 0);
   *p = OSSL_PARAM_construct_end();

@@ -6,6 +6,11 @@
  * vibhav950 on GitHub
  */
 
+// DO NOT REMOVE/MOVE THIS
+#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
+#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
+#endif
+
 #include "cipher.h"
 #include "cipher_defs.h"
 #include "common/defines.h"

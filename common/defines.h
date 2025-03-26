@@ -256,7 +256,7 @@ int zt_cpu_get_processor_count(void);
  * @return A pointer to the allocated memory block, or NULL if the allocation
  * fails.
  */
-void *zt_malloc(size_t size);
+void *zt_mem_malloc(size_t size);
 
 /**
  * Allocates a block of memory for an array of elements, each of the given size.
@@ -267,14 +267,14 @@ void *zt_malloc(size_t size);
  * @return A pointer to the allocated memory block, or NULL if the allocation
  * fails.
  */
-void *zt_calloc(size_t nmemb, size_t size);
+void *zt_mem_calloc(size_t nmemb, size_t size);
 
 /**
  * Frees a previously allocated block of memory.
  *
  * @param ptr A pointer to the memory block to free.
  */
-void zt_free(void *ptr);
+void zt_mem_free(void *ptr);
 
 /**
  * Changes the size of the memory block pointed to by ptr to the given size.
@@ -284,7 +284,7 @@ void zt_free(void *ptr);
  * @return A pointer to the reallocated memory block, or NULL if the
  * reallocation fails.
  */
-void *zt_realloc(void *ptr, size_t size);
+void *zt_mem_realloc(void *ptr, size_t size);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to the
@@ -295,7 +295,7 @@ void *zt_realloc(void *ptr, size_t size);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-void *zt_memset(void *mem, int ch, size_t len);
+void *zt_mem_memset(void *mem, int ch, size_t len);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to zero.
@@ -304,7 +304,7 @@ void *zt_memset(void *mem, int ch, size_t len);
  * @param len The number of bytes to set.
  * @return A pointer to the memory area.
  */
-void *zt_memzero(void *mem, size_t len);
+void *zt_mem_memzero(void *mem, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst.
@@ -314,7 +314,7 @@ void *zt_memzero(void *mem, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-void *zt_memcpy(void *dst, void *src, size_t len);
+void *zt_mem_memcpy(void *dst, void *src, size_t len);
 
 /**
  * Copies len bytes from the memory area src to the memory area dst, even if the
@@ -325,7 +325,7 @@ void *zt_memcpy(void *dst, void *src, size_t len);
  * @param len The number of bytes to copy.
  * @return A pointer to the destination memory area.
  */
-void *zt_memmove(void *dst, void *src, size_t len);
+void *zt_mem_memmove(void *dst, void *src, size_t len);
 
 /**
  * Compares the first len bytes of the memory areas a and b.
@@ -335,7 +335,7 @@ void *zt_memmove(void *dst, void *src, size_t len);
  * @param len The number of bytes to compare.
  * @return Zero if the memory areas are equal, non-zero otherwise.
  */
-unsigned int zt_memcmp(const void *a, const void *b, size_t len);
+unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len);
 
 /**
  * Compares two strings without leaking timing info about the private string.
@@ -378,6 +378,31 @@ char *zt_strdup(const char *s);
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
 char *zt_strmemdup(const void *m, size_t n);
+
+#include <stdlib.h>
+#include <string.h>
+
+#if defined(USE_SAFE_MEM)
+#define zt_malloc(size) zt_mem_malloc(size)
+#define zt_calloc(nmemb, size) zt_mem_calloc(nmemb, size)
+#define zt_realloc(ptr, size) zt_mem_realloc(ptr, size)
+#define zt_free(ptr) zt_mem_free(ptr)
+#define zt_memset(mem, ch, len) zt_mem_memset(mem, ch, len)
+#define zt_memzero(mem, len) zt_mem_memzero(mem, len)
+#define zt_memcpy(dst, src, len) zt_mem_memcpy(dst, src, len)
+#define zt_memmove(dst, src, len) zt_mem_memmove(dst, src, len)
+#define zt_memcmp(a, b, len) zt_mem_memcmp(a, b, len)
+#else // defined(USE_SAFE_MEM)
+#define zt_malloc(size) malloc(size)
+#define zt_calloc(nmemb, size) calloc(nmemb, size)
+#define zt_realloc(ptr, size) realloc(ptr, size)
+#define zt_free(ptr) free(ptr)
+#define zt_memset(mem, ch, len) memset(mem, ch, len)
+#define zt_memzero(mem, len) zt_mem_memset(mem, 0, len)
+#define zt_memcpy(dst, src, len) memcpy(dst, src, len)
+#define zt_memmove(dst, src, len) memmove(dst, src, len)
+#define zt_memcmp(a, b, len) memcmp(a, b, len)
+#endif // !defined(USE_SAFE_MEM)
 
 /**
  * Timeout routines

@@ -1,3 +1,13 @@
+/**
+ * @file kex_ecc_ossl.c
+ * Key exchange using Elliptic Curve Cryptography (ECC) with OpenSSL
+ */
+
+// DO NOT REMOVE/MOVE THIS
+#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
+#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
+#endif
+
 #include "common/defines.h"
 #include "common/memzero.h"
 #include "kex.h"

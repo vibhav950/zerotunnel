@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL
+CFLAGS := -Wall -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
 LIBS := -lcrypto -lssl
 
 all: bin/hmac_test

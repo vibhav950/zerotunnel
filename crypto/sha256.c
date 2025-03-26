@@ -1,3 +1,13 @@
+/**
+ * @file sha256.c
+ * Functions for the SHA-256 digest.
+ */
+
+// DO NOT REMOVE/MOVE THIS
+#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
+#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
+#endif
+
 #include "sha256.h"
 #include "common/defines.h"
 #include "common/endianness.h"

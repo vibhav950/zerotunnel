@@ -16,16 +16,16 @@
 
 // As of the development phase, this has not yet been tested is strictly
 // experimental. Define this macro at your own risk.
-#undef __SECURE_LARGE_ALLOC
+#undef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
 #undef __LARGE_ALLOC_SIZE
 #undef __LARGE_ALLOC_ALIGN_SIZE
 
-void *zt_malloc(size_t size) {
+void *zt_mem_malloc(size_t size) {
   void *ptr;
 
   ASSERT(size > 0);
 
-#ifdef __SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
   if (size >= __LARGE_ALLOC_SIZE) {
     size = (size & ~(__LARGE_ALLOC_ALIGN_SIZE - 1)) + __LARGE_ALLOC_ALIGN_SIZE;
     if (!(ptr = aligned_alloc(__LARGE_ALLOC_ALIGN_SIZE, size))) {
@@ -46,13 +46,13 @@ void *zt_malloc(size_t size) {
   return ptr;
 }
 
-void *zt_calloc(size_t nmemb, size_t size) {
+void *zt_mem_calloc(size_t nmemb, size_t size) {
   void *ptr;
 
   ASSERT(nmemb > 0);
   ASSERT(size > 0);
 
-#ifdef __SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
   if (size * nmemb >= __LARGE_ALLOC_SIZE) {
     ptr = zt_malloc(size * nmemb);
     if (ptr)
@@ -67,13 +67,13 @@ void *zt_calloc(size_t nmemb, size_t size) {
   return ptr;
 }
 
-void zt_free(void *ptr) {
+void zt_mem_free(void *ptr) {
   if (!ptr)
     return;
 
   ASSERT(malloc_usable_size(ptr) > 0);
 
-#ifdef __SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
   size_t size = malloc_usable_size(ptr);
   if (malloc_usable_size(ptr) >= __LARGE_ALLOC_SIZE) {
     if (munlock(ptr, size)) {
@@ -92,11 +92,11 @@ void zt_free(void *ptr) {
   free(ptr);
 }
 
-void *zt_realloc(void *ptr, size_t size) {
+void *zt_mem_realloc(void *ptr, size_t size) {
   ASSERT(size > 0);
 
   memzero(ptr, size);
-#ifdef __SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
   zt_free(ptr);
   ptr = zt_malloc(size);
 #else
@@ -105,11 +105,11 @@ void *zt_realloc(void *ptr, size_t size) {
   return ptr;
 }
 
-void *zt_memset(void *mem, int ch, size_t len) {
+void *zt_mem_memset(void *mem, int ch, size_t len) {
 #if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *p;
 
-  for (p = (volatile char *)&mem[0]; len; p[--len] = ch)
+  for (p = (volatile char *)mem; len; p[--len] = ch)
     ;
   return mem;
 #else
@@ -117,11 +117,11 @@ void *zt_memset(void *mem, int ch, size_t len) {
 #endif
 }
 
-void *zt_memzero(void *mem, size_t len) {
+void *zt_mem_memzero(void *mem, size_t len) {
 #if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *p;
 
-  for (p = (volatile char *)&mem[0]; len; p[--len] = 0x00)
+  for (p = (volatile char *)mem; len; p[--len] = 0x00)
     ;
   return mem;
 #else
@@ -129,12 +129,12 @@ void *zt_memzero(void *mem, size_t len) {
 #endif
 }
 
-void *zt_memcpy(void *dst, void *src, size_t len) {
+void *zt_mem_memcpy(void *dst, void *src, size_t len) {
 #if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   volatile char *cdst, *csrc;
 
-  cdst = (volatile char *)&dst[0];
-  csrc = (volatile char *)&src[0];
+  cdst = (volatile char *)dst;
+  csrc = (volatile char *)src;
   while (len--)
     cdst[len] = csrc[len];
   return dst;
@@ -143,13 +143,13 @@ void *zt_memcpy(void *dst, void *src, size_t len) {
 #endif
 }
 
-void *zt_memmove(void *dst, void *src, size_t len) {
+void *zt_mem_memmove(void *dst, void *src, size_t len) {
 #if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   size_t i;
   volatile char *cdst, *csrc;
 
-  cdst = (volatile char *)&dst[0];
-  csrc = (volatile char *)&src[0];
+  cdst = (volatile char *)dst;
+  csrc = (volatile char *)src;
   if (csrc > cdst && csrc < cdst + len)
     for (i = 0; i < len; i++)
       cdst[i] = csrc[i];
@@ -163,7 +163,7 @@ void *zt_memmove(void *dst, void *src, size_t len) {
 }
 
 /* Returns zero if a[0:len-1] == b[0:len-1], otherwise non-zero. */
-unsigned int zt_memcmp(const void *a, const void *b, size_t len) {
+unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len) {
 #if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
   unsigned int res = 0;
   const char *pa, *pb;

@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL
+CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
 LIBS := -lcrypto -lssl
 
 all: bin/aes_ctr_256_test

@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -fsanitize=address -fsanitize=leak -I./ -DDEBUG -DOPENSSL
+CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -fsanitize=address -fsanitize=leak -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
 LIBS := -lcrypto -lssl
 
 all: bin/aes_gcm_128_test
