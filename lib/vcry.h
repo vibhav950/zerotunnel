@@ -76,6 +76,10 @@
 #define VCRY_ENC_KEY_LEN               32UL
 #define VCRY_ENC_IV_LEN                12UL
 
+#define VCRY_MAC_KEY_OFFSET            (0UL)
+#define VCRY_ENC_KEY_OFFSET            (VCRY_MAC_KEY_LEN)
+#define VCRY_ENC_IV_OFFSET             (VCRY_MAC_KEY_LEN + VCRY_ENC_KEY_LEN)
+
 /**
  * Verification message length
  */
@@ -143,10 +147,5 @@ error_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
                           size_t ad_len, uint8_t *out, size_t *out_len);
 error_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
                           size_t ad_len, uint8_t *out, size_t *out_len);
-
-error_t vcry_aead_encrypt_cbuf(cbuf_t *cbuf, const uint8_t *in, size_t in_len,
-                               const uint8_t *ad, size_t ad_len);
-error_t vcry_aead_decrypt_cbuf(cbuf_t *cbuf, const uint8_t *in, size_t in_len,
-                               const uint8_t *ad, size_t ad_len);
 
 #endif // __VCRY_H__
