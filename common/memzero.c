@@ -1,4 +1,4 @@
-#include "memzero.h"
+#include "common/defines.h"
 
 #include <string.h>
 

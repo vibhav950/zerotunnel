@@ -12,7 +12,6 @@
 #endif
 
 #include "common/defines.h"
-#include "common/memzero.h"
 #include "kdf.h"
 #include "kdf_defs.h"
 

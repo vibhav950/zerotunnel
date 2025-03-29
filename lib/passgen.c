@@ -1,5 +1,4 @@
 #include "common/defines.h"
-#include "common/memzero.h"
 #include "random/systemrand.h"
 
 #include <stdbool.h>

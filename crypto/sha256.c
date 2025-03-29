@@ -11,7 +11,6 @@
 #include "sha256.h"
 #include "common/defines.h"
 #include "common/endianness.h"
-#include "common/memzero.h"
 #include "common/x86_cpuid.h"
 
 #if defined(__GNUC__)

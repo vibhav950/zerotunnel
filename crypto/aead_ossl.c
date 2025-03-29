@@ -14,7 +14,6 @@
 #include "cipher.h"
 #include "cipher_defs.h"
 #include "common/defines.h"
-#include "common/memzero.h"
 
 #include <openssl/evp.h>
 

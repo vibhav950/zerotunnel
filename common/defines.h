@@ -55,14 +55,21 @@
 #define likely(expr) (expr)
 #endif
 
+#if GCC_VERSION_AT_LEAST(2, 7)
+#define ALIGN(n) __attribute__( ( aligned(n) ) )
+#else
+#define ALIGN(n)
+#endif
+
 #elif defined(__clang__) /* __GNUC__ && !__clang__ */
 
 #define ATTRIBUTE_ALWAYS_INLINE
 #define ATTRIBUTE_NORETURN
 #define ATTRIBUTE_UNUSED
 #define ATTRIBUTE_FALLTHROUGH
-#define unlikely(expr) (x)
-#define likely(expr) (x)
+#define ALIGN(n)
+#define unlikely(expr) (expr)
+#define likely(expr) (expr)
 
 #endif
 
@@ -237,6 +244,14 @@ ATTRIBUTE_NORETURN static inline void __FKILL(void) {
   exit(EXIT_FAILURE)
 #endif
 }
+
+/**
+ * Secure zero functions
+ */
+
+void memzero(void *ptr, size_t len);
+
+void fzero(int fd);
 
 /**
  * System information helpers

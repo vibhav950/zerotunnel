@@ -2,7 +2,6 @@
 #include "common/b64.h"
 #include "common/defines.h"
 #include "common/hex.h"
-#include "common/memzero.h"
 #include "crypto/sha256.h"
 #include "lib/client.h"
 #include "ztlib.h"

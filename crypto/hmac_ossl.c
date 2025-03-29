@@ -11,7 +11,6 @@
 #error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
 #endif
 
-#include "common/memzero.h"
 #include "hmac.h"
 #include "hmac_defs.h"
 

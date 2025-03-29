@@ -4,7 +4,6 @@
  */
 
 #include "defines.h"
-#include "memzero.h"
 
 #include <errno.h>
 #include <malloc.h>

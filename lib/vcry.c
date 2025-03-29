@@ -1,7 +1,6 @@
 #include "vcry.h"
 #include "crypto/types.h"
 
-#include "common/memzero.h"
 #include "crypto/cipher_defs.h"
 #include "crypto/hmac_defs.h"
 #include "crypto/kdf.h"
