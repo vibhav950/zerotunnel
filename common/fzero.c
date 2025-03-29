@@ -18,7 +18,9 @@
 void fzero(int fd) {
   int fdz;
   off_t size;
+  ssize_t nwritten;
   struct stat st;
+
   if (fd < 0)
     return;
 
@@ -26,12 +28,14 @@ void fzero(int fd) {
     return;
   size = st.st_size;
 
+  nwritten = 0;
   if ((fdz = open("/dev/zero", O_WRONLY | O_ASYNC)) != -1)
-    size -= sendfile(fd, fdz, NULL, size);
+    nwritten = sendfile(fd, fdz, NULL, size);
   close(fdz);
 
-  if (size) {
-    lseek(fd, 0, SEEK_SET);
+  size -= nwritten;
+  if (size > 0) {
+    lseek(fd, nwritten, SEEK_SET);
     write(fd, "\0", size);
   }
 }
