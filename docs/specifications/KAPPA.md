@@ -3,7 +3,7 @@
 **Revision 1.2 (special draft), 2-16-2025**\
 **Authored by Vibhav Tiwari**
 
-> [!WARNING]
+> [!CAUTION]
 >  This protocol and all its derivatives are still under development and are not recommended for use in a production environment or for securing sensitive data. Additionally, please be aware that the protocol and this document are subject to change.
 > 
 >  If you have any relevant concerns or feedback for the developers, please [contact us via email]().
@@ -55,7 +55,7 @@
 
 ## 1. Introduction
 
-The KAPPA algorithm is a four-way handshake that provides password-based authentication and session key establishment between two peers. This protocol relies on the two parties having knowledge of a shared password established securely out-of-band. The handshake involves two roles, an "initiator" and a "responder". The initiator delivers the initial message to the responder which begins the handshake.
+The KAPPA protocol is a four-way handshake that provides password-based authentication and session key establishment between two peers. This protocol relies on the two parties having knowledge of a shared password established securely out-of-band. The handshake involves two roles, an "initiator" and a "responder". The initiator delivers the initial message to the responder which begins the handshake.
 
 Every ZeroTunnel transfer starts with this handshake. By the end of the handshake, both parties derive a new session key, which is used solely for the current transfer. After the transfer is complete, all keying material is destroyed, and the entire handshake is performed again, even if the same parties start another transfer in the future.
 
@@ -123,7 +123,7 @@ The KAPPA handshake involves two parties: an **initiator**, say, **Alice** and a
 
 - **Bob** wants to allow parties like **Alice** to send him encrypted data only if **Alice** knows the password, and must also prove to **Alice** that he knows the password.
 
-There may be a **Server** involved in relaying data between **Alice** and **Bob** but this is solely to enable application-level features like peer discovery and communication across NATs. Such a **Server** has no participation in the handshake. The handshake enforces cryptographic techniques that make it extremely difficult for any third party who does not know the password (such as a relay server) to compromise the security of the communication. However, if such an interfering third party is able to alter data from the sender in transit and relay it to the recipient, such an effort will cause a handshake failure between **Alice** and **Bob** causing a sort of Denial-Of-Service.
+There may be a **Server** involved in relaying data between **Alice** and **Bob** but this is solely to enable application-level features like peer discovery and communication across NATs. Such a **Server** has no participation in the handshake. The handshake enforces cryptographic techniques that make it extremely difficult for any third party who does not know the password (such as a relay server) to compromise the security of the communication. However, if such an interfering third party is able to alter data from the sender in transit and relay it to the recipient, such an effort will cause a handshake failure between **Alice** and **Bob** causing a Denial-Of-Service.
 
 ### 2.4 Named key pairs
 
@@ -165,7 +165,7 @@ If the error vector $e$ were absent, solving for $s$ would be trivial using Gaus
 
 ### 3.2. Kyber KEM
 
-Kyber (formally KEM CRYSTALS-KYBER) is a lattice-based Key Encapsulation Mechanism (KEM) based on the Module Learning-with-Errors (Module-LWE) problem. It operates over the ring $R_q = \mathbb{Z}_q[x] / (x^n + 1)$, where polynomials with small coefficients are used as the secret and error terms. The security of Kyber relies on the hardness of solving Module-LWE.  
+Kyber (formally KEM CRYSTALS-KYBER) [[1]](#9-references) is a lattice-based Key Encapsulation Mechanism (KEM) based on the Module Learning-with-Errors (Module-LWE) problem. It operates over the ring $R_q = \mathbb{Z}_q[x] / (x^n + 1)$, where polynomials with small coefficients are used as the secret and error terms. The security of Kyber relies on the hardness of solving Module-LWE.
 
 Kyber has three main operations that we are concerned with. From an abstract view, they can be defined as follows:
 
@@ -342,11 +342,11 @@ This is the fourth state in the initiator state machine and the third state in t
 
 - Alice generates her proof message as follows and sends it to Bob:
 
- _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
+    _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
 
 - Bob generates his proof message as follows and sends it to Alice:
   
- _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
+    _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
 
 ### 5.6. Verification completion
 
@@ -396,11 +396,11 @@ It is well known that most practical PAKE-like schemes are susceptible to denial
 
 - If an attacker learns an active master password at any point in time, the _K<sub>sess</sub>_ values from past exchanges authenticated with this password will still appear as random data to the attacker. This is because K<sub>sess</sub> is derived from one-time-use key material that is independent of _Password_.
 
-- If the authentication level [(Section 6)](#6-authentication-levels) is set to KAPPA0 (static), no break-in recovery is provided between sessions. That is, an adversary who learns the master password at any point can impersonate either party to the other in subsequent connections. This can be avoided by using KAPPA1 or KAPPA2 authentication levels.
+- If the authentication level [(Section 6)](#6-authentication-levels) is set to KAPPA0 (static), no break-in recovery is provided between sessions. That is, an adversary who learns the master password at any point can impersonate either party to the other in subsequent connections. This can be avoided by using the KAPPA1 or KAPPA2 authentication levels.
 
 ### 7.4. Forced session key reuse attack
 
-Except for the master password, all key material used for deriving the session key is ephemeral in nature, i.e., generated for each session from a secure random number generator, and discarded when the session ends. This includes the data originating from the initiator: the PQ-KEM public key, DH key, and salt, as well as the data from the responder: DH key and shared secret. Even if an adversary attempts to replay previously used data, the fresh random values contributed by the honest party will ensure statistical independence of the session key from those in prior sessions. Since both parties introduce new randomness into the key generation process, the handshake remains secure against key reuse and replay attacks.
+All key material used for deriving the session key is ephemeral in nature, i.e., generated for each session from a secure random number generator, and discarded when the session ends. This includes the data originating from the initiator: the PQ-KEM public key, DH key, and salt, as well as the data from the responder: DH key and shared secret. Even if an adversary attempts to replay previously used data, the fresh random values contributed by the honest party will ensure statistical independence of the session key from those in prior sessions. Since both parties introduce new randomness into the key generation process, the handshake remains secure against key reuse and replay attacks.
 
 ### 7.5. Passive quantum adversaries
 
@@ -410,7 +410,7 @@ Following are some noteworthy security properties of KAPPA in this setting:
 
 - If an adversary has recorded the public information and the messages sent between Alice and Bob during the handshake, even future access to a quantum computer will not compromise the session keys _K<sub>sess</sub>_ of past sessions since the shared secret computed from the PQ-KEM scheme is directly incorporated into the session key setup.
 
-- If the private key corresponding to the post-quantum one-time key _OTPQK_ is compromised while _Password_ remains secure, it would compromise _K<sub>sess</sub>_ of the corresponding session but the security of other sessions will still remain intact since _AEAD_ has IND-CPA post-quantum security.
+- If the private key corresponding to the post-quantum one-time key _OTPQK_ is compromised, the security of _K<sub>sess</sub>_ for the corresponding session would revert back to the security of the DHE keys. Note that this will also compromise the _Password_ used for said session since knowledge of _OTPQK_ allows the adversary to validate password guesses offline against the captured _OTPQK<sub>enc</sub>_.
 
 ### 7.6. Active quantum adversaries
 
@@ -420,7 +420,7 @@ The minimum security level provided by Kyber (Kyber-512) is equivalent to AES-12
 
 ### 7.7. KEM re-encapsulation attack
 
-An attacker who has compromised an _OTPQK_ from a previous KAPPA session without compromising _Password_ can replay the compromised key (_OTPQK<sub>Enc</sub>_) to the responder and de-encapsulate the _SS_. However, such an attacker is unable to re-encapsulate the _SS_ with the fresh PQ-KEM public key of the session under attack, since he only has this key in encrypted form.
+An attacker who has compromised an _OTPQK_ from a previous KAPPA session without compromising _Password_ for the current session can replay the compromised key (_OTPQK<sub>Enc</sub>_) to the responder and de-encapsulate the _SS_. However, such an attacker is unable to re-encapsulate the _SS_ with the fresh PQ-KEM public key of the session under attack, since he only has this key in encrypted form.
 
 ### 7.8. Risks of weak random sources
 
