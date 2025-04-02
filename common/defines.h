@@ -56,7 +56,7 @@
 #endif
 
 #if GCC_VERSION_AT_LEAST(2, 7)
-#define ALIGN(n) __attribute__( ( aligned(n) ) )
+#define ALIGN(n) __attribute__((aligned(n)))
 #else
 #define ALIGN(n)
 #endif
@@ -154,26 +154,29 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
 #define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 typedef enum {
-  ERR_SUCCESS, // OK
-  ERR_NOT_ALLOC, // memory/interface not allocated
-  ERR_NOT_INIT, // not initialized
-  ERR_NULL_PTR, // null pointer argument(s)
-  ERR_BAD_ARGS, // invalid argument(s)
-  ERR_MEM_FAIL, // out of memory
-  ERR_BUFFER_TOO_SMALL, // buffer too small
-  ERR_REQUEST_TOO_LARGE, // request exceeded allowed maximum size
-  ERR_NOT_SUPPORTED, // operation not supported
-  ERR_INTERNAL, // internal library error
-  ERR_INVALID, // invalid operation (sequence)
-  ERR_INVALID_DATUM, // invalid data
-  ERR_AUTH_FAIL, // authentication failed
-  ERR_AGAIN, // try again
-  ERR_TIMEOUT, // operation timed out
-  ERR_NORESOLVE, // could not resolve host
-  ERR_TCP_CONNECT, // TCP connection failed
-  ERR_TCP_SEND, // TCP send failed
-  ERR_TCP_RECV, // TCP receive failed
-  ERR_ALREADY, // already in progress
+  ERR_SUCCESS,           /* OK */
+  ERR_NOT_ALLOC,         /* memory/interface not allocated */
+  ERR_NOT_INIT,          /* not initialized */
+  ERR_NULL_PTR,          /* null pointer argument(s) */
+  ERR_BAD_ARGS,          /* invalid argument(s) */
+  ERR_MEM_FAIL,          /* out of memory */
+  ERR_BUFFER_TOO_SMALL,  /* buffer too small */
+  ERR_REQUEST_TOO_LARGE, /* request exceeded allowed maximum size */
+  ERR_NOT_SUPPORTED,     /* operation not supported */
+  ERR_INTERNAL,          /* internal library error */
+  ERR_INVALID,           /* invalid operation (sequence) */
+  ERR_INVALID_DATUM,     /* invalid data */
+  ERR_AUTH_FAIL,         /* authentication failed */
+  ERR_AGAIN,             /* try again */
+  ERR_TIMEOUT,           /* operation timed out */
+  ERR_NORESOLVE,         /* could not resolve host */
+  ERR_TCP_CONNECT,       /* TCP connection failed */
+  ERR_TCP_SEND,          /* TCP send failed */
+  ERR_TCP_RECV,          /* TCP receive failed */
+  ERR_ALREADY,           /* already in progress */
+  ERR_FIO_READ,          /* fio read failed */
+  ERR_FIO_WRITE,         /* fio write failed */
+  ERR_EOF,               /* end of file */
 } error_t;
 
 const char *zt_error_str(error_t err);
