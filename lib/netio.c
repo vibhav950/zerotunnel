@@ -1,77 +1,61 @@
+#include "client.h"
+#include "conn_defs.h"
 #include "io.h"
-#include "ztlib.h"
 
 #include <errno.h>
 #include <error.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 
-// /**
-//  * @param[in] sockfd The socket file descriptor to wait for.
-//  * @param[in] timeout_msec The wait timeout in milliseconds.
-//  * @param[in] mode `ZT_NETIO_READABLE`, `ZT_NETIO_WRITABLE`, or the bitwise
-//  OR
-//  * of the two.
-//  * @return -1 on error or timeout, otherwise check for the bitwise OR of
-//  * `ZT_NETIO_READABLE` and `ZT_NETIO_WRITABLE`.
-//  *
-//  * Wait for the socket to become readable/writable.
-//  *
-//  * Following values of @p timeout_msec are special:
-//  * If `0`, the function will return immediately.
-//  * If `-1`, the function will wait indefinitely.
-//  */
-// int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
-//   int rc;
-//   int flags, error;
-//   fd_set rset, wset;
-//   fd_set *rsetp, *wsetp;
-//   struct timeval tval;
-//   socklen_t len;
+/*
+int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
+  int rc;
+  int flags, error;
+  fd_set rset, wset;
+  fd_set *rsetp, *wsetp;
+  struct timeval tval;
+  socklen_t len;
 
-//   FD_ZERO(&rset);
-//   FD_SET(sockfd, &rset);
-//   wset = rset;
+  FD_ZERO(&rset);
+  FD_SET(sockfd, &rset);
+  wset = rset;
 
-//   /**
-//    * Prepare fd set arguments depending upon whether we are watching for
-//    * readability, writability, or both
-//    */
-//   rsetp = (mode & ZT_NETIO_READABLE) ? &rset : NULL;
-//   wsetp = (mode & ZT_NETIO_WRITABLE) ? &wset : NULL;
+  rsetp = (mode & ZT_NETIO_READABLE) ? &rset : NULL;
+  wsetp = (mode & ZT_NETIO_WRITABLE) ? &wset : NULL;
 
-//   tval.tv_sec = timeout_msec / 1000;
-//   tval.tv_usec = (timeout_msec % 1000) * 1000;
+  tval.tv_sec = timeout_msec / 1000;
+  tval.tv_usec = (timeout_msec % 1000) * 1000;
 
-//   if (select(sockfd + 1, rsetp, wsetp, NULL,
-//              (timeout_msec >= 0) ? &tval : NULL) == 0) {
-//     PRINTERROR("Connection timed out\n");
-//     return -1;
-//   }
+  if (select(sockfd + 1, rsetp, wsetp, NULL,
+             (timeout_msec >= 0) ? &tval : NULL) == 0) {
+    PRINTERROR("Connection timed out\n");
+    return -1;
+  }
 
-//   rc = 0;
-//   /** Socket readable? */
-//   if (mode & ZT_NETIO_READABLE) {
-//     if (!FD_ISSET(sockfd, &rset))
-//       rc |= ZT_NETIO_READABLE;
-//   }
-//   /** Socket writable? */
-//   if (mode & ZT_NETIO_WRITABLE) {
-//     if (!FD_ISSET(sockfd, &wset))
-//       rc |= ZT_NETIO_WRITABLE;
-//   }
+  rc = 0;
+  // Socket readable?
+  if (mode & ZT_NETIO_READABLE) {
+    if (!FD_ISSET(sockfd, &rset))
+      rc |= ZT_NETIO_READABLE;
+  }
+  // Socket writable?
+  if (mode & ZT_NETIO_WRITABLE) {
+    if (!FD_ISSET(sockfd, &wset))
+      rc |= ZT_NETIO_WRITABLE;
+  }
 
-//   len = sizeof(error);
-//   if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
-//     PRINTERROR("getsockopt failed (%s)\n", strerror(errno));
-//     rc = -1;
-//   }
-//   /** Check for pending socket error */
-//   if (error)
-//     rc = -1;
+  len = sizeof(error);
+  if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
+    PRINTERROR("getsockopt failed (%s)\n", strerror(errno));
+    rc = -1;
+  }
+  // Check for pending socket error
+  if (error)
+    rc = -1;
 
-//   return rc;
-// }
+  return rc;
+}
+*/
 
 /**
  * @param[in] sockfd The socket file descriptor to wait for.
@@ -138,7 +122,7 @@ bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec) {
  * using `zt_client_set_tcp_fastopen()`.
  *
  * If a timeout has been set, this function will wait for at most
- * @p send_timeout milliseconds in the event of an unwritable socket before
+ * `conn.send_timeout` milliseconds in the event of an unwritable socket before
  * retrying once again. If the socket still does not become writable, the
  * function returns zero.
  *
@@ -201,7 +185,7 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
  * Note: It is important to check how many bytes were actually read.
  *
  * If a timeout has been set, this function will wait for at most
- * @p recv_timeout milliseconds till there is data to read on the socket.
+ * `conn.recv_timeout` milliseconds till there is data to read on the socket.
  * If the socket does not become "readable" within this time, the function
  * returns the number of bytes read.
  *

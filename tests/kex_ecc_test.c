@@ -1,4 +1,3 @@
-#include "common/memzero.h"
 #include "crypto/kex.h"
 #include "crypto/kex_ecc.h"
 #include "crypto/types.h"
