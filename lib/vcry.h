@@ -97,6 +97,12 @@
 #define VCRY_VERIFY_CONST0            "First proof message (Proof_A)"
 #define VCRY_VERIFY_CONST1            "Second proof message (Proof_B)"
 
+/** Get the most recent failure status code */
+error_t vcry_get_last_err(void);
+
+/** Clear the most recent failure status code */
+void vcry_clear_last_err(void);
+
 void vcry_set_role_initiator(void);
 void vcry_set_role_responder(void);
 
