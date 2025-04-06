@@ -12,7 +12,7 @@ struct _config {
     *addr_ipv6,
     *hostname,
     *passwddb_file,
-    *peer_id,
+    *peer_id, // an optional name for the peer
     *cipher_alg,
     *aead_alg,
     *hmac_alg,
@@ -21,6 +21,9 @@ struct _config {
     *kdf_alg;
   auth_type_t
     auth_type;
+  struct authid
+    authid_mine,
+    authid_peer;
   bool
     config_ipv6 : 1,
     config_live_read : 1,
@@ -34,8 +37,3 @@ struct _config {
     send_timeout : 1,
     tcp_fastopen : 1;
 } config;
-
-int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode);
-
-ssize_t zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
-                           size_t nbytes);

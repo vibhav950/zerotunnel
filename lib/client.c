@@ -4,7 +4,7 @@
 #include "vcry.h"
 #include "ztlib.h"
 
-// #include <arpa/inet.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/tcp.h>
@@ -16,17 +16,29 @@
 
 #define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
 
-// TODO deal with this formatting
 static const char clientstate_names[][20] = {
-    "CLIENT_NONE",      "CLIENT_CONN_INIT", "CLIENT_AUTH_INIT",
-    "CLIENT_AUTH_WAIT", "CLIENT_CONN_DONE", "CLIENT_TRANSFER",
-    "CLIENT_DONE"};
+    [CLIENT_NONE] = "CLIENT_NONE",
+    [CLIENT_CONN_INIT] = "CLIENT_CONN_INIT",
+    [CLIENT_AUTH_PING] = "CLIENT_AUTH_PING",
+    [CLIENT_AUTH_PONG] = "CLIENT_AUTH_PONG",
+    [CLIENT_TRANSFER] = "CLIENT_TRANSFER",
+    [CLIENT_DONE] = "CLIENT_DONE"
+};
 
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
 
 ATTRIBUTE_NORETURN static void alrm_handler(int sig ATTRIBUTE_UNUSED) {
   siglongjmp(jmpenv, 1);
+}
+
+static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
+  ASSERT(state >= CLIENT_NONE && state <= CLIENT_DONE);
+  return clientstate_names[state];
+}
+
+static inline bool msg_type_isvalid(ZT_MSG_TYPE type) {
+  return type >= MSG_HANDSHAKE && type <= MSG_DONE;
 }
 
 static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
@@ -51,7 +63,7 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
   ASSERT(timeout_msec > 0);
 
   if (!conn->hostname) {
-    PRINTERROR("Empty hostname string\n");
+    PRINTERROR("empty hostname string");
     return ERR_NULL_PTR;
   }
 
@@ -61,7 +73,7 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
 
   if (sigsetjmp(jmpenv, 1)) {
     /** This is coming from a siglongjmp() after an alarm signal */
-    PRINTERROR("Host resolution timed out\n");
+    PRINTERROR("host resolution timed out");
     ret = ERR_TIMEOUT;
     goto cleanup;
   } else {
@@ -76,8 +88,8 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
     sigaction(SIGALRM, &sigact, NULL);
 
     /**
-     * This will cause a SIGALRM signal to be sent after `timeout_msec` in
-     * seconds (rounded up) which will cause the system call to abort
+     * This will cause a SIGALRM signal to be sent after `timeout_msec`
+     * in seconds (rounded up) which will cause the system call to abort
      */
     prev_alarm = alarm(zt_sltoui((timeout_msec + 999) / 1000));
   }
@@ -110,10 +122,10 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 
   if (status) {
-    PRINTERROR("getaddrinfo failed for %s: %s\n", conn->hostname,
+    PRINTERROR("getaddrinfo failed for %s: %s", conn->hostname,
                gai_strerror(status));
     if (status == EAI_SYSTEM) {
-      PRINTERROR("getaddrinfo failed for %s (%s)\n", conn->hostname,
+      PRINTERROR("getaddrinfo failed for %s (%s)", conn->hostname,
                  strerror(errno));
     }
     return ERR_INTERNAL;
@@ -176,7 +188,7 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
       ai_tail->ai_next = ai_cur;
     ai_tail = ai_cur;
 
-    PRINTDEBUG("Resolved %s to %s\n", conn->hostname,
+    PRINTDEBUG("Resolved %s to %s", conn->hostname,
                inet_ntop(p->ai_family, p->ai_addr, ipstr, sizeof(ipstr)));
   }
 
@@ -214,7 +226,7 @@ cleanup:
      */
     if (!alarm_runout ||
         (alarm_runout >= 0x80000000 && prev_alarm <= 0x80000000)) {
-      /** Set off the alarm; note that alarm(0) would switch it
+      /* Set off the alarm; note that alarm(0) would switch it
        * off instead of firing it now! */
       alarm(1);
       ret = ERR_TIMEOUT; /* previous timeout ran out whilst resolving host */
@@ -245,7 +257,7 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
     int fail = 0;
 
     if ((sockfd = socket(ai_cur->ai_family, SOCK_STREAM, IPPROTO_TCP))) {
-      PRINTERROR("socket failed (%s)\n", strerror(errno));
+      PRINTERROR("socket failed (%s)", strerror(errno));
       continue;
     }
 
@@ -255,7 +267,7 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
     if (conn->fl_tcp_nodelay) {
       if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set TCP_NODELAY (%s)\n",
+        PRINTERROR("setsockopt failed to set TCP_NODELAY (%s)",
                    strerror(errno));
         conn->fl_tcp_nodelay = false;
       }
@@ -268,7 +280,7 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
       on = 1;
       if (setsockopt(conn->sockfd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT,
                      (void *)&on, sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set TCP_FASTOPEN_CONNECT (%s)\n",
+        PRINTERROR("setsockopt failed to set TCP_FASTOPEN_CONNECT (%s)",
                    strerror(errno));
         conn->fl_tcp_fastopen = false;
       }
@@ -282,35 +294,35 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
       on = 1;
       if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_KEEPALIVE (%s)\n",
+        PRINTERROR("setsockopt failed to set SO_KEEPALIVE (%s)",
                    strerror(errno));
         fail = 1;
       }
 
       if (getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("getsockopt failed to get SO_KEEPALIVE (%s)\n",
+        PRINTERROR("getsockopt failed to get SO_KEEPALIVE (%s)",
                    strerror(errno));
         fail = 1;
       }
 
       if (fail || !on) {
-        PRINTERROR("Could not prepare socket for live read\n");
+        PRINTERROR("could not prepare socket for live read");
         close(sockfd);
         continue;
       }
     }
 
-    /** Try to enable send  */
+    /** Try to enable send */
     if (conn->send_timeout > 0) {
       struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
                              .tv_usec = (conn->send_timeout % 1000) * 1000};
       if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
                      sizeof(tval)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_SNDTIMEO (%s)\n",
+        PRINTERROR("setsockopt failed to set SO_SNDTIMEO (%s)",
                    strerror(errno));
-        // close(sockfd);
-        // continue;
+        close(sockfd);
+        continue;
       }
     }
 
@@ -319,10 +331,10 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
                              .tv_usec = (conn->recv_timeout % 1000) * 1000};
       if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
                      sizeof(tval)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_RCVTIMEO (%s)\n",
+        PRINTERROR("setsockopt failed to set SO_RCVTIMEO (%s)",
                    strerror(errno));
-        // close(sockfd);
-        // continue;
+        close(sockfd);
+        continue;
       }
     }
 
@@ -373,7 +385,7 @@ static inline error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
   ai_estab = conn->ai_estab;
   rv = connect(conn->sockfd, ai_estab->ai_addr, ai_estab->ai_addrlen);
   if (rv == -1 && errno != EAGAIN && errno != EINPROGRESS) {
-    PRINTERROR("connect failed (%s)\n", strerror(errno));
+    PRINTERROR("connect failed (%s)", strerror(errno));
     close(conn->sockfd);
     return ERR_TCP_CONNECT;
   }
@@ -384,65 +396,54 @@ static inline error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
   return ERR_SUCCESS;
 }
 
-// To restore the file status flags, use:
-// fnctl(sockfd, F_SETFL, conn->sock_flags); /* Restore file status flags */
-
 /**
  * @param[in] conn The client connection context.
- * @param[out] buf The payload buffer.
- * @param[in] nbytes The length of the buffer.
  * @param[in] aad The additional authenticated data.
  * @param[in] aad_len The length of the additional authenticated data.
- * @return An error_t status code.
+ * @return An `error_t` status code.
  *
- * Send data to the peer. This function will encrypt the payload before sending
- * it if the client is in the CLIENT_TRANSFER state whereas handshake messages
- * are sent as-is.
+ * Send data present in `conn->msgbuf->data` to the peer. This function will
+ * encrypt the payload before sending it if the client is in the
+ * `CLIENT_TRANSFER` state whereas handshake messages are sent as-is.
  *
- * If a failure occurs before all of the @p nbytes of data is sent (either
- * because of a timeout or other error), the function returns an ERR_TCP_SEND.
+ * If a failure occurs before all of the `conn->msgbuf->len` bytes of date are
+ * sent (either because of a timeout or other error), the function returns an
+ * `ERR_TCP_SEND`.
+ *
+ * The @p aad and @p aad_len arguments are ignored if the client state is not
+ * `CLIENT_TRANSFER`.
  */
-static error_t client_send(zt_client_connection_t *conn, const uint8_t *buf,
-                           size_t nbytes, const uint8_t *aad, size_t aad_len) {
-  ssize_t nwritten, tosend;
-  uint8_t *sndbuf;
+static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
+                           size_t aad_len) {
+  error_t ret;
+  ssize_t tosend, nbytes;
+  uint8_t *databuf;
 
   ASSERT(conn);
   ASSERT(conn->state > CLIENT_CONN_INIT && conn->state < CLIENT_DONE);
-  ASSERT(conn->buf);
-  ASSERT(buf);
-  ASSERT(nbytes);
-  ASSERT(!aad_len || aad); // can't have aad == NULL when aad_len > 0
+  ASSERT(conn->msgbuf);
+  ASSERT(conn->msgbuf->len <= ZT_MAX_TRANSFER_SIZE);
+  ASSERT(!aad_len || aad); /* can't have `aad == NULL` when `aad_len > 0` */
 
-  switch (conn->state) {
-  // Handshake messages are not encrypted
-  case CLIENT_AUTH_INIT: {
-    sndbuf = buf;
-    tosend = nbytes;
-    break;
-  }
+  databuf = zt_msg_data_ptr(conn->msgbuf);
+  nbytes = (ssize_t)zt_msg_data_len(conn->msgbuf);
 
-  // Encrypt the data before sending
-  case CLIENT_TRANSFER: {
-    tosend = ZT_MAX_IO_TRANSFER_SIZE; // size of the client buffer
-    if (vcry_aead_encrypt(buf, nbytes, aad, aad_len, conn->buf, &tosend) != 0) {
-      PRINTERROR("Failed to encrypt %zu bytes of payload\n", nbytes,
+  if (conn->state == CLIENT_TRANSFER) {
+    tosend = ZT_MAX_TRANSFER_SIZE;
+    if ((ret = vcry_aead_encrypt(databuf, nbytes, aad, aad_len, databuf,
+                                 &tosend)) != ERR_SUCCESS) {
+      PRINTERROR("failed to encrypt %zu bytes of payload", nbytes,
                  config.peer_id);
-      return ERR_INTERNAL;
+      return ret;
     }
-    sndbuf = conn->buf;
-    break;
-
-  // Panic: this should not happen
-  default:
-    PRINTERROR("Invalid client state %s\n", clientstate_names[conn->state]);
-    return ERR_INTERNAL;
+    tosend = tosend /*msgbuf.data*/ + sizeof(uint32_t) /*msgbuf.type*/;
+  } else {
+    tosend = nbytes + sizeof(uint32_t);
   }
-  }
+  zt_msg_set_len(conn->msgbuf, 0);
 
-  nwritten = zt_client_tcp_send(conn, sndbuf, tosend);
-  if (nwritten != tosend) {
-    PRINTERROR("Failed to send %zu bytes to peer_id=%s (%s)\n", tosend,
+  if (zt_client_tcp_send(conn, zt_msg_raw_ptr(conn->msgbuf), tosend) != 0) {
+    PRINTERROR("failed to send %zu bytes to peer_id=%s (%s)", tosend,
                config.peer_id, strerror(errno));
     return ERR_TCP_SEND;
   }
@@ -452,63 +453,77 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *buf,
 
 /**
  * @param[in] conn The client connection context.
- * @param[inout] data A pointer to a pointer to the data/buffer [may be NULL].
- * @param[inout] data_len The size of the data/buffer in bytes.
- * @return An error_t status code.
+ * @param[in] expect The expected message type.
+ * @param[in] aad The additional authenticated data.
+ * @param[in] aad_len The length of the additional authenticated data.
+ * @return An `error_t` status code.
  *
- * Read data from the peer. This function will decrypt the payload before
- * returning it if the client is in the CLIENT_TRANSFER state whereas handshake
- * messages are returned as-is.
+ * Read @p expect bytes from the peer into `conn->msgbuf->data` and set
+ * `conn->msgbuf->len` to the length of the received `conn->msgbuf->data`.
  *
- * If @p *data is NULL, the function will place the data in conn->buf and set
- * @p *data to conn->buf. Otherwise, the data will be placed in @p *data.
- * The number of bytes read is placed in @p data_len.
+ * If @p expect is -1, the function will read as much data as possible from the
+ * underlying socket.
  *
- * If @p *data already has the output buffer, the @p *data_len argument must be
- * set to the size of the buffer.
+ * The message type is extracted from the first 4 bytes of the message and
+ * stored in the `conn->msgbuf->type`.
  *
+ * If the client is in the `CLIENT_TRANSFER` state, the data is decrypted before
+ * being returned to the caller. Handshake messages are returned as-is.
+ *
+ * If the client state is not `CLIENT_TRANSFER`, the @p aad and @p aad_len
+ * arguments are ignored.
  */
-static error_t client_recv(zt_client_connection_t *conn, uint8_t **data,
-                           size_t *data_len, const uint8_t *aad,
-                           size_t aad_len) {
-  ssize_t nread;
+static error_t client_recv(zt_client_connection_t *conn, ZT_MSG_TYPE expect,
+                           const uint8_t *aad, size_t aad_len) {
+  error_t ret;
+  ssize_t nread, outlen;
+  size_t max_recv;
+  uint8_t *buf;
 
   ASSERT(conn);
   ASSERT(conn->state > CLIENT_CONN_INIT && conn->state < CLIENT_DONE);
+  ASSERT(conn->msgbuf);
 
-  if (*data == NULL) {
-    *data = conn->buf;
-    *data_len = ZT_MAX_IO_TRANSFER_SIZE;
-  }
-
-  if ((*data_len = zt_client_tcp_recv(conn, *data, *data_len)) < 0) {
-    PRINTERROR("Failed to read data from peer_id=%s (%s)\n", config.peer_id,
+  max_recv = ZT_MAX_TRANSFER_SIZE + 64;
+  buf = zt_msg_raw_ptr(conn->msgbuf);
+  if ((nread = zt_client_tcp_recv(conn, buf, max_recv, NULL)) < 0) {
+    PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
                strerror(errno));
     return ERR_TCP_RECV;
   }
 
-  if (conn->state == CLIENT_TRANSFER) {
-    size_t len;
-    if (vcry_aead_decrypt(*data, *data_len, aad, aad_len, *data, data_len) !=
-        0) {
-      PRINTERROR("Failed to decrypt %zu bytes of payload\n", *data_len,
-                 config.peer_id);
-      return ERR_INTERNAL;
-    }
+  if (nread < sizeof(uint32_t) ||
+      !msg_type_isvalid(zt_msg_get_type(conn->msgbuf))) {
+    PRINTERROR("invalid message type prefix", nread, config.peer_id);
+    return ERR_INVALID_DATUM;
   }
+
+  if (expect != zt_msg_get_type(conn->msgbuf)) {
+    PRINTERROR("unexpected message type %u (expected %u)", nread,
+               config.peer_id, zt_msg_get_type(conn->msgbuf), expect);
+    return ERR_INVALID_DATUM;
+  }
+
+  nread -= sizeof(uint32_t); /* without the message type */
+
+  buf = zt_msg_data_ptr(conn->msgbuf);
+  if (conn->state == CLIENT_TRANSFER) {
+    if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
+        ERR_SUCCESS) {
+      PRINTERROR("failed to decrypt %zu bytes of payload", nread,
+                 config.peer_id);
+      return ret;
+    }
+    nread = outlen;
+  }
+
+  zt_msg_set_len(conn->msgbuf, nread);
 
   return ERR_SUCCESS;
 }
 
-// TODO handle *done
-// TODO handle error_t errors, this function will only return 0 or -1
-
-// This is the client state machine; the idea is to call zt_client_do from
-// the main routine with different arguments required for different states.
-// This way we can have some nice async behaviour while building the
-// connection
-int zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
-  int rv;
+error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
+  error_t ret;
 
   if (unlikely(!conn || !done))
     return ERR_NULL_PTR;
@@ -517,96 +532,137 @@ int zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
   case CLIENT_CONN_INIT: {
     struct zt_addrinfo *ai_list = NULL;
 
-    if ((rv = zt_client_resolve_host_timeout(
+    if ((ret = zt_client_resolve_host_timeout(
              conn, &ai_list,
              (conn->resolve_timeout > 0) ? conn->resolve_timeout
-                                         : ZT_CLIENT_TIMEOUT_RESOLVE)) != 0) {
-      return -1;
+                                         : ZT_CLIENT_TIMEOUT_RESOLVE)) !=
+        ERR_SUCCESS) {
+      return ret;
     }
-    if ((rv = zt_client_tcp_conn0(conn, ai_list)) != 0)
-      return -1;
-    if ((rv = zt_client_tcp_conn1(conn)) != 0)
-      return -1;
 
-    /** Allocate a reusable buffer big enough for any payload */
-    if (!(conn->buf = zt_malloc(ZT_MAX_IO_TRANSFER_SIZE)))
-      return -1;
+    if ((ret = zt_client_tcp_conn0(conn, ai_list)) != ERR_SUCCESS)
+      return ret;
 
-    CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
-    return 0;
+    if ((ret = zt_client_tcp_conn1(conn)) != ERR_SUCCESS)
+      return ret;
+
+    /** Allocate client message buffer */
+    if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
+      return ERR_MEM_FAIL;
+
+    CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
+    return ERR_SUCCESS;
   }
 
-  case CLIENT_AUTH_INIT: {
-    int rv;
+  case CLIENT_AUTH_PING: {
     struct passwd *master_pass;
     uint8_t *sndbuf;
     size_t sndbuf_len;
 
-    if (!(master_pass = zt_auth_passwd_new(
-              config.passwddb_file, config.auth_type, config.hostname))) {
-      return -1;
+    if (!(master_pass = zt_auth_passwd_new(config.passwddb_file,
+                                           config.auth_type, config.peer_id))) {
+      return ERR_INTERNAL;
     }
 
     vcry_set_role_initiator();
 
-    if (vcry_set_authpass(master_pass->pw, master_pass->pwlen) != 0)
-      return -1;
+    if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
+        ERR_SUCCESS) {
+      return ret;
+    }
 
     zt_auth_passwd_free(master_pass, NULL);
 
-    rv = 0;
-    rv = rv || vcry_set_cipher_from_name(config.cipher_alg);
-    rv = rv || vcry_set_aead_from_name(config.aead_alg);
-    rv = rv || vcry_set_hmac_from_name(config.hmac_alg);
-    rv = rv || vcry_set_ecdh_from_name(config.ecdh_alg);
-    rv = rv || vcry_set_kem_from_name(config.kem_alg);
-    rv = rv || vcry_set_kdf_from_name(config.kdf_alg);
-    if (rv)
-      return -1;
+    vcry_set_cipher_from_name(config.cipher_alg);
+    vcry_set_aead_from_name(config.aead_alg);
+    vcry_set_hmac_from_name(config.hmac_alg);
+    vcry_set_ecdh_from_name(config.ecdh_alg);
+    vcry_set_kem_from_name(config.kem_alg);
+    vcry_set_kdf_from_name(config.kdf_alg);
 
-    if (vcry_handshake_initiate(&sndbuf, &sndbuf_len) != 0)
-      return -1;
+    if ((ret = vcry_get_last_err()) != ERR_SUCCESS)
+      return ret;
+
+    if ((ret = vcry_handshake_initiate(&sndbuf, &sndbuf_len)) != ERR_SUCCESS)
+      return ret;
 
     /** Check if the connect() was successful and we have a writable socket */
-    if (!zt_tcp_io_waitfor_read(conn->sockfd, conn->connect_timeout)) {
-      PRINTERROR("Connection failed\n");
-      return -1;
+    if (!zt_tcp_io_waitfor_write(conn->sockfd, conn->connect_timeout))
+      return ERR_TCP_CONNECT;
+
+    zt_memcpy(zt_msg_data_ptr(conn->msgbuf), config.authid_mine.bytes,
+              AUTHID_LEN_BYTES);
+
+    zt_memcpy(zt_msg_data_ptr(conn->msgbuf) + AUTHID_LEN_BYTES, sndbuf,
+              sndbuf_len);
+
+    zt_msg_set_len(conn->msgbuf, sndbuf_len + AUTHID_LEN_BYTES);
+    zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
+
+    if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+      return ret;
+
+    CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PONG);
+    return ERR_SUCCESS;
+  }
+
+  case CLIENT_AUTH_PONG: {
+    uint8_t *rcvbuf, *sndbuf;
+    size_t rcvlen, sndlen;
+
+    /* read [AUTHID_LEN_BYTES]][...][VCRY_VERIFY_MSG_LEN] */
+    if ((ret = client_recv(conn, MSG_HANDSHAKE, NULL, 0)) != ERR_SUCCESS)
+      return ret;
+
+    rcvlen = zt_msg_get_len(conn->msgbuf);
+    rcvbuf = zt_msg_data_ptr(conn->msgbuf);
+
+    if (rcvlen < AUTHID_LEN_BYTES + VCRY_VERIFY_MSG_LEN)
+      return ERR_INVALID_DATUM;
+
+    /* extract [AUTHID_LEN_BYTES] */
+    zt_memcpy(&config.authid_peer, rcvbuf, AUTHID_LEN_BYTES);
+
+    rcvbuf += AUTHID_LEN_BYTES;
+    rcvlen -= AUTHID_LEN_BYTES;
+
+    if ((ret = vcry_handshake_complete(rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) !=
+        ERR_SUCCESS) {
+      return ret;
     }
 
-    if (client_send(conn, sndbuf, sndbuf_len, NULL, 0) != 0)
-      return -1;
+    if ((ret = vcry_derive_session_key()) != ERR_SUCCESS)
+      return ret;
 
-    CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_WAIT);
-    return 0;
+    if ((ret = vcry_initiator_verify_initiate(
+             &sndbuf, &sndlen, config.authid_mine.bytes,
+             config.authid_peer.bytes)) != ERR_SUCCESS) {
+      return ret;
+    }
+
+    zt_memcpy(zt_msg_data_ptr(conn->msgbuf), sndbuf, sndlen);
+    zt_msg_set_len(conn->msgbuf, sndlen);
+    zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
+
+    /* extract [VCRY_VERIFY_MSG_LEN] */
+    if ((ret = vcry_initiator_verify_complete(
+             rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
+             config.authid_mine.bytes, config.authid_peer.bytes)) !=
+        ERR_SUCCESS) {
+      return ret;
+    }
+
+    if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+      return ret;
+
+    CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
+    return ERR_SUCCESS;
   }
 
-  case CLIENT_AUTH_WAIT: {
-    uint8_t *rcvbuf = NULL;
-    size_t rcvbuf_len;
-
-    if (client_recv(conn, &rcvbuf, &rcvbuf_len, NULL, 0) != 0)
-      return -1;
-
-    if (vcry_handshake_complete(rcvbuf, rcvbuf_len) != 0)
-      return -1;
-
-    /*
-      I am done for the night; here is the immediate TODO:
-
-      - VCRY has a VCRY_VERIFY_MSG_LEN macro. If the responder sends the
-      response and verification messages in the same datagram, we can expect the
-      last VCRY_VERIFY_MSG_LEN bytes to be the verification message.
-
-      - Maybe put a special EOF marker at the end of the verification message
-      and check for it here.
-
-      - Note that VCRY requires you to call vcry_derive_session_key() ->
-      vcry_initiator_verify_initiate() before we can call
-      vcry_initiator_verify_complete() which is what consumes the responder's
-      verification message.
-
-      GOODNIGHT!
-    */
+  case CLIENT_TRANSFER: {
   }
+
+  default:
+    return ERR_INVALID;
   }
 }

@@ -314,7 +314,7 @@ error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode) {
 void zt_fio_close(zt_fio_t *fio) {
   if (likely((fio != NULL) && FIO_FL_TST(fio, FIO_FL_OPEN))) {
     if (fio->_prev)
-      munmap(fio->_prev, PA_SIZE(fio->size));
+      munmap(fio->_prev, fio->_prevsize);
     close(fio->fd);
     zt_free(fio->name);
     zt_memzero(fio, sizeof(zt_fio_t));
@@ -361,7 +361,7 @@ error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
   flags = fio->flags;
   size = fio->size;
   offset = fio->offset;
-  pa_size = fio->_pa_chunk_size;
+  pa_size = MIN(fio->_pa_chunk_size, PA_SIZE(size - offset));
 
   maddr = mmap(NULL, pa_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, offset);
   if (maddr == MAP_FAILED) {
@@ -384,6 +384,35 @@ error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
 
   return ERR_SUCCESS;
 }
+
+/*
+error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
+  ssize_t rc;
+
+  if (unlikely(!fio || !buf || !nread))
+    return ERR_NULL_PTR;
+
+  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_READ)))
+    return ERR_INVALID;
+
+  rc = read(fio->fd, buf, bufsize);
+  switch (rc) {
+    case -1:
+      PRINTERROR("failed to read(2) from file %s (%s)", fio->name,
+                 strerror(errno));
+      return ERR_FIO_READ;
+    case 0:
+      *nread = 0;
+      return ERR_EOF;
+    default:
+      *nread = rc;
+      break;
+  }
+  fio->offset += rc;
+
+  return ERR_SUCCESS;
+}
+*/
 
 /**
  * @param[in] fio An open fio. See `zt_fio_open()`.
