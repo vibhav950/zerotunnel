@@ -640,9 +640,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
       return ret;
     }
 
-    zt_memcpy(zt_msg_data_ptr(conn->msgbuf), sndbuf, sndlen);
-    zt_msg_set_len(conn->msgbuf, sndlen);
-    zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
+    zt_msg_make(conn->msgbuf, MSG_HANDSHAKE, sndbuf, sndlen);
 
     /* extract [VCRY_VERIFY_MSG_LEN] */
     if ((ret = vcry_initiator_verify_complete(

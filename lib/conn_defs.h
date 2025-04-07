@@ -59,19 +59,31 @@ typedef struct _zt_msg_st {
   size_t len;                                   /* Length of `data[]` */
 } zt_msg_t;
 
-static inline ATTRIBUTE_ALWAYS_INLINE void
-zt_msg_make(zt_msg_t *msg, ZT_MSG_TYPE type, size_t len) {
-  ASSERT((len > 0) && (len <= ZT_MAX_TRANSFER_SIZE));
-  msg->type = type;
-  msg->len = len;
-}
-
+/** `msg.data[]` pointer */
 #define zt_msg_data_ptr(msgptr)                 ((uint8_t *)(msgptr)->data)
+
+/** `msg.raw[]` pointer */
 #define zt_msg_raw_ptr(msgptr)                  ((uint8_t *)(msgptr)->raw)
+
+/** length of `msg.data[]` */
 #define zt_msg_data_len(msgptr)                 ((msgptr)->len)
+
+/** msg type */
 #define zt_msg_type(msgptr)                     ((msgptr)->type)
-#define zt_msg_set_len(msgptr, len_val)         ((void)((msgptr) && (msgptr->len = (len_val))))
-#define zt_msg_set_type(msgptr, type_val)       ((void)((msgptr) && (msgptr->type = (type_val))))
+
+/** set `msg.len` */
+#define zt_msg_set_len(msgptr, len_val)         (void)(msgptr->len = (len_val))
+
+/** set `msg.type` */
+#define zt_msg_set_type(msgptr, type_val)       (void)(msgptr->type = (type_val))
+
+/** Populate message `msgptr` */
+#define zt_msg_make(msgptr, type, data, len)                                   \
+  do {                                                                         \
+    zt_memcpy(zt_msg_data_ptr(msgptr), data, len);                             \
+    zt_msg_set_type(msgptr, type);                                             \
+    zt_msg_set_len(msgptr, len);                                               \
+  } while (0)
 
 struct zt_addrinfo {
   int                   ai_flags;
