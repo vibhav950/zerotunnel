@@ -53,13 +53,16 @@ void cbuf_free(cbuf_t *cbuf) {
  *
  * - `CBUF_MIN_CAPACITY <= len <= CBUF_MAX_CAPACITY`
  *
- * - The ownership of the pointer @p buf is transferred to @p cbuf. If @p buf is
- * accessed externally, the behavior is undefined.
+ * - The ownership of @p buf is transferred to @p cbuf. If @p buf is accessed
+ * externally, the behavior is undefined.
  *
  * - To release this buffer for external use again, use `cbuf_release()`.
  */
 int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len) {
-  if (!cbuf || !buf || (len < CBUF_MIN_CAPACITY) || (len > CBUF_MAX_CAPACITY))
+  if (!cbuf || !buf)
+    return -1;
+
+  if ((len < CBUF_MIN_CAPACITY) || (len > CBUF_MAX_CAPACITY))
     return -1;
 
   cbuf->buf = buf;
@@ -77,7 +80,7 @@ int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len) {
  * @return The capacity of @p *buf.
  *
  * @brief Release the buffer from @p cbuf for external use. This function will
- * transfer ownership of internal buffer of this @p cbuf to the caller.
+ * transfer ownership of the internal buffer of this @p cbuf to the caller.
  *
  * After calling this function,
  *
@@ -86,15 +89,19 @@ int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len) {
  * - This @p cbuf CANNOT be used before calling `cbuf_make()` or `cbuf_init()`.
  */
 size_t cbuf_release(cbuf_t *cbuf, uint8_t **buf) {
+  size_t capacity;
+
   if (!cbuf || !buf)
     return 0;
+
+  capacity = cbuf->capacity;
 
   *buf = cbuf->buf;
   cbuf->capacity = 0;
   atomic_store(&cbuf->readp, NULL);
   atomic_store(&cbuf->writep, NULL);
 
-  return cbuf->capacity;
+  return capacity;
 }
 
 /**
@@ -228,7 +235,7 @@ int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
  * @return The number of bytes written, or -1 for invalid arguments.
  *
  * @brief Lock-free blocking write for this SPSC @p cbuf.
- * This function will block using busy-waiting until some space becomes
+ * This function will block using busy-waiting until enough space becomes
  * available or @p timeout_msec ms have elapsed. Once any amount of free space
  * is available to write, the function writes as much as possible and returns
  * the number of bytes written.
@@ -274,8 +281,8 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
     else
       nwrite = (ssize_t)(readp - writep) - 1;
 
-    if (nwrite > 0)
-      break; /* we have some space to write */
+    if (nwrite >= capacity)
+      break; /* we have enough space to write */
 
     if (zt_timeout_expired(&timeout, NULL))
       return 0; /* timed out with no free space */
@@ -283,7 +290,6 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
     clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
   }
 
-  ASSERT(nwrite > 0);
   nwrite = MIN(nbytes, nwrite);
 
   /* Two-phase copy; write up to the end of the buffer */
@@ -452,7 +458,7 @@ ssize_t cbuf_remove(cbuf_t *cbuf, size_t nbytes) {
   writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
 
   n = MIN(cbuf_get_readable_size(cbuf), nbytes);
-  readp = cbuf->buf + (readp - cbuf->buf + n) % cbuf->capacity;
+  readp = cbuf->buf + ((size_t)(readp - cbuf->buf) + n) % cbuf->capacity;
 
   atomic_store_explicit(&cbuf->readp, readp, memory_order_release);
   return n;
