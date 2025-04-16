@@ -1,7 +1,5 @@
 #include "cbuf.h"
-#include "time_utils.h"
-
-#include <time.h>
+#include "timeout.h"
 
 /**
  * @param[in] cbuf The cbuf to initialize.
@@ -32,6 +30,8 @@ int cbuf_init(cbuf_t *cbuf, size_t capacity) {
  * @param[in] cbuf The cbuf to free
  *
  * @brief Free the memory allocated for @p cbuf.
+ *
+ * @note Not thread safe!
  */
 void cbuf_free(cbuf_t *cbuf) {
   if (!cbuf)
@@ -87,6 +87,8 @@ int cbuf_make(cbuf_t *cbuf, uint8_t *buf, size_t len) {
  * - The caller is responsible for freeing (if necessary) this buffer.
  *
  * - This @p cbuf CANNOT be used before calling `cbuf_make()` or `cbuf_init()`.
+ *
+ * @note Not thread safe!
  */
 size_t cbuf_release(cbuf_t *cbuf, uint8_t **buf) {
   size_t capacity;
@@ -125,6 +127,9 @@ size_t cbuf_get_capacity(cbuf_t *cbuf) {
  * -1 for invalid arguments.
  *
  * @brief Check if the buffer is empty.
+ *
+ * @note The result might be stale/inaccurate due to the concurrent nature of
+ * this cbuf.
  */
 int cbuf_is_empty(cbuf_t *cbuf) {
   uint8_t *readp, *writep;
@@ -132,8 +137,8 @@ int cbuf_is_empty(cbuf_t *cbuf) {
   if (unlikely(!cbuf))
     return -1;
 
-  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
-  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+  readp = atomic_load(&cbuf->readp);
+  writep = atomic_load(&cbuf->writep);
 
   return readp == writep;
 }
@@ -145,6 +150,9 @@ int cbuf_is_empty(cbuf_t *cbuf) {
  * -1 for invalid arguments.
  *
  * @brief Check if the buffer is full.
+ *
+ * @note The result might be stale/inaccurate due to the concurrent nature of
+ * this cbuf.
  */
 int cbuf_is_full(cbuf_t *cbuf) {
   uint8_t *writep, *readp;
@@ -153,8 +161,8 @@ int cbuf_is_full(cbuf_t *cbuf) {
   if (unlikely(!cbuf))
     return -1;
 
-  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
-  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+  readp = atomic_load(&cbuf->readp);
+  writep = atomic_load(&cbuf->writep);
 
   if (readp <= writep)
     offs = writep - readp;
@@ -170,6 +178,9 @@ int cbuf_is_full(cbuf_t *cbuf) {
  * @return The number of bytes available to read, or -1 for invalid arguments.
  *
  * @brief Get the number of bytes available to read from @p cbuf.
+ *
+ * @note The result might be stale/inaccurate due to the concurrent nature of
+ * this cbuf.
  */
 ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
   uint8_t *writep, *readp;
@@ -178,8 +189,8 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
   if (unlikely(!cbuf))
     return 0;
 
-  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
-  writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+  readp = atomic_load(&cbuf->readp);
+  writep = atomic_load(&cbuf->writep);
   if (readp <= writep)
     offs = writep - readp;
   else
@@ -188,11 +199,22 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
   return offs;
 }
 
+static inline size_t readable_size(size_t capacity, uint8_t *readp,
+                                   uint8_t *writep) {
+  ASSERT((readp != NULL) && (writep != NULL));
+
+  /* empty condition: readp == writep */
+  if (readp <= writep)
+    return writep - readp;
+  else
+    return capacity - (size_t)(readp - writep);
+}
+
 /**
  * @param[in] cbuf An initialized cbuf instance. See `cbuf_init()` and
  * `cbuf_make()`.
  * @param[in] nbytes The number of bytes that must become readable.
- * @param[in] timeout_msec The wait timeout (in ms).
+ * @param[in] timeout_msec The wait timeout (in milliseconds).
  * @return >0 if @p nbytes are readable, 0 if the timeout expired,
  * -1 for invalid arguments.
  *
@@ -205,24 +227,27 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
  *
  * - `-1`: wait indefinitely
  */
-int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
-                          timediff_t timeout_msec) {
+int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes, int64_t timeout_msec) {
+  uint8_t *writep, *readp;
   zt_timeout_t timeout;
-  // 800us sleep
-  const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
+  /* 32x pauses, 64x pauses x 32 */
+  int pause = 32, pause32 = 64;
 
   if (!cbuf || !nbytes)
     return -1;
 
-  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
   for (;;) {
-    if (cbuf_get_readable_size(cbuf) >= nbytes)
+    readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
+    writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
+
+    if (readable_size(cbuf->capacity, readp, writep) >= nbytes)
       return 1;
 
     if (zt_timeout_expired(&timeout, NULL))
       return 0;
 
-    clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
+    decaying_sleep(pause, pause32);
   }
 }
 
@@ -231,11 +256,11 @@ int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
  * `cbuf_make()`.
  * @param[in] buf The buffer to write.
  * @param[in] nbytes The maximum number of bytes to write.
- * @param[in] timeout_msec The wait timeout (in ms).
+ * @param[in] timeout_msec The wait timeout (in milliseconds).
  * @return The number of bytes written, or -1 for invalid arguments.
  *
  * @brief Lock-free blocking write for this SPSC @p cbuf.
- * This function will block using busy-waiting until enough space becomes
+ * This function will block using busy-waiting until some space becomes
  * available or @p timeout_msec ms have elapsed. Once any amount of free space
  * is available to write, the function writes as much as possible and returns
  * the number of bytes written.
@@ -247,12 +272,12 @@ int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes,
  * - `-1`: wait indefinitely
  */
 ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
-                            timediff_t timout_msec) {
+                            int64_t timeout_msec) {
   uint8_t *writep, *readp;
   ssize_t capacity, nwrite, len, rem;
   zt_timeout_t timeout;
-  // 800us sleep
-  const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
+  /* 32x pauses, 64x pauses x 32 */
+  int pause = 32, pause32 = 64;
 
   if (!cbuf || !buf || (nbytes > cbuf->capacity))
     return -1;
@@ -260,10 +285,10 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
   capacity = cbuf->capacity;
 
   /* Start the timeout and spin until there is space to write */
-  zt_timeout_begin(&timeout, timout_msec * 1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
   for (;;) {
     readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
-    /* Since only the writer updates writep, a plain load is OK */
+    /* Since only the writer updates writep, a relaxed load is OK */
     writep = atomic_load_explicit(&cbuf->writep, memory_order_relaxed);
 
     /**
@@ -281,13 +306,13 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
     else
       nwrite = (ssize_t)(readp - writep) - 1;
 
-    if (nwrite >= capacity)
+    if (nwrite >= nbytes)
       break; /* we have enough space to write */
 
     if (zt_timeout_expired(&timeout, NULL))
       return 0; /* timed out with no free space */
 
-    clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
+    decaying_sleep(pause, pause32);
   }
 
   nwrite = MIN(nbytes, nwrite);
@@ -317,7 +342,7 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  * `cbuf_make()`.
  * @param[out] buf The buffer to read into.
  * @param[in] nbytes The maximum number of bytes to read.
- * @param[in] timeout_msec The wait timeout (in ms).
+ * @param[in] timeout_msec The wait timeout (in milliseconds).
  * @param[in] all Enforce all-or-nothing behaviour.
  * @return The number of bytes read into @p buf, or -1 for invalid arguments.
  *
@@ -326,7 +351,7 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  * readable. Data is read with FIFO ordering.
  *
  * - If @p all is set to `true`, the function will read exactly @p nbytes bytes
- * from @p cbuf. If there are not enough bytest to read, the function returns 0;
+ * from @p cbuf. If there are not enough bytes to read, the function returns 0;
  * Otherwise, it returns @p nbytes.
  *
  * - If @p all is set to `false`, the function will wait no longer than
@@ -341,12 +366,12 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
  * - `-1`: wait indefinitely
  */
 ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
-                           timediff_t timeout_msec, bool all) {
+                           int64_t timeout_msec, bool all) {
   uint8_t *writep, *readp;
   ssize_t capacity, nread, len, rem;
   zt_timeout_t timeout;
-  // 800us sleep
-  const struct timespec sleep_timeout = {.tv_sec = 0, .tv_nsec = 800 * 1000};
+  /* 32x pauses, 64x pauses x 32 */
+  int pause = 32, pause32 = 64;
 
   if (!cbuf || !buf || (nbytes > cbuf->capacity))
     return -1;
@@ -354,16 +379,12 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
   capacity = cbuf->capacity;
 
   /* spinlock */
-  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
   for (;;) {
-    readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+    readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
     writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
 
-    /* empty condition => readp == writep */
-    if (readp <= writep)
-      nread = (ssize_t)(writep - readp);
-    else
-      nread = capacity - (ssize_t)(readp - writep);
+    nread = readable_size(capacity, readp, writep);
 
     if (nread >= nbytes)
       break;
@@ -371,7 +392,7 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
     if (zt_timeout_expired(&timeout, NULL))
       break;
 
-    clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_timeout, NULL);
+    decaying_sleep(pause, pause32);
   }
 
   if (nread <= 0)
@@ -419,14 +440,10 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
     return -1;
 
   capacity = cbuf->capacity;
-  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+  readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
   writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
 
-  if (readp <= writep)
-    nread = (ssize_t)(writep - readp);
-  else
-    nread = capacity - (ssize_t)(readp - writep);
-  nread = MIN(nread, nbytes);
+  nread = MIN(readable_size(capacity, readp, writep), nbytes);
 
   len = (ssize_t)(cbuf->buf + capacity - readp);
   len = MIN(len, nread);
@@ -450,15 +467,17 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
 ssize_t cbuf_remove(cbuf_t *cbuf, size_t nbytes) {
   uint8_t *readp, *writep;
   ssize_t n;
+  size_t capacity;
 
   if (!cbuf)
     return -1;
 
-  readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
+  capacity = cbuf->capacity;
+  readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
   writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
 
-  n = MIN(cbuf_get_readable_size(cbuf), nbytes);
-  readp = cbuf->buf + ((size_t)(readp - cbuf->buf) + n) % cbuf->capacity;
+  n = MIN(readable_size(capacity, readp, writep), nbytes);
+  readp = cbuf->buf + ((size_t)(readp - cbuf->buf) + n) % capacity;
 
   atomic_store_explicit(&cbuf->readp, readp, memory_order_release);
   return n;

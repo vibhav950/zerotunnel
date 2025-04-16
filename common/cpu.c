@@ -2,7 +2,7 @@
 
 #if defined(_WIN32)
 #define __platform_type 1
-#include <windows.h>
+#include <Windows.h>
 #elif defined(__linux__)
 #include <unistd.h>
 #define __platform_type 2

@@ -1,12 +1,22 @@
 #include "time_utils.h"
 
-/** */
+/** Get current time. */
 zt_timeval_t zt_time_now() {
-  struct timeval t;
   zt_timeval_t rv;
-  gettimeofday(&t, NULL);
-  rv.tv_sec = t.tv_sec;
-  rv.tv_usec = t.tv_usec;
+  struct timespec ts;
+  struct timeval tv;
+  /**
+   * There may not be a monotonically increasing clock at
+   * runtime, in which case we fall back to gettimeofday().
+   */
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+    rv.tv_sec = ts.tv_sec;
+    rv.tv_usec = (int)(ts.tv_nsec / 1000);
+  } else {
+    (void)gettimeofday(&tv, NULL);
+    rv.tv_sec = tv.tv_sec;
+    rv.tv_usec = tv.tv_usec;
+  }
   return rv;
 }
 

@@ -1,13 +1,12 @@
-#ifndef __CBUF_H__
-#define __CBUF_H__
-
-#include "defines.h"
+#pragma once
 
 #include <limits.h>
 #include <stdatomic.h>
+#include <stdbool.h>
+#include <sys/types.h>
 
 /* Min capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
-#define CBUF_MIN_CAPACITY 512
+#define CBUF_MIN_CAPACITY 512U
 /* Max capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
 #define CBUF_MAX_CAPACITY SSIZE_MAX
 
@@ -18,8 +17,8 @@
  * A circular (ring) buffer designed for concurrent read and write access by one
  * reader and one writer thread.
  *
- * - Thread-safe for concurrent use by one reader and one writer thread, NOT safe
- * for multiple synchronouse readers/writers.
+ * - Thread-safe for concurrent use by one reader and one writer thread, NOT
+ * safe for multiple synchronouse readers/writers.
  *
  * - `readp` and `writep` are atomic pointers that "chase" each other. Readable
  * data is available between `readp` and `writep`. The buffer is considered full
@@ -50,16 +49,14 @@ int cbuf_is_full(cbuf_t *cbuf);
 
 ssize_t cbuf_get_readable_size(cbuf_t *cbuf);
 
-int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes, timediff_t timeout_msec);
+int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes, int64_t timeout_msec);
 
 ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
-                            timediff_t timeout_msec);
+                            int64_t timeout_msec);
 
 ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
-                           timediff_t timeout_msec, bool all);
+                           int64_t timeout_msec, bool all);
 
 ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes);
 
 ssize_t cbuf_remove(cbuf_t *cbuf, size_t nbytes);
-
-#endif /* __CBUF_H__ */
