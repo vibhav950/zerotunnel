@@ -15,14 +15,29 @@
 #endif
 #endif
 
+#if __platform_type == 1
+int CountSetBits(ULONG_PTR bitMask) {
+  DWORD LSHIFT = sizeof(ULONG_PTR) * 8 - 1;
+  DWORD bitSetCount = 0;
+  ULONG_PTR bitTest = (ULONG_PTR)1 << LSHIFT;
+  DWORD i;
+
+  for (i = 0; i <= LSHIFT; ++i) {
+    bitSetCount += ((bitMask & bitTest) ? 1 : 0);
+    bitTest /= 2;
+  }
+
+  return (int)bitSetCount;
+}
+#endif
+
 inline int zt_cpu_get_processor_count(void) {
 #if __platform_type == 1
   SYSTEM_LOGICAL_PROCESSOR_INFORMATION *info = NULL;
   DWORD length = 0;
-  int physical_cores = 0;
-  int count = length / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+  int nprocessors, i;
 
-  GetLogicalProcessorInformation(NULL, &length);
+  (void)GetLogicalProcessorInformation(NULL, &length);
   info = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION *)malloc(length);
   if (!info)
     return -1;
@@ -30,14 +45,17 @@ inline int zt_cpu_get_processor_count(void) {
     free(info);
     return -1;
   }
-  for (; count; --count)
+  for (i = 0;, nprocessors = 0,
+      i < length/sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+       ++i) {
     if (info[i].Relationship == RelationProcessorCore)
-      physical_cores++;
+      nprocessors += CountSetBits(info[i].ProcessorMask);
+  }
   free(info);
-  return physical_cores;
+  return nprocessors;
 #elif (__platform_type == 2) || (__platform_type == 3)
-  long cores = sysconf(_SC_NPROCESSORS_ONLN);
-  return (int)((cores > 0) ? cores : -1);
+  long nprocessors = sysconf(_SC_NPROCESSORS_ONLN);
+  return (int)((nprocessors > 0) ? nprocessors : -1);
 #else
   return -1;
 #endif

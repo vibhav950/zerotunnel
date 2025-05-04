@@ -260,7 +260,12 @@ void fzero(int fd);
  * System information helpers
  */
 
-/** Get the number of CPU cores. */
+/**
+ * Get the number of logical processors.
+ *
+ * On a machine with Hyperthreading/SMT, this will return the
+ * total number of hardware threads available on this machine.
+ */
 int zt_cpu_get_processor_count(void);
 
 /**
