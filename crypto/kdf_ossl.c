@@ -120,7 +120,7 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
 
   scrypt_n = KDF_SCRYPT_CFABLE_N;
   scrypt_r = KDF_SCRYPT_CFABLE_R;
-  scrypt_p = MAX(MIN(KDF_SCRYPT_CFABLE_P, zt_cpu_get_processor_count()), 1);
+  scrypt_p = MIN(KDF_SCRYPT_CFABLE_P, zt_cpu_get_processor_count());
   scrypt_maxmem = KDF_SCRYPT_CFABLE_MAXMEM;
   *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
   *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);

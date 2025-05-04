@@ -138,19 +138,10 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
 #define PTR32(ptr) ((uint32_t *)(ptr))
 #define PTR64(ptr) ((uint64_t *)(ptr))
 
-#ifdef MAX
-#undef MAX
-#endif
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
-#ifdef MIN
-#undef MIN
-#endif
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-#ifdef COUNTOF
-#undef COUNTOF
-#endif
 #define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 typedef enum {
@@ -261,12 +252,9 @@ void fzero(int fd);
  */
 
 /**
- * Get the number of logical processors.
- *
- * On a machine with Hyperthreading/SMT, this will return the
- * total number of hardware threads available on this machine.
+ * Get the number of logical processors available to the current process
  */
-int zt_cpu_get_processor_count(void);
+unsigned int zt_cpu_get_processor_count(void);
 
 /**
  * Memory/string routines
