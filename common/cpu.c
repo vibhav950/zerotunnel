@@ -3,25 +3,24 @@
 #include "defines.h"
 
 #if defined(_WIN32)
-#define __platform_type 1
+#define _PLATFORM_WIN32
 #include <Windows.h>
 #elif defined(__linux__)
 #include <pthread.h>
 #include <sched.h>
 #include <unistd.h>
-#define __platform_type 2
+#define _PLATFORM_LINUX
 #elif defined(__APPLE__) && defined(__MACH__)
 #include <TargetConditionals.h>
 #if TARGET_OS_MAC == 1
-/* OSX */
 #include <sys/sysctl.h>
 #include <sys/types.h>
-#define __platform_type 3
+#define _PLATFORM_OSX
 #endif
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #include <sys/sysctl.h>
 #include <sys/types.h>
-#define __platform_type 4
+#define _PLATFORM_BSD
 #endif
 
 #define SINGLE_PROCESSOR 1
@@ -38,7 +37,7 @@
 // clang-format on
 
 unsigned int zt_cpu_get_processor_count(void) {
-#if (__platform_type == 1) /* Win32 */
+#if defined(_PLATFORM_WIN32)
   /**
    * This method should also work systems with greater than 64 processors where
    * a processor may be scheduled to processors from multiple processor groups.
@@ -61,7 +60,7 @@ unsigned int zt_cpu_get_processor_count(void) {
     nprocs += GetActiveProcessorCount(arrGroups[i]);
   free(arrGroups);
   return nprocs;
-#elif (__platform_type == 2)                                     /* Linux */
+#elif defined(_PLATFORM_LINUX)
   int nprocs = MIN(sysconf(_SC_NPROCESSORS_ONLN), CPU_SETSIZE);
   int af_count = 0, err;
   unsigned int count;
@@ -73,8 +72,8 @@ unsigned int zt_cpu_get_processor_count(void) {
   /* prefer affinity-based result, if available */
   count = (af_count > 0) ? af_count : nprocs;
   return count;
-#elif (__platform_type == 3) /* OSX */ || (__platform_type == 4) /* BSD */
-#if (__platform_type == 3)
+#elif defined(_PLATFORM_OSX) || defined(_PLATFORM_BSD)
+#if defined(_PLATFORM_OSX)
   const int code = HW_AVAILCPU;
 #else
   const int code = HW_NCPU;
