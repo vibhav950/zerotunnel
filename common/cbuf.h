@@ -1,9 +1,9 @@
 #pragma once
 
+#include "defines.h"
+
 #include <limits.h>
 #include <stdatomic.h>
-#include <stdbool.h>
-#include <sys/types.h>
 
 /* Min capacity of a cbuf for `cbuf_init()` and `cbuf_make()` */
 #define CBUF_MIN_CAPACITY 512U
