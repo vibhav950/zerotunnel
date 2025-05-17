@@ -304,7 +304,12 @@ size_t zt_hex_decode(const uint8_t *src, size_t len, uint8_t **dst) {
     return 0;
 
 #if defined(__AVX_2__)
-  decodeHexVec(*dst, src, buflen);
+  if (HasAVX2())
+    // do the runtime check for the AVX2 CPU feature flag
+    // (the program might intend to disable it)
+    decodeHexVec(*dst, src, buflen);
+  else
+    decodeHexLUT4(*dst, src, buflen);
 #else
   decodeHexLUT4(*dst, src, buflen);
 #endif
@@ -324,7 +329,6 @@ size_t zt_hex_encode(const uint8_t *src, size_t len, uint8_t **dst) {
   (*dst)[buflen - 1] = '\0';
 
 #if defined(__AVX2__)
-  // do the runtime check for the AVX2 CPU feature flag (the program might intend to disable it)
   if (HasAVX2())
     encodeHexVec(*dst, src, len);
   else
