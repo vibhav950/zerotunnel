@@ -15,7 +15,7 @@
 #define VCRY_FLAG_SET(x)              ((void)(vctx.flags |= (x)))
 #define VCRY_FLAG_GET(x)              ((int)(vctx.flags & (x)))
 
-#define VCRY_ERR_SET(x)               (__vcry_err_location = (x))
+#define VCRY_ERR_SET(x)               (__vcry_err_val = (x))
 
 #define VCRY_EXPECT(retval, expectval, jmp)                                    \
   do { if ((ret = (retval)) != (expectval))                                    \
@@ -105,10 +105,13 @@ struct vcry_ctx_st {
     flags; /** flags for validating the global config */
 };
 
-/** The global thread-local context for this module */
+#ifdef VCRY_THREAD_LOCAL
 static __thread struct vcry_ctx_st vctx;
-
-static __thread error_t __vcry_err_location = ERR_SUCCESS;
+static __thread error_t __vcry_err_val;
+#else
+static struct vcry_ctx_st vctx;
+static error_t __vcry_err_val;
+#endif
 
 void vcry_set_role_initiator(void) {
   vctx.role = vcry_hshake_role_initiator;
@@ -119,11 +122,11 @@ void vcry_set_role_responder(void) {
 }
 
 error_t vcry_get_last_err(void) {
-  return __vcry_err_location;
+  return __vcry_err_val;
 }
 
 void vcry_clear_last_err(void) {
-  __vcry_err_location = ERR_SUCCESS;
+  __vcry_err_val = ERR_SUCCESS;
 }
 
 error_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
