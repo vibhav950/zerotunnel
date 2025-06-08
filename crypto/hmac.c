@@ -27,6 +27,10 @@ int hmac_flag_get(hmac_t *h, hmac_flag_t flag) {
   return (h) && (h->flags & flag);
 }
 
+size_t hmac_digest_len(hmac_t *h) {
+  return (h) ? h->key_len : 0;
+}
+
 error_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
                         size_t out_len, hmac_alg_t alg) {
   if (!intf || !intf->alloc || !h)
