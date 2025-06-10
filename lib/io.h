@@ -3,13 +3,12 @@
 
 #include "common/defines.h"
 
+#include <limits.h>
+
 /** File descriptor readable */
 #define ZT_IO_READABLE 0x01
 /** File descriptor writable */
 #define ZT_IO_WRITABLE 0x02
-
-/** Maximum I/O chunk size */
-#define ZT_IO_MAX_CHUNK_SIZE (1UL << 17)
 
 int zt_io_waitfor(int fd, timediff_t timeout_msec, int mode);
 bool zt_io_waitfor_read(int fd, timediff_t timeout_msec);
@@ -40,7 +39,7 @@ typedef enum {
 
 typedef struct _zt_fio_st {
   int fd;
-  char *name;
+  char *path;
   int flags;
   off_t size;
   off_t offset;
@@ -49,11 +48,17 @@ typedef struct _zt_fio_st {
   size_t _pa_chunk_size;
 } zt_fio_t;
 
-error_t zt_file_delete(const char *name);
+typedef struct _zt_fileinfo_st {
+  uint8_t name[NAME_MAX + 1];
+  uint64_t size;
+  uint32_t reserved;
+} zt_fileinfo_t;
 
-error_t zt_file_zdelete(const char *name);
+error_t zt_file_delete(const char *filepath);
 
-error_t zt_file_rename(const char *name, const char *new_name);
+error_t zt_file_zdelete(const char *filepath);
+
+error_t zt_file_rename(const char *oldpath, const char *newpath);
 
 off_t zt_file_getsize(int fd);
 
@@ -61,7 +66,10 @@ error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode);
 
 void zt_fio_close(zt_fio_t *fio);
 
-error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
+error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info);
+
+// error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
+error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread);
 
 error_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize);
 

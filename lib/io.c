@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <linux/fs.h>
 #include <poll.h>
 #include <stdio.h>
@@ -143,50 +144,65 @@ bool zt_io_waitfor_write(int fd, timediff_t timeout_msec) {
 }
 
 /**
- * @param[in] name The name of the file to delete.
+ * @param[in] filepath The path of the file to delete.
  * @return An `error_t` status code.
  *
  * Delete a file.
  */
-error_t zt_file_delete(const char *name) {
-  if (unlink(name) == -1) {
-    PRINTERROR("failed to unlink(2) file %s (%s)", name, strerror(errno));
+error_t zt_file_delete(const char *filepath) {
+  if (unlink(filepath) == -1) {
+    PRINTERROR("failed to unlink(2) file %s (%s)", filepath, strerror(errno));
     return ERR_INVALID;
   }
   return ERR_SUCCESS;
 }
 
 /**
- * @param[in] name The name of the file to delete.
+ * @param[in] filepath The path of the file to delete.
  * @return An `error_t` status code.
  *
  * Zero out and delete a file.
  */
-error_t zt_file_zdelete(const char *name) {
-  int fd = open(name, O_WRONLY);
+error_t zt_file_zdelete(const char *filepath) {
+  int fd = open(filepath, O_WRONLY);
   if (fd == -1) {
-    PRINTERROR("failed to open(2) file %s (%s)", name, strerror(errno));
+    PRINTERROR("failed to open(2) file %s (%s)", filepath, strerror(errno));
     return ERR_INVALID;
   }
   fzero(fd);
   close(fd);
-  if (unlink(name) == -1) {
-    PRINTERROR("failed to unlink(2) file %s (%s)", name, strerror(errno));
+  if (unlink(filepath) == -1) {
+    PRINTERROR("failed to unlink(2) file %s (%s)", filepath, strerror(errno));
     return ERR_INVALID;
   }
   return ERR_SUCCESS;
 }
 
 /**
- * @param[in] name The name of the file to rename.
- * @param[in] new_name The new name of the file.
+ * @param[in] oldpath The path of the file to rename.
+ * @param[in] newpath The new path of the file.
  * @return An `error_t` status code.
  *
  * Rename a file.
  */
-error_t zt_file_rename(const char *name, const char *new_name) {
-  if (rename(name, new_name) != 0) {
-    PRINTERROR("failed to rename(3) %s to %s (%s)", name, new_name,
+error_t zt_file_rename(const char *oldpath, const char *newpath) {
+  struct stat st;
+  char *p;
+
+  /** oldpath may not be a directory */
+  stat(oldpath, &st);
+  if (!S_ISREG(st.st_mode))
+    return ERR_BAD_ARGS;
+
+  /** newpath may not be a directory */
+  p = basename(newpath);
+  if ((p[0] == '/') || ((p[0] == '.') && (p[1] == '\0')) ||
+      ((p[0] == '.') && (p[1] == '.') && (p[2] == '\0'))) {
+    return ERR_BAD_ARGS;
+  }
+
+  if (rename(oldpath, newpath) != 0) {
+    PRINTERROR("failed to rename(3) %s to %s (%s)", oldpath, newpath,
                strerror(errno));
     return ERR_INVALID;
   }
@@ -228,19 +244,25 @@ off_t zt_file_getsize(int fd) {
 
 /**
  * @param[in] fio An fio structure to be initialized.
- * @param[in] name The path of the file to open.
+ * @param[in] filepath The path of the file to open.
  * @param[in] mode The mode in which to open the file.
  * @return An `error_t` status code.
  *
  * Open a file in the specified mode. The caller must call `zt_fio_close()`
  * on this @p fio after use.
+ *
+ * This function will put an exclusive lock on the file if @p mode is one
+ * of the writable modes - FIO_RDWR, FIO_WRONLY, FIO_APPEND, FIO_RDAPPEND.
+ * If the file is opened in read-only mode (FIO_RDONLY), a shared lock is
+ * acquired instead.
  */
-error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode) {
+error_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   int fd = -1;
   int flags = 0;
   off_t size;
+  struct flock fl;
 
-  if (unlikely(!fio || !name))
+  if (unlikely(!fio || !filepath))
     return ERR_NULL_PTR;
 
   switch (mode) {
@@ -264,23 +286,33 @@ error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode) {
   }
 
   if (mode == FIO_RDONLY)
-    fd = open(name, flags);
+    fd = open(filepath, flags);
   else
-    fd = open(name, flags | O_CREAT, 0600);
+    fd = open(filepath, flags | O_CREAT, 0600);
 
   if (fd == -1) {
-    PRINTERROR("failed to open(2) file %s (%s)", name, strerror(errno));
+    PRINTERROR("failed to open(2) file %s (%s)", filepath, strerror(errno));
+    return ERR_BAD_ARGS;
+  }
+
+  /** lock the file */
+  fl.l_type = (mode == FIO_RDONLY) ? F_RDLCK : F_WRLCK;
+  fl.l_start = 0;
+  fl.l_whence = SEEK_SET;
+  fl.l_len = 0; /* entire file */
+  if (fcntl(fd, F_SETLK, &fl) < 0) {
+    PRINTERROR("fnctl(2): failed to lock file %s (%s)", filepath,
+               strerror(errno));
+    close(fd);
     return ERR_BAD_ARGS;
   }
 
   size = zt_file_getsize(fd);
 
   zt_memzero(fio, sizeof(zt_fio_t));
-
   fio->fd = fd;
   fio->size = size;
-  fio->name = zt_strdup(name);
-
+  fio->path = zt_strdup(filepath);
   FIO_FL_SET(fio, FIO_FL_OPEN);
 
   /** Set the operation access flags */
@@ -291,16 +323,16 @@ error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode) {
   else
     FIO_FL_SET(fio, FIO_FL_READ | FIO_FL_WRITE);
 
-  /** Set the `mmap()` chunk size for reads, depending on the file size */
-  if (size >= 4 * SIZE_GB) {
-    FIO_FL_SET(fio, FIO_FL_XXL);
-    fio->_pa_chunk_size = FIO_CHUNK_SIZE_XXL;
-  } else if (size >= 512 * SIZE_MB) {
-    FIO_FL_SET(fio, FIO_FL_XL);
-    fio->_pa_chunk_size = FIO_CHUNK_SIZE_XL;
-  } else {
-    fio->_pa_chunk_size = MIN(PA_SIZE(fio->size), FIO_CHUNK_SIZE_XL);
-  }
+  // /** Set the `mmap()` chunk size for reads, depending on the file size */
+  // if (size >= 4 * SIZE_GB) {
+  //   FIO_FL_SET(fio, FIO_FL_XXL);
+  //   fio->_pa_chunk_size = FIO_CHUNK_SIZE_XXL;
+  // } else if (size >= 512 * SIZE_MB) {
+  //   FIO_FL_SET(fio, FIO_FL_XL);
+  //   fio->_pa_chunk_size = FIO_CHUNK_SIZE_XL;
+  // } else {
+  //   fio->_pa_chunk_size = MIN(PA_SIZE(fio->size), FIO_CHUNK_SIZE_XL);
+  // }
 
   return ERR_SUCCESS;
 }
@@ -309,14 +341,18 @@ error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode) {
  * @param[in] fio An open fio.
  * @return Void.
  *
- * De-init the fio and close the underlying file descriptor.
+ * De-init the fio, unlock and close the underlying file descriptor.
  */
 void zt_fio_close(zt_fio_t *fio) {
+  struct flock fl;
+
   if (likely((fio != NULL) && FIO_FL_TST(fio, FIO_FL_OPEN))) {
-    if (fio->_prev)
-      munmap(fio->_prev, fio->_prevsize);
+    // if (fio->_prev)
+    // munmap(fio->_prev, fio->_prevsize);
+    fl.l_type = F_UNLCK;
+    (void)fnctl(fio->fd, F_SETLK, &fl);
     close(fio->fd);
-    zt_free(fio->name);
+    zt_free(fio->path);
     zt_memzero(fio, sizeof(zt_fio_t));
     fio->fd = -1;
   }
@@ -324,19 +360,49 @@ void zt_fio_close(zt_fio_t *fio) {
 
 /**
  * @param[in] fio An open fio. See `zt_fio_open()`.
- * @param[out] buf A pointer to a pointer to the buffer with the data read.
- * @param[out] bufsize The number of readable bytes placed in @p *buf.
+ * @param[out] info The file info pointer.
  * @return An `error_t` status code.
  *
- * Reads a portion of the underlying file using a sliding window fashion.
- *
- * This function provides sequential read access to a file by `mmap()`ing fixed
- * size page-aligned chunks into the address space of this process. The Each
- * call to `zt_fio_read()` advances the read window, `munmap()`ing the previous
- * region and `mmap()`ing the next one.
- *
- * `zt_fio_close()` will perform the required `munmap()` on the final chunk.
+ * Get the file information for the file represented by the `fio`.
  */
+error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
+  char *p;
+
+  if (unlikely(!fio || !info))
+    return ERR_NULL_PTR;
+
+  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN)))
+    return ERR_BAD_ARGS;
+
+  p = basename(fio->path);
+  /** Sanity check; this should never happen with an open fio */
+  if (unlikely((p[0] == '/') || ((p[0] == '.') && (p[1] == '\0')) ||
+               ((p[0] == '.') && (p[1] == '.') && (p[2] == '\0')))) {
+    return ERR_BAD_ARGS;
+  }
+  strncpy(info->name, p, NAME_MAX);
+  info->name[NAME_MAX] = '\0';
+
+  info->size = (uint64_t)fio->size;
+  info->reserved = 0;
+
+  return ERR_SUCCESS;
+}
+
+/*
+// @param[in] fio An open fio. See `zt_fio_open()`.
+// @param[out] buf A pointer to a pointer to the buffer with the data read.
+// @param[out] bufsize The number of readable bytes placed in @p *buf.
+// @return An `error_t` status code.\n\n
+// Reads a portion of the underlying file using a sliding window fashion.
+// This function provides sequential read access to a file by `mmap()`ing fixed
+// size page-aligned chunks into the address space of this process. Each call to
+// `zt_fio_read()` advances the read window, `munmap()`ing the previous region
+// and `mmap()`ing the next one.\n\n
+// The size of the readable data is placed in @p *bufsize. If this function
+// is called after the file EOF is reached, @p *bufsize is set to 0 and
+// `ERR_EOF` is returned.\n\n
+// `zt_fio_close()` will perform the required `munmap()` on the final chunk.
 error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
   int fd, flags;
   void *maddr;
@@ -354,8 +420,11 @@ error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
     fio->_prev = NULL;
   }
 
-  if (fio->offset >= fio->size)
+  if (fio->offset >= fio->size) {
+    *buf = NULL;
+    *bufsize = 0;
     return ERR_EOF;
+  }
 
   fd = fio->fd;
   flags = fio->flags;
@@ -384,8 +453,20 @@ error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
 
   return ERR_SUCCESS;
 }
+*/
 
-/*
+/**
+ * @param[in] fio An open fio. See `zt_fio_open()`.
+ * @param[out] buf A pointer to a buffer to read into.
+ * @param[in] bufsize The size of the buffer to read into.
+ * @param[out] nread The number of bytes read.
+ * @return An `error_t` status code.
+ *
+ * Reads at most @p bufsize bytes of data from the file represented by @p fio
+ * into @p buf.
+ *
+ * If the file EOF is reached, @p nread is set to 0 and `ERR_EOF` is returned.
+ */
 error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   ssize_t rc;
 
@@ -397,22 +478,21 @@ error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
 
   rc = read(fio->fd, buf, bufsize);
   switch (rc) {
-    case -1:
-      PRINTERROR("failed to read(2) from file %s (%s)", fio->name,
-                 strerror(errno));
-      return ERR_FIO_READ;
-    case 0:
-      *nread = 0;
-      return ERR_EOF;
-    default:
-      *nread = rc;
-      break;
+  case -1:
+    PRINTERROR("failed to read(2) from file %s (%s)", fio->path,
+               strerror(errno));
+    return ERR_FIO_READ;
+  case 0:
+    *nread = 0;
+    return ERR_EOF;
+  default:
+    *nread = rc;
+    break;
   }
   fio->offset += rc;
 
   return ERR_SUCCESS;
 }
-*/
 
 /**
  * @param[in] fio An open fio. See `zt_fio_open()`.
@@ -434,7 +514,7 @@ error_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
 
   rc = write(fio->fd, buf, bufsize);
   if (rc != bufsize) {
-    PRINTERROR("failed to write(2) to file %s (%s)", fio->name,
+    PRINTERROR("failed to write(2) to file %s (%s)", fio->path,
                strerror(errno));
     return ERR_FIO_WRITE;
   }
