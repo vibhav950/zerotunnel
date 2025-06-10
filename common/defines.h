@@ -61,6 +61,12 @@
 #define ALIGN(n)
 #endif
 
+#if GCC_VERSION_AT_LEAST(3, 3)
+#define ATTRIBUTE_NOTHROW __attribute__((nothrow))
+#else
+#define ATTRIBUTE_NOTHROW
+#endif
+
 #elif defined(__clang__) /* __GNUC__ && !__clang__ */
 
 #define ATTRIBUTE_ALWAYS_INLINE
@@ -70,6 +76,7 @@
 #define ALIGN(n)
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
+#define ATTRIBUTE_NOTHROW
 
 #endif
 
@@ -378,6 +385,18 @@ void *zt_memdup(const void *m, size_t n);
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
 char *zt_strdup(const char *s);
+
+/**
+ * Duplicates a formatted string.
+ *
+ * @param fmt The format string.
+ * @param ... The values to format.
+ * @return A pointer to the nul-terminated duplicated string, or NULL if the
+ * duplication fails.
+ *
+ * @note The returned pointer must be zt_free()'d when no longer needed.
+ */
+char *zt_vstrdup(const char *fmt, ...);
 
 /**
  * Duplicates a memory block and converts it to a null-terminated string.

@@ -67,7 +67,7 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
 }
 
 void zt_mem_free(void *ptr) {
-  if (!ptr)
+  if (unlikely(!ptr))
     return;
 
   ASSERT(malloc_usable_size(ptr) > 0);
@@ -80,7 +80,8 @@ void zt_mem_free(void *ptr) {
        * NOTE: This failure will only occur if pages corresponding to ptr[.size]
        * have not been successfully locked with mlock(). Forcing an exit here
        * means we are exiting without first sweeping process memory with secrets
-       * in it. Even more the reason to only call zt_free() with valid arguments!
+       * in it. Even more the reason to only call zt_free() with valid
+       * arguments!
        */
       PRINTDEBUG("munlock(%zu) failed (%s)\n", size, strerror(errno));
       memzero(ptr, size);
@@ -190,7 +191,7 @@ unsigned int zt_strcmp(const char *str, const char *x) {
   unsigned int res = 0;
   volatile size_t i, j, k;
 
-  if (!str || !x)
+  if (unlikely(!str || !x))
     return 1;
 
   i = j = k = 0;
@@ -208,7 +209,7 @@ unsigned int zt_strcmp(const char *str, const char *x) {
 }
 
 void *zt_memdup(const void *m, size_t n) {
-  if (!m || !n)
+  if (unlikely(!m || !n))
     return NULL;
 
   void *p = zt_malloc(n);
@@ -217,14 +218,41 @@ void *zt_memdup(const void *m, size_t n) {
   return (void *)zt_memcpy(p, (void *)m, n);
 }
 
-char *zt_strdup(const char *s) { return s ? zt_memdup(s, strlen(s) + 1) : NULL; }
+char *zt_strdup(const char *s) {
+  return s ? zt_memdup(s, strlen(s) + 1) : NULL;
+}
+
+char *zt_vstrdup(const char *fmt, ...) {
+  va_list args;
+  char *buf;
+  size_t len;
+
+  if (unlikely(!fmt))
+    return NULL;
+
+  va_start(args, fmt);
+  len = vsnprintf(NULL, 0, fmt, args);
+  va_end(args);
+
+  if (unlikely(len < 0))
+    return NULL;
+
+  buf = zt_malloc(len + 1);
+  if (unlikely(!buf))
+    return NULL;
+
+  va_start(args, fmt);
+  vsnprintf(buf, len + 1, fmt, args);
+  va_end(args);
+  return buf;
+}
 
 char *zt_strmemdup(const void *m, size_t n) {
-  if (!m || !n)
+  if (unlikely(!m || !n))
     return NULL;
 
   void *p1 = zt_malloc(n + 1);
-  if (!p1)
+  if (unlikely(!p1))
     return NULL;
   char *p2 = (char *)zt_memcpy(p1, (void *)m, n);
   p2[n] = 0;
