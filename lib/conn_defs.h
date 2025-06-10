@@ -12,23 +12,27 @@
 /* TCP socket readability */
 #define ZT_NETIO_READABLE               ZT_IO_WRITABLE
 
-/**
- * Size of the biggest I/O buffer
- * Note: ZT_TCP_MAX_CHUNK_SIZE <= ZT_MAX_IO_TRANSFER_SIZE
- */
+/** Size of the biggest I/O buffer */
 #define ZT_MAX_TRANSFER_SIZE            (1UL << 17)
 
-/* Size of the largest payload chunk */
-#define ZT_TCP_MAX_CHUNK_SIZE           ZT_IO_MAX_CHUNK_SIZE
+/**
+ * Size of the biggest payload that can be sent.
+ *
+ * Note: Since AEAD encryption can increase the size of the payload
+ * by appending an AEAD tag to it, we must reserve space for it.
+ */
+#define ZT_MAX_PAYLOAD_SIZE             (ZT_MAX_TRANSFER_SIZE - 32)
 
 /**
  * Default port numbers
  */
+
 #define ZT_DEFAULT_LISTEN_PORT          9595   /* Default service port */
 
 /**
  * Timeouts waiting periods
  */
+
 #define ZT_CLIENT_TIMEOUT_RESOLVE       30000U  /* Host resolution timeout (msec) */
 #define ZT_CLIENT_TIMEOUT_CONNECT       30000U  /* Client connect timeout (msec) */
 #define ZT_CLIENT_TIMEOUT_SEND          15000U  /* Client send() timeout (msec) */
@@ -44,19 +48,36 @@ typedef enum {
   MSG_HANDSHAKE   = (1 << 0), /* Handshake message type */
   MSG_CONTROL     = (1 << 1), /* Control message */
   MSG_METADATA    = (1 << 2), /* File metadata */
-  MSG_DATA        = (1 << 3), /* Session payload */
+  MSG_DATA        = (1 << 3), /* File payload */
   MSG_DONE        = (1 << 4), /* No further messages sent from now */
-} ZT_MSG_TYPE;
+};
+
+#define ZT_CONN_STATS_MAX_KEY_LEN 30
+
+#if 1 // defined(DEBUG)
+typedef struct _zt_conn_stats_st {
+  char *key;
+  int64_t value;
+} zt_conn_stats_t;
+#endif
+
+typedef uint32_t zt_msg_type_t;
+
+/** size of message header */
+#define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
+
+/** size of `msg.raw[]` */
+#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MAX_TRANSFER_SIZE + ZT_MSG_HEADER_SIZE)
 
 typedef struct _zt_msg_st {
   union {
     struct {
-      uint32_t type;                            /* Message type */
-      uint8_t  data[ZT_MAX_TRANSFER_SIZE + 32]; /* Message payload */
+      zt_msg_type_t type;                 /* Message type */
+      uint32_t len;                       /* Length of `data[]` */
+      uint8_t data[ZT_MAX_TRANSFER_SIZE]; /* Message payload */
     };
-    uint8_t  raw[ZT_MAX_TRANSFER_SIZE + 64];    /* Raw data (`type` || `data[]`) */
+    uint8_t raw[ZT_MSG_MAX_RAW_SIZE];     /* Raw data (`type` || `len` || `data[]`) */
   };
-  size_t len;                                   /* Length of `data[]` */
 } zt_msg_t;
 
 /** `msg.data[]` pointer */
@@ -66,13 +87,13 @@ typedef struct _zt_msg_st {
 #define zt_msg_raw_ptr(msgptr)                  ((uint8_t *)(msgptr)->raw)
 
 /** length of `msg.data[]` */
-#define zt_msg_data_len(msgptr)                 ((msgptr)->len)
+#define zt_msg_data_len(msgptr)                 (ntoh32((msgptr)->len))
 
 /** msg type */
 #define zt_msg_type(msgptr)                     ((msgptr)->type)
 
 /** set `msg.len` */
-#define zt_msg_set_len(msgptr, len_val)         (void)(msgptr->len = (len_val))
+#define zt_msg_set_len(msgptr, len_val)         (void)(msgptr->len = hton32(len_val))
 
 /** set `msg.type` */
 #define zt_msg_set_type(msgptr, type_val)       (void)(msgptr->type = (type_val))
