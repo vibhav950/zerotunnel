@@ -47,6 +47,8 @@ typedef struct {
     connect_timeout,
     send_timeout,
     recv_timeout;
+  size_t
+    total_sent;
   bool
     fl_tcp_fastopen   : 1,  /* is TCP fastopen enabled */
     fl_ipv6           : 1,  /* use IPv6 addressing */

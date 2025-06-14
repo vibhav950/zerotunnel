@@ -41,7 +41,8 @@ typedef enum {
   MSG_CONTROL     = (1 << 1), /* Control message */
   MSG_METADATA    = (1 << 2), /* File metadata */
   MSG_DATA        = (1 << 3), /* File payload */
-  MSG_DONE        = (1 << 4), /* No further messages sent from now */
+  MSG_PADDING     = (1 << 4), /* Padding (zero payload) */
+  MSG_DONE        = (1 << 5), /* No further messages sent from now */
 };
 
 typedef uint8_t zt_msg_type_t;
@@ -52,12 +53,15 @@ typedef uint8_t zt_msg_type_t;
 /**
  * Size of message suffix
  *
- * Must be at least as large as 2x the largest AAD tag size!
+ * Must be at least as large as 2x the largest AEAD tag size!
  */
 #define ZT_MSG_SUFFIX_SIZE                      32UL
 
 /** size of `msg.raw[]` */
 #define ZT_MSG_MAX_RAW_SIZE                     (ZT_MAX_TRANSFER_SIZE + ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE)
+
+/** padding makes the total encrypted data size a multiple of the padding factor */
+#define ZT_MSG_PADDING_FACTOR                   (1UL << 12)
 
 typedef struct _zt_msg_st {
   union {

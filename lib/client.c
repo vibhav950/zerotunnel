@@ -435,7 +435,7 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
 
   rawptr = zt_msg_raw_ptr(conn->msgbuf);
 
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     outlen = ZT_MSG_MAX_RAW_SIZE;
 
     /** encrypt msg header */
@@ -464,6 +464,9 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
                config.peer_id, strerror(errno));
     return ERR_TCP_SEND;
   }
+
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE))
+    conn->total_sent += tosend;
 
   zt_msg_set_len(conn->msgbuf, 0);
 
@@ -503,7 +506,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   buf = zt_msg_raw_ptr(conn->msgbuf);
 
   (void)vcry_get_aead_tag_len(&taglen);
-  taglen = (conn->state > CLIENT_AUTH_PONG) ? taglen : 0;
+  taglen = ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) ? taglen : 0;
 
   /** Read the message header */
   if ((nread = zt_client_tcp_recv(conn, buf, ZT_MSG_HEADER_SIZE + taglen,
@@ -521,7 +524,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   }
 
   /** Decrypt the header if required */
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
         ERR_SUCCESS) {
       PRINTERROR("failed to decrypt %zu bytes", nread);
@@ -559,7 +562,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   }
 
   /* Decrypt the payload if required */
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     buf = zt_msg_data_ptr(conn->msgbuf);
     if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
         ERR_SUCCESS) {
@@ -792,6 +795,28 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
       }
 
       zt_fio_close(&fileptr);
+
+      if (config.config_size_obfuscation &&
+          (conn->total_sent % ZT_MSG_PADDING_FACTOR)) {
+        size_t padding, taglen;
+        uint8_t *dataptr;
+
+        (void)vcry_get_aead_tag_len(&taglen);
+
+        padding = (ZT_MSG_PADDING_FACTOR -
+                   ((conn->total_sent + ZT_MSG_HEADER_SIZE + taglen) %
+                    ZT_MSG_PADDING_FACTOR)) %
+                  ZT_MSG_PADDING_FACTOR;
+
+        dataptr = zt_msg_data_ptr(conn->msgbuf);
+        zt_memset(dataptr, 0, padding);
+
+        zt_msg_set_len(conn->msgbuf, padding);
+        zt_msg_set_type(conn->msgbuf, MSG_PADDING);
+
+        if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+          goto cleanup;
+      }
 
       if (rv != ERR_EOF) {
         ret = rv;
