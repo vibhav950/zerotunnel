@@ -16,14 +16,6 @@
 #define ZT_MAX_TRANSFER_SIZE            (1UL << 17)
 
 /**
- * Size of the biggest payload that can be sent.
- *
- * Note: Since AEAD encryption can increase the size of the payload
- * by appending an AEAD tag to it, we must reserve space for it.
- */
-#define ZT_MAX_PAYLOAD_SIZE             (ZT_MAX_TRANSFER_SIZE - 32)
-
-/**
  * Default port numbers
  */
 
@@ -52,22 +44,20 @@ typedef enum {
   MSG_DONE        = (1 << 4), /* No further messages sent from now */
 };
 
-#define ZT_CONN_STATS_MAX_KEY_LEN 30
-
-#if 1 // defined(DEBUG)
-typedef struct _zt_conn_stats_st {
-  char *key;
-  int64_t value;
-} zt_conn_stats_t;
-#endif
-
-typedef uint32_t zt_msg_type_t;
+typedef uint8_t zt_msg_type_t;
 
 /** size of message header */
 #define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
 
+/**
+ * Size of message suffix
+ *
+ * Must be at least as large as 2x the largest AAD tag size!
+ */
+#define ZT_MSG_SUFFIX_SIZE                      32UL
+
 /** size of `msg.raw[]` */
-#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MAX_TRANSFER_SIZE + ZT_MSG_HEADER_SIZE)
+#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MAX_TRANSFER_SIZE + ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE)
 
 typedef struct _zt_msg_st {
   union {
@@ -76,7 +66,8 @@ typedef struct _zt_msg_st {
       uint32_t len;                       /* Length of `data[]` */
       uint8_t data[ZT_MAX_TRANSFER_SIZE]; /* Message payload */
     };
-    uint8_t raw[ZT_MSG_MAX_RAW_SIZE];     /* Raw data (`type` || `len` || `data[]`) */
+    /* Raw data (`type` || `len` || `data[]` || <suffix>) */
+    uint8_t raw[ZT_MSG_MAX_RAW_SIZE];
   };
 } zt_msg_t;
 

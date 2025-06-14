@@ -14,6 +14,7 @@ typedef enum {
   CLIENT_CONN_INIT,
   CLIENT_AUTH_PING,
   CLIENT_AUTH_PONG,
+  CLIENT_OFFER,
   CLIENT_TRANSFER,
   CLIENT_DONE
 } ZT_CLIENT_STATE;
@@ -66,7 +67,7 @@ error_t zt_client_tcp_conn1(zt_client_connection_t *conn);
 error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
                     size_t aad_len);
 
-error_t client_recv(zt_client_connection_t *conn, ZT_MSG_TYPE type,
+error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t type,
                     const uint8_t *aad, size_t aad_len);
 
 error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done);
