@@ -12,9 +12,6 @@
 /* TCP socket readability */
 #define ZT_NETIO_READABLE               ZT_IO_WRITABLE
 
-/** Size of the biggest I/O buffer */
-#define ZT_MAX_TRANSFER_SIZE            (1UL << 17)
-
 /**
  * Default port numbers
  */
@@ -49,15 +46,14 @@ typedef uint8_t zt_msg_type_t;
 /** size of message header */
 #define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
 
-/**
- * Size of message suffix
- *
- * Must be at least as large as 2x the largest AAD tag size!
- */
+/** size of msg suffix */
 #define ZT_MSG_SUFFIX_SIZE                      32UL
 
 /** size of `msg.raw[]` */
-#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MAX_TRANSFER_SIZE + ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE)
+#define ZT_MSG_MAX_RAW_SIZE                     (1UL << 17)
+
+/** size of max `msg.data[]` */
+#define ZT_MAX_TRANSFER_SIZE                    (ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE - ZT_MSG_SUFFIX_SIZE)
 
 typedef struct _zt_msg_st {
   union {

@@ -435,7 +435,7 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
 
   rawptr = zt_msg_raw_ptr(conn->msgbuf);
 
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     outlen = ZT_MSG_MAX_RAW_SIZE;
 
     /** encrypt msg header */
@@ -503,7 +503,9 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   buf = zt_msg_raw_ptr(conn->msgbuf);
 
   (void)vcry_get_aead_tag_len(&taglen);
-  taglen = (conn->state > CLIENT_AUTH_PONG) ? taglen : 0;
+  taglen = ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE))
+               ? taglen
+               : 0;
 
   /** Read the message header */
   if ((nread = zt_client_tcp_recv(conn, buf, ZT_MSG_HEADER_SIZE + taglen,
@@ -521,7 +523,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   }
 
   /** Decrypt the header if required */
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
         ERR_SUCCESS) {
       PRINTERROR("failed to decrypt %zu bytes", nread);
@@ -559,7 +561,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
   }
 
   /* Decrypt the payload if required */
-  if (conn->state > CLIENT_AUTH_PONG) {
+  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     buf = zt_msg_data_ptr(conn->msgbuf);
     if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
         ERR_SUCCESS) {
