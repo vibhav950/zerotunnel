@@ -9,9 +9,9 @@
 #include "crypto/kex_ecc.h"
 #include "random/systemrand.h"
 
-#include <pthread.h>
 #include <string.h>
 
+// clang-format off
 #define VCRY_FLAG_SET(x)              ((void)(vctx.flags |= (x)))
 #define VCRY_FLAG_GET(x)              ((int)(vctx.flags & (x)))
 
@@ -112,22 +112,15 @@ static __thread error_t __vcry_err_val;
 static struct vcry_ctx_st vctx;
 static error_t __vcry_err_val;
 #endif
+// clang-format on
 
-void vcry_set_role_initiator(void) {
-  vctx.role = vcry_hshake_role_initiator;
-}
+void vcry_set_role_initiator(void) { vctx.role = vcry_hshake_role_initiator; }
 
-void vcry_set_role_responder(void) {
-  vctx.role = vcry_hshake_role_responder;
-}
+void vcry_set_role_responder(void) { vctx.role = vcry_hshake_role_responder; }
 
-error_t vcry_get_last_err(void) {
-  return __vcry_err_val;
-}
+error_t vcry_get_last_err(void) { return __vcry_err_val; }
 
-void vcry_clear_last_err(void) {
-  __vcry_err_val = ERR_SUCCESS;
-}
+void vcry_clear_last_err(void) { __vcry_err_val = ERR_SUCCESS; }
 
 error_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
   if (!authpass)
@@ -251,6 +244,17 @@ error_t vcry_set_aead_from_name(const char *name) {
   return vcry_set_aead_from_id(id);
 }
 
+error_t vcry_get_aead_tag_len(size_t *len) {
+  if (!len)
+    return VCRY_ERR_SET(ERR_NULL_PTR);
+
+  if (VCRY_FLAG_GET(vcry_fl_aead_set) != vcry_fl_aead_set)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
+  *len = cipher_tag_len(vctx.aead);
+  return ERR_SUCCESS;
+}
+
 error_t vcry_set_hmac_from_id(int id) {
   error_t ret;
   size_t key_len;
@@ -316,6 +320,17 @@ error_t vcry_set_hmac_from_name(const char *name) {
   else if (!strcmp(name, "HMAC-SHA3-512"))
     id = VCRY_HMAC_SHA3_512;
   return vcry_set_hmac_from_id(id);
+}
+
+error_t vcry_get_hmac_digest_len(size_t *len) {
+  if (!len)
+    return VCRY_ERR_SET(ERR_NULL_PTR);
+
+  if (VCRY_FLAG_GET(vcry_fl_mac_set) != vcry_fl_mac_set)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
+  *len = hmac_digest_len(vctx.mac);
+  return ERR_SUCCESS;
 }
 
 error_t vcry_set_ecdh_from_id(int id) {
@@ -476,6 +491,8 @@ error_t vcry_set_kdf_from_name(const char *name) {
  * Compute K_pass = KDF(pass || salt1 || "Compute master key (k_pass)")
  * where KDF is a memory-hard key derivation function (e.g., scrypt/argon2)
  *
+ * The caller is responsible for freeing the `peerdata` buffer.
+ *
  * Note: This function is called by the initiator of the handshake process.
  *
  * Returns an `error_t` status code.
@@ -618,6 +635,8 @@ clean2:
  * 2. Encapsulate the PQ-KEM shared secret (SS, CT) = encaps(PQK)
  * 3. Save peer's DHE public key and generate own DHE keypair and attach the
  *    public key to the response.
+ *
+ * The caller is responsible for freeing the `peerdata_mine` buffer.
  *
  * Note: This function is called by the responder of the handshake process.
  *
@@ -976,6 +995,8 @@ clean2:
  * Proof_A = HMAC(K_mac, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
  *                "First proof message (Proof_A)")
  *
+ * The caller is responsible for freeing the `verify_msg` buffer.
+ *
  * NOTE: This function performs a non-constant-time comparison of
  * ID_A and ID_B so these strings must not contain sensitive data.
  *
@@ -1046,6 +1067,8 @@ error_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
  * Compute the responder's verification message:
  * Proof_B = HMAC(K_mac, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
  *                "Second proof message (Proof_B)")
+ *
+ * The caller is responsible for freeing the `verify_msg` buffer.
  *
  * NOTE: This function performs a non-constant-time comparison of
  * ID_A and ID_B so these strings must not contain sensitive data.

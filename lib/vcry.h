@@ -124,6 +124,9 @@ error_t vcry_set_ecdh_from_name(const char *name);
 error_t vcry_set_kem_from_name(const char *name);
 error_t vcry_set_kdf_from_name(const char *name);
 
+error_t vcry_get_aead_tag_len(size_t *len);
+error_t vcry_get_hmac_digest_len(size_t *len);
+
 error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len);
 
 error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
