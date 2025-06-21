@@ -74,12 +74,11 @@ unsigned int zt_cpu_get_processor_count(void) {
   return count;
 #elif defined(_PLATFORM_OSX) || defined(_PLATFORM_BSD)
 #if defined(_PLATFORM_OSX)
-  const int code = HW_AVAILCPU;
+  int mib[] = {CTL_HW, HW_AVAILCPU};
 #else
-  const int code = HW_NCPU;
+  const int mib[] = {CTL_HW, HW_NCPU};
 #endif
   unsigned int count;
-  const int mib[] = {CTL_HW, code};
   size_t size = sizeof(count);
   if ((sysctl(mib, 2, &count, &size, NULL, 0) == 0) && (count > 0))
     return count;
