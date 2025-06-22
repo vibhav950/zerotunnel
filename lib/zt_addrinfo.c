@@ -8,7 +8,7 @@ void zt_addrinfo_free(struct zt_addrinfo *ai) {
 
   for (ai_cur = ai; ai_cur; ai_cur = ai_next) {
     ai_next = ai_cur->ai_next;
-    free(ai_cur);
+    zt_free(ai_cur);
   }
 }
 

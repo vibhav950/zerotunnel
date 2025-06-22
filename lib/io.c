@@ -301,7 +301,7 @@ error_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   fl.l_whence = SEEK_SET;
   fl.l_len = 0; /* entire file */
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fnctl(2): failed to lock file %s (%s)", filepath,
+    PRINTERROR("fcntl(2): failed to lock file %s (%s)", filepath,
                strerror(errno));
     close(fd);
     return ERR_BAD_ARGS;
@@ -350,7 +350,7 @@ void zt_fio_close(zt_fio_t *fio) {
     // if (fio->_prev)
     // munmap(fio->_prev, fio->_prevsize);
     fl.l_type = F_UNLCK;
-    (void)fnctl(fio->fd, F_SETLK, &fl);
+    (void)fcntl(fio->fd, F_SETLK, &fl);
     close(fio->fd);
     zt_free(fio->path);
     zt_memzero(fio, sizeof(zt_fio_t));

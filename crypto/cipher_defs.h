@@ -25,12 +25,12 @@
 
 #include <openssl/evp.h>
 
-struct _ciphr_ossl_ctx_st {
+struct _cipher_ossl_ctx_st {
   const EVP_CIPHER *ossl_evp;
   EVP_CIPHER_CTX *ossl_ctx;
 };
 
-typedef struct _ciphr_ossl_ctx_st cipher_ossl_ctx, aead_ossl_ctx;
+typedef struct _cipher_ossl_ctx_st cipher_ossl_ctx, aead_ossl_ctx;
 
 #endif /* OPENSSL */
 

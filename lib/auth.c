@@ -147,7 +147,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fnctl: failed to acquire x-lock on %s (%s)", passwddb_file,
+    PRINTERROR("fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
                strerror(errno));
     fclose(fp);
     close(fd);
@@ -269,7 +269,7 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fnctl: failed to acquire x-lock on %s (%s)", passwddb_file,
+    PRINTERROR("fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
                strerror(errno));
     fclose(fp);
     close(fd);
