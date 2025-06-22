@@ -168,6 +168,7 @@ typedef enum {
   ERR_AGAIN,             /* try again */
   ERR_TIMEOUT,           /* operation timed out */
   ERR_NORESOLVE,         /* could not resolve host */
+  ERR_TCP_ACCEPT,        /* failed to accept TCP connection */
   ERR_TCP_CONNECT,       /* TCP connection failed */
   ERR_TCP_SEND,          /* TCP send failed */
   ERR_TCP_RECV,          /* TCP receive failed */

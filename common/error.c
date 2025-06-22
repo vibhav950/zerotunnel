@@ -37,6 +37,8 @@ const char *zt_error_str(error_t err) {
     return "operation timed out";
   case ERR_NORESOLVE:
     return "could not resolve host";
+  case ERR_TCP_ACCEPT:
+    return "failed to accept TCP connection";
   case ERR_TCP_CONNECT:
     return "TCP connection failed";
   case ERR_TCP_SEND:
