@@ -121,6 +121,9 @@ bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec) {
  * TCP Fast Open will be used if it is enabled and available. It can be enabled
  * using `zt_client_set_tcp_fastopen()`.
  *
+ * Note: On builds with Linux < 4.11, this function may try to perform a
+ * previously deferred connect() call - so heads up for a connect failure!
+ *
  * If a timeout has been set, this function will wait for at most
  * `conn.send_timeout` milliseconds in the event of an unwritable socket before
  * retrying once again. If the socket still does not become writable, the
@@ -136,7 +139,34 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
     return -1;
 
   while (nbytes) {
-    ssize_t n = send(conn->sockfd, buf, nbytes, 0);
+    ssize_t n;
+
+#ifdef defined(MSG_FASTOPEN) && !defined(TCP_FASTOPEN_CONNECT)
+    if (conn->fl_tcp_fastopen && conn->first_send) {
+      n = sendto(conn->sockfd, buf, nbytes, MSG_FASTOPEN,
+                 conn->ai_estab->ai_addr, conn->ai_estab->ai_addrlen);
+      conn->first_send = false;
+
+      if (n < 0 && errno == EOPNOTSUPP) {
+        /** TFO disabled on system; fallback to a normal connect() */
+        conn->fl_tcp_fastopen = false;
+        int rv = connect(conn->sockfd, conn->ai_estab->ai_addr,
+                         conn->ai_estab->ai_addrlen);
+
+        if (rv == -1 && errno != EAGAIN && errno != EINPROGRESS) {
+          PRINTERROR("connect: failed (%s)", strerror(errno));
+          close(conn->sockfd);
+          return -1;
+        }
+
+        errno = EAGAIN; // send() again
+      }
+    } else {
+#else
+    if (1) {
+#endif
+      n = send(conn->sockfd, buf, nbytes, 0);
+    }
 
     if (n > 0) {
       nwritten += n;

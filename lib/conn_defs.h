@@ -16,20 +16,19 @@
  * Default port numbers
  */
 
-#define ZT_DEFAULT_LISTEN_PORT          9595   /* Default service port */
+#define ZT_DEFAULT_LISTEN_PORT          "9595"   /* Default service port */
 
 /**
  * Timeouts waiting periods
  */
 
-#define ZT_CLIENT_TIMEOUT_RESOLVE       30000U  /* Host resolution timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_CONNECT       30000U  /* Client connect timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_SEND          15000U  /* Client send() timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_RECV          15000U  /* Client recv() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RESOLVE       10000U  /* Host resolution timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_CONNECT       10000U  /* Client connect timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_SEND          5000U   /* Client send() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RECV          5000U   /* Client recv() timeout (msec) */
 
-// #define SERVER_TIMEOUT_COMMIT   30U  /* Client commitment timeout (sec) */
-// #define SERVER_TIMEOUT_TRANSFER 30U  /* Timeout to abort ongoing transfer (sec) */
-
+#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT  5000U   /* Server send() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT  5000U   /* Server recv() timeout (msec) */
 
 #define CLIENT_RESOLVE_RETRIES          5   /* Host resolution retries */
 
@@ -43,6 +42,9 @@ typedef enum {
 
 typedef uint8_t zt_msg_type_t;
 
+/** end-of-padding marker */
+#define MSG_PADDING_END                         0x01
+
 /** size of message header */
 #define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
 
@@ -53,14 +55,14 @@ typedef uint8_t zt_msg_type_t;
 #define ZT_MSG_MAX_RAW_SIZE                     (1UL << 17)
 
 /** size of max `msg.data[]` */
-#define ZT_MAX_TRANSFER_SIZE                    (ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE - ZT_MSG_SUFFIX_SIZE)
+#define ZT_MAX_TRANSFER_SIZE                    (ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE - ZT_MSG_SUFFIX_SIZE - 1)
 
 typedef struct _zt_msg_st {
   union {
     struct {
-      zt_msg_type_t type;                 /* Message type */
-      uint32_t len;                       /* Length of `data[]` */
-      uint8_t data[ZT_MAX_TRANSFER_SIZE]; /* Message payload */
+      zt_msg_type_t type;                     /* Message type */
+      uint32_t len;                           /* Length of `data[]` */
+      uint8_t data[ZT_MAX_TRANSFER_SIZE + 1]; /* Message payload */
     };
     /* Raw data (`type` || `len` || `data[]` || <suffix>) */
     uint8_t raw[ZT_MSG_MAX_RAW_SIZE];
@@ -93,6 +95,11 @@ typedef struct _zt_msg_st {
     zt_msg_set_len(msgptr, len);                                               \
   } while (0)
 
+/** check message type validity */
+static inline bool msg_type_isvalid(zt_msg_type_t type) {
+  return (type >= MSG_HANDSHAKE && type <= MSG_DONE);
+}
+
 struct zt_addrinfo {
   int                   ai_flags;
   int                   ai_family;
@@ -102,6 +109,7 @@ struct zt_addrinfo {
   char                  *ai_canonname;
   struct sockaddr       *ai_addr;
   struct zt_addrinfo    *ai_next;
+  size_t                total_size;
 };
 
 void zt_addrinfo_free(struct zt_addrinfo *ai);

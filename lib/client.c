@@ -38,10 +38,6 @@ static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
   return clientstate_names[state];
 }
 
-static inline bool msg_type_isvalid(zt_msg_type_t type) {
-  return type >= MSG_HANDSHAKE && type <= MSG_DONE;
-}
-
 static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
                                               struct zt_addrinfo **ai_list,
                                               timediff_t timeout_msec) {
@@ -123,13 +119,10 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 
   if (status) {
-    PRINTERROR("getaddrinfo failed for %s: %s", conn->hostname,
-               gai_strerror(status));
-    if (status == EAI_SYSTEM) {
-      PRINTERROR("getaddrinfo failed for %s (%s)", conn->hostname,
-                 strerror(errno));
-    }
-    return ERR_INTERNAL;
+    const char *errstr = (status == EAI_SYSTEM) ? (const char *)strerror(errno)
+                                                : gai_strerror(status);
+    PRINTERROR("getaddrinfo: failed for %s (%s)", conn->hostname, errstr);
+    return ERR_NORESOLVE;
   }
 
   for (p = res; p != NULL; p = p->ai_next) {
@@ -171,6 +164,7 @@ static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
     ai_cur->ai_canonname = NULL;
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
+    ai_cur->total_size = sizeof(struct zt_addrinfo) + cname_len + saddr_len;
 
     ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
     zt_memcpy(ai_cur->ai_addr, p->ai_addr, saddr_len);
@@ -237,7 +231,7 @@ cleanup:
   }
 #endif
 
-  /* If there was an error, free the my_addrinfo list */
+  /* If there was an error, free the zt_addrinfo list */
   if (ret)
     zt_addrinfo_free(ai_head);
   freeaddrinfo(res);
@@ -257,36 +251,54 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
     int fail = 0;
 
-    if ((sockfd = socket(ai_cur->ai_family, SOCK_STREAM, IPPROTO_TCP))) {
-      PRINTERROR("socket failed (%s)", strerror(errno));
+    if ((sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
+                         ai_cur->ai_protocol))) {
+      PRINTERROR("socket: failed (%s)", strerror(errno));
       continue;
     }
 
+    if (SOCK_CLOEXEC == 0) {
+      int flags = fcntl(sockfd, F_GETFD);
+      if (flags < 0) {
+        PRINTERROR("fcntl: failed to get flags (%s)", strerror(errno));
+        flags = 0;
+      }
+      flags |= FD_CLOEXEC;
+      if (fcntl(sockfd, F_SETFD, flags) == -1)
+        PRINTERROR("fcntl: failed to set O_CLOEXEC (%s)", strerror(errno));
+    }
+
     /** Try to enable TCP_NODELAY */
-#ifdef TCP_NODELAY
-    on = 1;
     if (conn->fl_tcp_nodelay) {
+#ifdef TCP_NODELAY
+      on = 1;
       if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set TCP_NODELAY (%s)",
+        PRINTERROR("setsockopt: failed to set TCP_NODELAY (%s)",
                    strerror(errno));
         conn->fl_tcp_nodelay = false;
       }
-    }
+#else
+      PRINTERROR("TCP_NODELAY was requested but not supported by this build");
+      conn->fl_tcp_nodelay = false;
 #endif
+    }
 
     /** Try to enable TCP_FASTOPEN */
-#ifdef TCP_FASTOPEN_CONNECT /* Linux >= 4.11 */
     if (conn->fl_tcp_fastopen) {
+#if defined(TCP_FASTOPEN_CONNECT) /* Linux >= 4.11 */
       on = 1;
       if (setsockopt(conn->sockfd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT,
                      (void *)&on, sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set TCP_FASTOPEN_CONNECT (%s)",
+        PRINTERROR("setsockopt: failed to set TCP_FASTOPEN_CONNECT (%s)",
                    strerror(errno));
         conn->fl_tcp_fastopen = false;
       }
-    }
+#elif !defined(MSG_FASTOPEN) /* old Linux */
+      PRINTERROR("TCP_FASTOPEN was requested but not supported by this build");
+      conn->fl_tcp_fastopen = false;
 #endif
+    }
 
     /** We must have TCP keepalive enabled for live reads */
     if (conn->fl_live_read) {
@@ -295,14 +307,14 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
       on = 1;
       if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_KEEPALIVE (%s)",
+        PRINTERROR("setsockopt: failed to set SO_KEEPALIVE (%s)",
                    strerror(errno));
         fail = 1;
       }
 
       if (getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
                      sizeof(on)) == -1) {
-        PRINTERROR("getsockopt failed to get SO_KEEPALIVE (%s)",
+        PRINTERROR("getsockopt: failed to get SO_KEEPALIVE (%s)",
                    strerror(errno));
         fail = 1;
       }
@@ -314,13 +326,12 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
       }
     }
 
-    /** Try to enable send */
     if (conn->send_timeout > 0) {
       struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
                              .tv_usec = (conn->send_timeout % 1000) * 1000};
       if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
                      sizeof(tval)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_SNDTIMEO (%s)",
+        PRINTERROR("setsockopt: failed to set SO_SNDTIMEO (%s)",
                    strerror(errno));
         close(sockfd);
         continue;
@@ -332,7 +343,7 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
                              .tv_usec = (conn->recv_timeout % 1000) * 1000};
       if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
                      sizeof(tval)) == -1) {
-        PRINTERROR("setsockopt failed to set SO_RCVTIMEO (%s)",
+        PRINTERROR("setsockopt: failed to set SO_RCVTIMEO (%s)",
                    strerror(errno));
         close(sockfd);
         continue;
@@ -340,28 +351,28 @@ static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
     }
 
     /* If nothing failed we have found a valid candidate */
-    ai_estab = zt_malloc(sizeof(struct zt_addrinfo));
-    if (ai_estab) {
-      zt_memcpy(ai_estab, ai_cur, sizeof(struct zt_addrinfo));
-      ai_estab->ai_next = NULL;
-      conn->sockfd = sockfd;
-      conn->ai_estab = ai_estab;
-      break;
-    } else {
-      ret = ERR_MEM_FAIL;
-      goto exit;
-    }
+    break;
   }
 
-  if (!ai_estab)
-    ret = ERR_NORESOLVE;
+  if (ai_cur) {
+    ai_estab = zt_malloc(ai_cur->total_size);
+    if (!ai_estab)
+      ret = ERR_MEM_FAIL;
+    zt_memcpy(ai_estab, ai_cur, ai_cur->total_size);
+    ai_estab->ai_next = NULL;
+    conn->sockfd = sockfd;
+    conn->ai_estab = ai_estab;
+  } else {
+    PRINTERROR("could not create a suitable socket for any address");
+    ret = ERR_INTERNAL;
+  }
 
 exit:
   if (ret) {
     conn->sockfd = -1;
     close(sockfd);
   }
-  freeaddrinfo(ai_list);
+  zt_addrinfo_free(ai_list);
   return ret;
 }
 
@@ -380,16 +391,45 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
    * and instead of waiting can use the time for the handshake setup process
    */
   sockfd = conn->sockfd;
-  conn->sock_flags = flags = fnctl(sockfd, F_GETFL, 0);
-  fnctl(sockfd, F_SETFL, flags | O_NONBLOCK);
+  conn->sock_flags = flags = fcntl(sockfd, F_GETFL, 0);
+  fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
   ai_estab = conn->ai_estab;
-  rv = connect(conn->sockfd, ai_estab->ai_addr, ai_estab->ai_addrlen);
+
+#if defined(MSG_FASTOPEN) && !defined(TCP_FASTOPEN_CONNECT)
+  if (conn->fl_tcp_fastopen) {
+    conn->first_send = true;
+    /**
+     * do nothing; we must send the TFO cookie/cookie request using the sendto()
+     * syscall with the `MSG_FASTOPEN` flag as the first send of this connection
+     */
+    rv = 0;
+#elif defined(TCP_FASTOPEN_CONNECT)
+  if (conn->fl_tcp_fastopen) {
+    rv = connect(sockfd, ai_estab->ai_addr, ai_estab->ai_addrlen);
+    conn->first_send = false;
+#else
+  if (0) {
+#endif
+  } else {
+    rv = connect(sockfd, ai_estab->ai_addr, ai_estab->ai_addrlen);
+    conn->first_send = false;
+  }
+
   if (rv == -1 && errno != EAGAIN && errno != EINPROGRESS) {
-    PRINTERROR("connect failed (%s)", strerror(errno));
+    PRINTERROR("connect: failed (%s)", strerror(errno));
     close(conn->sockfd);
     return ERR_TCP_CONNECT;
   }
+
+#ifdef DEBUG
+  char address[INET6_ADDRSTRLEN + 6];
+  getnameinfo(ai_estab->ai_addr, ai_estab->ai_addrlen, address,
+              INET6_ADDRSTRLEN, &address[INET6_ADDRSTRLEN], 6,
+              NI_NUMERICHOST | NI_NUMERICSERV);
+  PRINTDEBUG("connected to %s:%d", address, &address[INET6_ADDRSTRLEN]);
+#endif
+
   /**
    * We are done for now, but it is important to verify the connection
    * before performing a read/write and restore the file status flags then
@@ -420,7 +460,8 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
 static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
                            size_t aad_len) {
   error_t ret;
-  ssize_t tosend, outlen, nbytes;
+  ssize_t tosend, outlen, len;
+  size_t msglen, padding;
   uint8_t *rawptr;
 
   ASSERT(conn);
@@ -434,24 +475,41 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
   }
 
   rawptr = zt_msg_raw_ptr(conn->msgbuf);
+  msglen = zt_msg_data_len(conn->msgbuf);
+
+  padding = 0;
+  if (config.config_length_obfuscation) {
+    (void)vcry_aead_tag_len(&len);
+    padding =
+        config.padding_factor - ((ZT_MSG_HEADER_SIZE + msglen + 2 * len + 1) &
+                                 (config.padding_factor - 1));
+  }
 
   if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
     outlen = ZT_MSG_MAX_RAW_SIZE;
 
     /** encrypt msg header */
-    nbytes = ZT_MSG_HEADER_SIZE;
-    if ((ret = vcry_aead_encrypt(rawptr, nbytes, aad, aad_len, rawptr,
-                                 &outlen)) != ERR_SUCCESS) {
-      PRINTERROR("failed to encrypt %zu bytes", nbytes);
+    len = ZT_MSG_HEADER_SIZE;
+    if ((ret = vcry_aead_encrypt(rawptr, len, aad, aad_len, rawptr, &outlen)) !=
+        ERR_SUCCESS) {
+      PRINTERROR("failed to encrypt %zu bytes", len);
       return ret;
     }
     tosend = outlen;
 
+    if (padding) {
+      uint8_t *p = rawptr + tosend;
+      zt_memmove(p + padding + 1, p, msglen);
+      zt_memzero(p, padding);
+      p[padding] = MSG_PADDING_END;
+      tosend += padding + 1;
+    }
+
     /** encrypt msg payload */
-    nbytes = zt_msg_data_len(conn->msgbuf);
-    if ((ret = vcry_aead_encrypt(rawptr + tosend, nbytes, aad, aad_len,
+    len = zt_msg_data_len(conn->msgbuf);
+    if ((ret = vcry_aead_encrypt(rawptr + tosend, len, aad, aad_len,
                                  rawptr + tosend, &outlen)) != ERR_SUCCESS) {
-      PRINTERROR("failed to encrypt %zu bytes", nbytes);
+      PRINTERROR("failed to encrypt %zu bytes", len);
       return ret;
     }
     tosend += outlen;
@@ -824,8 +882,17 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
   }
 
 cleanup:
+  shutdown(conn, SHUT_RDWR);
+  close(conn->sockfd);
+  conn->sockfd = -1;
+
+  zt_addrinfo_free(conn->ai_estab);
+  conn->ai_estab = NULL;
+
   vcry_module_release();
+
   zt_free(conn->msgbuf);
   conn->msgbuf = NULL;
+
   return ret;
 }

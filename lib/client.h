@@ -19,7 +19,8 @@ typedef enum {
   CLIENT_DONE
 } ZT_CLIENT_STATE;
 
-typedef struct {
+// clang-format off
+typedef struct _zt_client_connection_st {
   ZT_CLIENT_STATE
     state;
   struct zt_addrinfo
@@ -38,22 +39,24 @@ typedef struct {
     *msgbuf;
   char
     *hostname;
+    *explicit_port;
   int
     sockfd,
     sock_flags,
-    serv_port;
-  int
     resolve_timeout,
     connect_timeout,
     send_timeout,
     recv_timeout;
   bool
+    first_send;
+  bool
     fl_tcp_fastopen   : 1,  /* is TCP fastopen enabled */
     fl_ipv6           : 1,  /* use IPv6 addressing */
-    fl_explicit_port  : 1,  /* use explicit port */
+    fl_explicit_port  : 1,  /* override default server port */
     fl_tcp_nodelay    : 1,  /* is TCP_NODELAY enabled */
     fl_live_read      : 1;  /* is live read enabled */
 } zt_client_connection_t;
+// clang-format on
 
 error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
                                        struct zt_addrinfo **ai_list,
