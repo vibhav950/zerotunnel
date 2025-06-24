@@ -1,6 +1,6 @@
 #include "client.h"
-#include "conn_defs.h"
 #include "io.h"
+#include "server.h"
 
 #include <errno.h>
 #include <error.h>
@@ -248,6 +248,110 @@ ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
   }
 
   // Signal the caller if there is more data to be read
+  if (pending) {
+    if (zt_tcp_io_waitfor_read(conn->sockfd, 0))
+      *pending = true;
+    else
+      *pending = false;
+  }
+  return nread;
+}
+
+/**
+ * @param[in] conn The server connection context.
+ * @param[in] buf The buffer to send.
+ * @param[in] nbytes The number of bytes to send.
+ * @return 0 if all the bytes were sent, -1 otherwise.
+ *
+ * Write exactly @p nbytes from @p buf to the TCP connection represented by
+ * @p conn.
+ *
+ * This function will treat a partial write as an error and return -1.
+ *
+ * If a timeout has been set, this function will wait for at most
+ * `conn.send_timeout` milliseconds in the event of an unwritable socket before
+ * retrying once again. If the socket still does not become writable, the
+ * function returns zero.
+ *
+ * The timeout can be set using `zt_server_set_send_timeout()`.
+ */
+int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
+                       size_t nbytes) {
+  ssize_t nwritten = 0;
+
+  if (unlikely(!conn || !buf || !nbytes))
+    return -1;
+
+  while (nbytes) {
+    ssize_t n = send(conn->sockfd, buf, nbytes, 0);
+
+    if (n > 0) {
+      nwritten += n;
+
+      if ((size_t)n >= nbytes)
+        return 0; /* sent all nbytes */
+
+      nbytes -= n;
+      buf += n;
+    } else if (conn->send_timeout && (errno == EAGAIN)) {
+      if (!zt_tcp_io_waitfor_write(conn->sockfd, conn->send_timeout))
+        return -1;
+    } else {
+      return -1;
+    }
+  }
+}
+
+/**
+ * @param[in] conn The server connection context.
+ * @param[out] buf The buffer to read into.
+ * @param[in] nbytes The length of the buffer.
+ * @param[out] pending Set to `true` if there is more data to be read, `false`
+ * otherwise.
+ * @return Number of bytes read, or -1 on error.
+ *
+ * Read a maximum of @p nbytes bytes from the TCP connection represented by
+ * @p conn into the output buffer @p buf.
+ *
+ * If there is still data to be read on the socket, the function will set
+ * @p pending to `true`. The remaining data can be read by calling the function
+ * again.
+ *
+ * Note: It is important to check how many bytes were actually read.
+ *
+ * If a timeout has been set, this function will wait for at most
+ * `conn.recv_timeout` milliseconds till there is data to read on the socket.
+ * If the socket does not become "readable" within this time, the function
+ * returns the number of bytes read.
+ *
+ * The timeout can be set using `zt_server_set_recv_timeout()`.
+ */
+ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
+                           size_t nbytes, bool *pending) {
+  ssize_t nread;
+
+  if (unlikely(!conn || !buf || !nbytes))
+    return -1;
+
+  nread = 0;
+  while ((size_t)nread < nbytes) {
+    ssize_t n = recv(conn->sockfd, buf + nread, nbytes - nread, 0);
+
+    if (n == 0) {
+      PRINTERROR("Unexpected socket shutdown by peer");
+      return -1;
+    }
+
+    if (n > 0) {
+      nread += n;
+    } else if (conn->recv_timeout && (errno == EAGAIN)) {
+      if (!zt_tcp_io_waitfor_read(conn->sockfd, conn->recv_timeout))
+        return nread;
+    } else {
+      return -1;
+    }
+  }
+
   if (pending) {
     if (zt_tcp_io_waitfor_read(conn->sockfd, 0))
       *pending = true;

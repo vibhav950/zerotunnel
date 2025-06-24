@@ -2,7 +2,6 @@
 #define __CONN_DEFS_H__
 
 #include "common/defines.h"
-#include "client.h"
 #include "io.h"
 
 #include <sys/socket.h>
@@ -30,7 +29,7 @@
 #define ZT_CLIENT_TIMEOUT_SEND_DEFAULT  5000U   /* Server send() timeout (msec) */
 #define ZT_CLIENT_TIMEOUT_RECV_DEFAULT  5000U   /* Server recv() timeout (msec) */
 
-#define CLIENT_RESOLVE_RETRIES          5   /* Host resolution retries */
+#define CLIENT_RESOLVE_RETRIES          5       /* Host resolution retries */
 
 typedef enum {
   MSG_HANDSHAKE   = (1 << 0), /* Handshake message type */
@@ -42,8 +41,8 @@ typedef enum {
 
 typedef uint8_t zt_msg_type_t;
 
-/** end-of-padding marker */
-#define MSG_PADDING_END                         0x01
+/** message data end marker */
+#define MSG_END                                 0x01
 
 /** size of message header */
 #define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
@@ -51,11 +50,11 @@ typedef uint8_t zt_msg_type_t;
 /** size of msg suffix */
 #define ZT_MSG_SUFFIX_SIZE                      32UL
 
-/** size of `msg.raw[]` */
-#define ZT_MSG_MAX_RAW_SIZE                     (1UL << 17)
-
 /** size of max `msg.data[]` */
-#define ZT_MAX_TRANSFER_SIZE                    (ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE - ZT_MSG_SUFFIX_SIZE - 1)
+#define ZT_MAX_TRANSFER_SIZE                    (1UL << 17)
+
+/** size of `msg.raw[]` */
+#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MSG_HEADER_SIZE + ZT_MAX_TRANSFER_SIZE + ZT_MSG_SUFFIX_SIZE + 1)
 
 typedef struct _zt_msg_st {
   union {
@@ -121,11 +120,5 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode);
 bool zt_tcp_io_waitfor_read(int sockfd, timediff_t timeout_msec);
 
 bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec);
-
-int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
-                       size_t nbytes);
-
-ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
-                           size_t nbytes, bool *pending);
 
 #endif /* __CONN_DEFS_H__ */

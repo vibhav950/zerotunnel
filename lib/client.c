@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -439,13 +441,10 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
 
 /**
  * @param[in] conn The client connection context.
- * @param[in] aad The additional authenticated data.
- * @param[in] aad_len The length of the additional authenticated data.
  * @return An `error_t` status code.
  *
- * Send data present in `conn->msgbuf->data` to the peer. This function will
- * encrypt the payload before sending it if the client is in the
- * `CLIENT_TRANSFER` state whereas handshake messages are sent as-is.
+ * Send the message present in `conn->msgbuf` to the peer. All messages with
+ * application-level payloads are encrypted.
  *
  * The caller must indicate the type of message by setting the `msgbuf->type`
  * field; failing to do so would result in a protocol violation/failure.
@@ -453,68 +452,51 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
  * If a failure occurs before all of the `conn->msgbuf->len` bytes of data are
  * sent (either because of a timeout or other error), the function returns an
  * `ERR_TCP_SEND`.
- *
- * The @p aad and @p aad_len arguments are ignored if the client state is not
- * `CLIENT_TRANSFER`.
  */
-static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
-                           size_t aad_len) {
+static error_t client_send(zt_client_connection_t *conn) {
   error_t ret;
-  ssize_t tosend, outlen, len;
-  size_t msglen, padding;
+  size_t len, tosend, taglen;
   uint8_t *rawptr;
+  bool is_encrypted;
 
   ASSERT(conn);
   ASSERT(conn->state > CLIENT_CONN_INIT && conn->state < CLIENT_DONE);
   ASSERT(conn->msgbuf);
-  ASSERT(!aad_len || aad); /* can't have `aad == NULL` when `aad_len > 0` */
 
   if (zt_msg_data_len(conn->msgbuf) > ZT_MAX_TRANSFER_SIZE) {
-    PRINTERROR("message too large (%zu bytes)", zt_msg_data_len(conn->msgbuf));
+    PRINTERROR("message data too large (%zu bytes)",
+               zt_msg_data_len(conn->msgbuf));
     return ERR_REQUEST_TOO_LARGE;
   }
 
-  rawptr = zt_msg_raw_ptr(conn->msgbuf);
-  msglen = zt_msg_data_len(conn->msgbuf);
+  is_encrypted = (zt_msg_type(conn->msgbuf) != MSG_HANDSHAKE);
 
-  padding = 0;
-  if (config.config_length_obfuscation) {
-    (void)vcry_aead_tag_len(&len);
-    padding =
-        config.padding_factor - ((ZT_MSG_HEADER_SIZE + msglen + 2 * len + 1) &
-                                 (config.padding_factor - 1));
+  len = zt_msg_data_len(conn->msgbuf);
+
+  rawptr = zt_msg_data_ptr(conn->msgbuf);
+  rawptr[len++] = MSG_END; /* end of data */
+
+  if ((conn->state == CLIENT_TRANSFER) && config.config_length_obfuscation) {
+    size_t padding;
+
+    vcry_get_aead_tag_len(&taglen);
+
+    padding = (len - 1) & (config.padding_factor - 1);
+    zt_memset(rawptr + len, 0x00, padding); // FIX: possible side-channel?
+    len += padding;
   }
 
-  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
-    outlen = ZT_MSG_MAX_RAW_SIZE;
+  zt_msg_set_len(conn->msgbuf, len); /* update length in header */
 
-    /** encrypt msg header */
-    len = ZT_MSG_HEADER_SIZE;
-    if ((ret = vcry_aead_encrypt(rawptr, len, aad, aad_len, rawptr, &outlen)) !=
+  if (is_encrypted) {
+    if ((ret = vcry_aead_encrypt(rawptr + ZT_MSG_HEADER_SIZE, len, rawptr,
+                                 ZT_MSG_HEADER_SIZE, rawptr, &tosend)) !=
         ERR_SUCCESS) {
-      PRINTERROR("failed to encrypt %zu bytes", len);
+      PRINTERROR("encryption failed");
       return ret;
     }
-    tosend = outlen;
-
-    if (padding) {
-      uint8_t *p = rawptr + tosend;
-      zt_memmove(p + padding + 1, p, msglen);
-      zt_memzero(p, padding);
-      p[padding] = MSG_PADDING_END;
-      tosend += padding + 1;
-    }
-
-    /** encrypt msg payload */
-    len = zt_msg_data_len(conn->msgbuf);
-    if ((ret = vcry_aead_encrypt(rawptr + tosend, len, aad, aad_len,
-                                 rawptr + tosend, &outlen)) != ERR_SUCCESS) {
-      PRINTERROR("failed to encrypt %zu bytes", len);
-      return ret;
-    }
-    tosend += outlen;
   } else {
-    tosend = zt_msg_data_len(conn->msgbuf) + ZT_MSG_HEADER_SIZE;
+    tosend = len + ZT_MSG_HEADER_SIZE;
   }
 
   if (zt_client_tcp_send(conn, rawptr, tosend) != 0) {
@@ -531,62 +513,46 @@ static error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
 /**
  * @param[in] conn The client connection context.
  * @param[in] expect The expected message type.
- * @param[in] aad The additional authenticated data.
- * @param[in] aad_len The length of the additional authenticated data.
  * @return An `error_t` status code.
  *
  * Receive a message from the peer and store it in `conn->msgbuf`.
  *
- * The type of the recieved message will be extracted form offset 0 of the raw
- * buffer, and must match @p expect. Additionally, the type is stored in
- * `conn->msgbuf->type`.
+ * The type of the message (resulting `conn->msgbuf->type`) must match
+ * @p expect.
  *
- * If the client is in the `CLIENT_TRANSFER` state, the data is decrypted before
- * being returned to the caller. Handshake messages are returned as-is.
+ * The amount of payload data to be read is indicated by a fixed-size header
+ * prefix. If a failure occurs before all of this payload data is received
+ * (either because of a timeout or other error), the function returns an error
+ * code and sets the message length to 0.
  *
- * If the client state is not `CLIENT_TRANSFER`, the @p aad and @p aad_len
- * arguments are ignored.
+ * Encrypted payload data is decrypted in-place in `conn->msgbuf->data[]`.
  */
-static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
-                           const uint8_t *aad, size_t aad_len) {
+static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
   error_t ret = ERR_SUCCESS;
-  ssize_t nread, outlen;
-  size_t msglen, taglen;
-  uint8_t *buf;
+  ssize_t nread;
+  size_t datalen, taglen;
+  uint8_t *rawptr, *dataptr;
+  bool is_encrypted;
 
   ASSERT(conn);
-  ASSERT(conn->state > CLIENT_CONN_INIT && conn->state < CLIENT_DONE);
+  ASSERT(conn->state > CLIENT_CONN_INIT && conn->state <= CLIENT_DONE);
   ASSERT(conn->msgbuf);
 
-  buf = zt_msg_raw_ptr(conn->msgbuf);
-
-  (void)vcry_get_aead_tag_len(&taglen);
-  taglen = ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE))
-               ? taglen
-               : 0;
+  rawptr = zt_msg_raw_ptr(conn->msgbuf);
+  dataptr = zt_msg_data_ptr(conn->msgbuf);
 
   /** Read the message header */
-  if ((nread = zt_client_tcp_recv(conn, buf, ZT_MSG_HEADER_SIZE + taglen,
-                                  NULL)) < 0) {
+  nread = zt_client_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
+  if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
                strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
-
-  if (nread != ZT_MSG_HEADER_SIZE + taglen) {
+  if (nread != ZT_MSG_HEADER_SIZE) {
     PRINTERROR("received malformed header");
     ret = ERR_INVALID_DATUM;
     goto out;
-  }
-
-  /** Decrypt the header if required */
-  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
-    if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
-        ERR_SUCCESS) {
-      PRINTERROR("failed to decrypt %zu bytes", nread);
-      goto out;
-    }
   }
 
   if (!msg_type_isvalid(zt_msg_type(conn->msgbuf) ||
@@ -597,36 +563,36 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect,
     goto out;
   }
 
-  /**
-   * Read the message payload
-   */
+  is_encrypted = (zt_msg_type(conn->msgbuf) != MSG_HANDSHAKE);
 
-  msglen = zt_msg_data_len(conn->msgbuf) + taglen;
+  if (is_encrypted)
+    vcry_get_aead_tag_len(&taglen);
+  else
+    taglen = 0;
+  datalen = zt_msg_data_len(conn->msgbuf) + taglen;
 
-  if ((nread = zt_client_tcp_recv(conn, buf + ZT_MSG_HEADER_SIZE, msglen,
-                                  NULL)) < 0) {
+  /** Read message payload */
+  nread = zt_client_tcp_recv(conn, dataptr, datalen, NULL);
+  if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
                strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
-
-  if (nread != msglen) {
+  if (nread != datalen) {
     PRINTERROR("received only %zu bytes of payload (expected %zu bytes)", nread,
-               msglen);
+               datalen);
     ret = ERR_INVALID_DATUM;
     goto out;
   }
 
   /* Decrypt the payload if required */
-  if ((conn->state > CLIENT_AUTH_PONG) && (conn->state < CLIENT_DONE)) {
-    buf = zt_msg_data_ptr(conn->msgbuf);
-    if ((ret = vcry_aead_decrypt(buf, nread, aad, aad_len, buf, &outlen)) !=
-        ERR_SUCCESS) {
-      PRINTERROR("failed to decrypt %zu bytes", nread);
+  if (is_encrypted) {
+    if ((ret = vcry_aead_decrypt(dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
+                                 dataptr, &nread)) != ERR_SUCCESS) {
+      PRINTERROR("decryption failed");
       goto out;
     }
-    nread = outlen;
   }
 
 out:
@@ -737,7 +703,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
       zt_msg_set_len(conn->msgbuf, sndbuf_len + AUTHID_LEN_BYTES);
       zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
 
-      if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+      if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PONG);
@@ -748,7 +714,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
       uint8_t *rcvbuf, *sndbuf;
       size_t rcvlen, sndlen;
 
-      if ((ret = client_recv(conn, MSG_HANDSHAKE, NULL, 0)) != ERR_SUCCESS)
+      if ((ret = client_recv(conn, MSG_HANDSHAKE)) != ERR_SUCCESS)
         goto cleanup;
 
       rcvlen = zt_msg_get_len(conn->msgbuf);
@@ -795,7 +761,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
       }
 
       /* send our verify-initiation message to the peer */
-      if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+      if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
@@ -823,7 +789,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
                   sizeof(zt_fileinfo_t));
       memzero(&fileinfo, sizeof(zt_fileinfo_t));
 
-      if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS) {
+      if ((ret = client_send(conn)) != ERR_SUCCESS) {
         zt_fio_close(fileptr);
         goto cleanup;
       }
@@ -845,7 +811,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
 
         zt_msg_set_len(conn->msgbuf, nread);
 
-        if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS) {
+        if ((ret = client_send(conn)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
           goto cleanup;
         }
@@ -865,7 +831,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
     case CLIENT_DONE: {
       zt_msg_make(conn->msgbuf, MSG_DONE, NULL, 0);
 
-      if ((ret = client_send(conn, NULL, 0)) != ERR_SUCCESS)
+      if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_NONE);

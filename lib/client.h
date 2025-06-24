@@ -3,12 +3,6 @@
 
 #include "conn_defs.h"
 
-#include <netdb.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-
 typedef enum {
   CLIENT_NONE = 0,
   CLIENT_CONN_INIT,
@@ -25,13 +19,7 @@ typedef struct _zt_client_connection_st {
     state;
   struct zt_addrinfo
     *ai_estab;
-  struct sockaddr_in
-    *addr_ipv4;
-#ifdef USE_IPV6
-  struct sockaddr_in6
-    *addr_ipv6;
-#endif
-#if 1 // USE_SIGACT_TIMEOUT
+#if 1 //def USE_SIGACT_TIMEOUT
   zt_timeval_t
     created_at;
 #endif
@@ -58,21 +46,12 @@ typedef struct _zt_client_connection_st {
 } zt_client_connection_t;
 // clang-format on
 
-error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
-                                       struct zt_addrinfo **ai_list,
-                                       timediff_t timeout_sec);
-
-error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
-                            struct zt_addrinfo *ai_list);
-
-error_t zt_client_tcp_conn1(zt_client_connection_t *conn);
-
-error_t client_send(zt_client_connection_t *conn, const uint8_t *aad,
-                    size_t aad_len);
-
-error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t type,
-                    const uint8_t *aad, size_t aad_len);
-
 error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done);
+
+int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
+                       size_t nbytes);
+
+ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
+                           size_t nbytes, bool *pending);
 
 #endif /* __CLIENT_H__ */

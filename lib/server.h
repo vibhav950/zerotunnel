@@ -6,7 +6,8 @@
 typedef enum {
   SERVER_NONE = 0,
   SERVER_CONN_INIT,
-  SERVER_AUTH_WAIT,
+  SERVER_AUTH_REPLY,
+  SERVER_AUTH_COMPLETE,
   SERVER_COMMIT,
   SERVER_TRANSFER,
   SERVER_DONE
@@ -18,6 +19,8 @@ typedef struct _zt_server_connection_st {
     state;
   struct zt_addrinfo
     *ai_estab;        /* established address */
+  zt_msg_t
+    *msgbuf;          /* message buffer */
   char
     *hostname;        /* stated hostname string; if NULL, defaults to 0.0.0.0 */
     *port;            /* port to listen on; if NULL, defaults to `ZT_DEFAULT_LISTEN_PORT` */
@@ -32,5 +35,11 @@ typedef struct _zt_server_connection_st {
     fl_live_read;     /* enable live read mode */
 } zt_server_connection_t;
 // clang-format on
+
+int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
+                       size_t nbytes);
+
+ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
+                           size_t nbytes, bool *pending);
 
 #endif /* __SERVER_H__ */

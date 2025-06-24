@@ -4,9 +4,13 @@
 #endif
 #include "server.h"
 
+#include "vcry.h"
+#include "ztlib.h"
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/types.h>
@@ -22,7 +26,8 @@
 static const char serverstate_names[][20] = {
     [SERVER_NONE] = "SERVER_NONE",
     [SERVER_CONN_INIT] = "SERVER_CONN_INIT",
-    [SERVER_AUTH_WAIT] = "SERVER_AUTH_WAIT",
+    [SERVER_AUTH_REPLY] = "SERVER_AUTH_REPLY",
+    [SERVER_AUTH_COMPLETE] = "SERVER_AUTH_COMPLETE",
     [SERVER_COMMIT] = "SERVER_COMMIT",
     [SERVER_TRANSFER] = "SERVER_TRANSFER",
     [SERVER_DONE] = "SERVER_DONE"};
@@ -338,7 +343,164 @@ error_t zt_server_tcp_accept(zt_server_connection_t *conn) {
   return ERR_SUCCESS;
 }
 
-static error_t server_read(zt_server_connection_t *conn, const uint8_t *aad, size_t aad_len) {
+/**
+ * @param[in] conn The client connection context.
+ * @return An `error_t` status code.
+ *
+ * Send the message present in `conn->msgbuf` to the peer. All messages with
+ * application-level payloads are encrypted.
+ *
+ * The caller must indicate the type of message by setting the `msgbuf->type`
+ * field; failing to do so would result in a protocol violation/failure.
+ *
+ * If a failure occurs before all of the `conn->msgbuf->len` bytes of data are
+ * sent (either because of a timeout or other error), the function returns an
+ * `ERR_TCP_SEND`.
+ */
+static error_t server_send(zt_server_connection_t *conn) {
+  error_t ret;
+  size_t len, tosend, taglen;
+  uint8_t *rawptr;
+  bool is_encrypted;
 
+  ASSERT(conn);
+  ASSERT(conn->state > SERVER_CONN_INIT && conn->state < SERVER_DONE);
+  ASSERT(conn->msgbuf);
+
+  if (zt_msg_data_len(conn->msgbuf) > ZT_MAX_TRANSFER_SIZE) {
+    PRINTERROR("message data too large (%zu bytes)",
+               zt_msg_data_len(conn->msgbuf));
+    return ERR_REQUEST_TOO_LARGE;
+  }
+
+  is_encrypted = (zt_msg_type(conn->msgbuf) != MSG_HANDSHAKE);
+
+  len = zt_msg_data_len(conn->msgbuf);
+
+  rawptr = zt_msg_data_ptr(conn->msgbuf);
+  rawptr[len++] = MSG_END; // data END marker
+
+  zt_msg_set_len(conn->msgbuf, len); /* update length in header */
+
+  if (is_encrypted) {
+    if ((ret = vcry_aead_encrypt(rawptr + ZT_MSG_HEADER_SIZE, len, rawptr,
+                                 ZT_MSG_HEADER_SIZE, rawptr, &tosend)) !=
+        ERR_SUCCESS) {
+      PRINTERROR("encryption failed");
+      return ret;
+    }
+  } else {
+    tosend = len + ZT_MSG_HEADER_SIZE;
+  }
+
+  if (zt_server_tcp_send(conn, rawptr, tosend) != 0) {
+    PRINTERROR("failed to send %zu bytes to peer_id=%s (%s)", tosend,
+               config.peer_id, strerror(errno));
+    return ERR_TCP_SEND;
+  }
+
+  zt_msg_set_len(conn->msgbuf, 0);
+
+  return ERR_SUCCESS;
 }
 
+/**
+ * @param[in] conn The server connection context.
+ * @param[in] expect The expected message type.
+ * @return An `error_t` status code.
+ *
+ * Receive a message from the peer. The caller must indicate the expected
+ * message type by passing it as the `expect` parameter; failing to do so would
+ * result in a protocol violation/failure.
+ *
+ * The amount of payload data to be read is indicated by a fixed-size header
+ * prefix. If a failure occurs before all of this payload data is received
+ * (either because of a timeout or other error), the function returns an error
+ * code and sets the message length to 0.
+ *
+ * Encrypted payload data is decrypted in-place in `conn->msgbuf->data[]`.
+ */
+static error_t server_recv(zt_server_connection_t *conn, zt_msg_type_t expect) {
+  error_t ret = ERR_SUCCESS;
+  ssize_t nread;
+  size_t taglen, datalen, i;
+  uint8_t *rawptr, *dataptr;
+  bool is_encrypted;
+
+  ASSERT(conn);
+  ASSERT(conn->state > SERVER_CONN_INIT && conn->state <= SERVER_DONE);
+  ASSERT(conn->msgbuf);
+
+  rawptr = zt_msg_raw_ptr(conn->msgbuf);
+  dataptr = zt_msg_data_ptr(conn->msgbuf);
+
+  /** read the msg header */
+  nread = zt_server_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
+  if (nread < 0) {
+    PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
+               strerror(errno));
+    ret = ERR_TCP_RECV;
+    goto out;
+  }
+  if (nread != ZT_MSG_HEADER_SIZE) {
+    PRINTERROR("received malformed header");
+    ret = ERR_INVALID_DATUM;
+    goto out;
+  }
+
+  if (!msg_type_isvalid(zt_msg_type(conn->msgbuf)) ||
+      (expect != zt_msg_type(conn->msgbuf))) {
+    PRINTERROR("invalid message type %u (expected %u)",
+               zt_msg_type(conn->msgbuf), expect);
+    ret = ERR_INVALID_DATUM;
+    goto out;
+  }
+
+  is_encrypted = (zt_msg_type(conn->msgbuf) != MSG_HANDSHAKE);
+
+  if (is_encrypted)
+    vcry_get_aead_tag_len(&taglen);
+  else
+    taglen = 0;
+  datalen = zt_msg_data_len(conn->msgbuf) + taglen;
+
+  /** read msg payload */
+  nread = zt_server_tcp_recv(conn, dataptr, datalen, NULL);
+  if (nread < 0) {
+    PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
+               strerror(errno));
+    ret = ERR_TCP_RECV;
+    goto out;
+  }
+  if (nread != datalen) {
+    PRINTERROR("received only %zu bytes of payload (expected %zu bytes)", nread,
+               datalen);
+    ret = ERR_INVALID_DATUM;
+    goto out;
+  }
+
+  /** decrypt encrypted payload */
+  if (is_encrypted) {
+    if ((ret = vcry_aead_decrypt(rawptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
+                                 rawptr, &nread)) != ERR_SUCCESS) {
+      PRINTERROR("decryption failed");
+      goto out;
+    }
+  }
+
+  /**
+   * Remove message padding - this loop intentionally iterates through
+   * the entire message payload to avoid leaking the padding length due
+   * to timing differences
+   */
+  for (i = nread; i > 0; --i)
+    if (dataptr[i - 1] == MSG_END)
+      nread = i - 1;
+
+out:
+  if (unlikely(ret))
+    zt_msg_set_len(conn->msgbuf, 0);
+  else
+    zt_msg_set_len(conn->msgbuf, nread);
+  return ret;
+}
