@@ -2,6 +2,7 @@
 #include "common/b64.h"
 #include "common/defines.h"
 #include "common/hex.h"
+#include "common/ztver.h"
 #include "crypto/sha256.h"
 #include "lib/client.h"
 #include "ztlib.h"
@@ -122,7 +123,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   uint8_t *idhash;
   uint8_t bufx1[400] = {0};
   size_t bufsize = 0;
-  ssize_t nread, pwlen;
+  ssize_t nread, pwlen, enc_len;
   passwd_id_t pwid_cmp;
   bool found = false;
 
@@ -171,11 +172,6 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
     if (!*linep || *linep == '#')
       continue; // skip empty and comment lines
 
-    // strip trailing newline characters
-    char *end = buf + nread - 1;
-    while (end > buf && (*end == '\n' || *end == '\r'))
-      *end-- = '\0';
-
     // read "::<idhash>"
     if (*linep && !found) {
       if (line_read_hex(linep, "::", bufx1) !=
@@ -204,21 +200,44 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
         continue; // skip passwords marked used
 
       // position after the "x" or " " marker
+      char *marker = linep + 1;
       linep += 2;
 
-      if (!(linep = strchr(linep, ':')))
-        continue;
-
-      char *bufx2;
-      if ((pwlen = line_read_decode_b64(linep, ":", &bufx2, NULL)) < 0) {
-        free(bufx2);
+      char *bufx2 = NULL;
+      if ((pwlen = line_read_decode_b64(linep, ":", &bufx2, &enc_len)) < 0) {
+        zt_free(bufx2);
         continue;
       }
 
       *passwd = zt_strmemdup(bufx2, pwlen);
+      if (!*passwd)
+        pwid_cmp = -1;
       memzero(bufx2, pwlen);
-      free(bufx2);
-      break;
+      zt_free(bufx2);
+      if (!*passwd)
+        break;
+
+      // mark password used
+      *marker = 'x';
+      linep += 1; // skip the ':', password starts here
+      zt_memset(linep, '0', enc_len);
+
+      /* Delete this password from the password file; return failure if
+       * this write fails to prevent a password from being used twice */
+      if (fseek(fp, -nread, SEEK_CUR) != 0)
+        pwid_cmp = -1;
+      if (fwrite(buf, 1, nread, fp) != nread)
+        pwid_cmp = -1;
+      if (fflush(fp) != 0)
+        pwid_cmp = -1;
+
+      if (pwid_cmp == -1) {
+        memzero(*passwd, strlen(*passwd));
+        zt_free(*passwd);
+        *passwd = NULL;
+      }
+
+      break; // match found
     }
   }
 
@@ -314,26 +333,24 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
       if (!found || (pwid != -1 && pwid_cmp != pwid))
         continue;
 
-      char *marker_pos = strchr(linep, ':');
-      if (!marker_pos || *(marker_pos + 2) != ':')
+      linep = strchr(linep, ':');
+      if (!linep || *(linep + 2) != ':')
         continue;
-      marker_pos++;
 
+      // mark password used
+      *(linep + 1) = 'x';
       // position after the "x" or " " marker
-      char *pw_start = strchr(marker_pos, ':');
-      if (!pw_start)
-        continue;
+      linep += 2;
 
-      char *bufx2;
+      char *bufx2 = NULL;
       ssize_t pwlen, enc_len;
-      if ((pwlen = line_read_decode_b64(pw_start, ":", &bufx2, &enc_len)) < 0) {
+      if ((pwlen = line_read_decode_b64(linep, ":", &bufx2, &enc_len)) < 0) {
         zt_free(bufx2);
         continue;
       }
 
-      *marker_pos = 'x';
-      pw_start++;
-      memset(pw_start, '0', enc_len);
+      linep += 1; // skip the ':', password starts here
+      zt_memset(linep, '0', enc_len);
 
       fseek(fp, -(nread), SEEK_CUR);
       fwrite(buf, 1, nread, fp);
@@ -380,7 +397,7 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
     break;
   case KAPPA_AUTHTYPE_1:
     if ((id = zt_auth_passwd_load(passwddb_file, peer_id, id, &pw)) < 0) {
-      PRINTERROR("Found no matching password entries (peer_id=%s, pwid=%d)",
+      PRINTERROR("found no matching password entries (peer_id=%s, pwid=%d)",
                  peer_id, id);
       goto err;
     }
@@ -422,7 +439,6 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
   }
 
   switch (auth_type) {
-  /* One-time use passwords */
   case KAPPA_AUTHTYPE_0:
   case KAPPA_AUTHTYPE_2:
     if (!(pw = auth_passwd_prompt("Enter password: ", 0)))
@@ -481,8 +497,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     goto cleanup;
   }
 
-  // fprintf(fp, "zerotunnel v%s\r\n", ZEROTUNNEL_VERSION_STRING);
-  fprintf(fp, "# zerotunnel v1.0.1\r\n");
+  fprintf(fp, "# zerotunnel v%s\r\n", ZT_VERSION_STRING);
   fprintf(fp, "# Auto-generated password bundle\r\n", peer_id);
   fprintf(fp, "::%s%c\r\n", idhash_hex, '\0');
 
@@ -569,11 +584,10 @@ int zt_get_hostid(struct authid *authid) {
 }
 
 // cd lib
-// gcc -I../ -lbsd -lsystemd auth.c passgen.c ../random/systemrand.c
-// ../common/memzero.c \
-// ../common/mem.c ../common/x86_cpuid.c ../common/log.c ../random/rdrand.c \
-// ../common/hex.c ../common/b64.c ../crypto/sha256.c ../crypto/sha256_alg.c \
-// ../crypto/sha256_x86.c
+// gcc -I../ -lbsd -lsystemd auth.c passgen.c ../random/systemrand.c\
+// ../random/rdrand.c ../common/memzero.c ../common/mem.c ../common/x86_cpuid.c\
+// ../common/log.c ../common/hex.c ../common/b64.c ../crypto/sha256_alg.c\
+// ../crypto/sha256.c ../crypto/sha256_x86.c -D__ZTLIB_ENVIRON_SAFE_MEM=1\
 
 #include <stdio.h>
 

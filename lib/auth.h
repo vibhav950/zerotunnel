@@ -4,11 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** Length of the password string excluding null terminator */
+/** Max character length of the password string excluding NULL terminator */
 #define MAX_PASSWD_LEN 256U
 
+/** Length of the password hash in bytes */
 #define PASSWD_HASH_LEN 32U
 
+/** Length of the authid in bytes */
 #define AUTHID_LEN_BYTES 16U
 
 typedef int32_t passwd_id_t;
