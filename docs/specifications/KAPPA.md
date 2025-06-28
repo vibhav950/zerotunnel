@@ -5,7 +5,7 @@
 
 > [!CAUTION]
 >  This protocol and all its derivatives are still under development and are not recommended for use in a production environment or for securing sensitive data. Additionally, please be aware that the protocol and this document are subject to change.
-> 
+>
 >  If you have any relevant concerns or feedback for the developers, please [contact us via email]().
 
 ---
@@ -177,45 +177,44 @@ Kyber has three main operations that we are concerned with. From an abstract vie
 
 ### 3.3. The Decisional MLWE game
 
-The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and asks to determine whether a given tuple $(A, t)$ comes from a valid Module-LWE instance or is completely random. Formally, the game proceeds as follows:  
+The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and asks to determine whether a given tuple $(A, t)$ comes from a valid Module-LWE instance or is completely random. Formally, the game proceeds as follows:
 
 1. **Setup:**
-   - A challenger samples a random matrix $A \in R_q^{k \times k}$.  
-   - A secret vector $s \in R_q^k$ and an error vector $e \in R_q^k$ are drawn from a small error distribution (e.g., the centered binomial distribution $\beta_{\eta}$).  
-   - The challenger computes:
+   - A challenger samples a random matrix $A \in R_q^{k \times k}$.
+   - A secret vector $s \in R_q^k$ and an error vector $e \in R_q^k$ are drawn from a small error distribution (e.g., the centered binomial distribution $\beta_{\eta}$).
+   - The challenger then computes the following components:
+      - $t = A s + e$
+      - A random vector $t' \in R_q^k$, independent of $A$.
 
- $$t = A s + e$$
+2. **Challenge:**
 
-   - Alternatively, the challenger picks a random vector $t' \in R_q^k$, independent of $A$.  
+   - The challenger picks a random bit $b \in \{0,1\}$.
+   - If $b = 0$, it sends $(A, t)$ (a real MLWE instance).
+   - If $b = 1$, it sends $(A, t')$ (a random instance).
 
-2. **Challenge:**  
-   - The challenger picks a random bit $b \in \{0,1\}$.  
-   - If $b = 0$, it sends $(A, t)$ (a real MLWE instance).  
-   - If $b = 1$, it sends $(A, t')$ (a random instance).  
-
-3. **Required:**  
-   - The adversary must guess whether $b = 0$ or $b = 1$.  
-   - If the adversary can distinguish between the two distributions with non-negligible probability, it breaks the MLWE assumption.  
+3. **Required:**
+   - The adversary must guess whether $b = 0$ or $b = 1$.
+   - If the adversary can distinguish between the two distributions with non-negligible probability, it breaks the MLWE assumption.
 
 ### 3.4. Decisional MLWE instance in Kyber
 
-1. **Key Generation**  
-   - The matrix $A$ is publicly known and randomly sampled from $R_q^{k \times k}$.  
-   - A small secret vector $s$ and an error vector $e$ are sampled from **$\beta_{\eta}$**.  
-   - The public key is computed as:  
+1. **Key Generation**
+  - The matrix $A$ is publicly known and randomly sampled from $R_q^{k \times k}$.
+  - A small secret vector $s$ and an error vector $e$ are sampled from **$\beta_{\eta}$**.
+  - The public key is computed as:
 
- $$(A, t) = key \textunderscore gen(A, s, e) = A \cdot s + e$$
+    $$(A, t) = key \textunderscore gen(A, s, e) = A \cdot s + e$$
 
- This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $`\rho \in \{ 0, 1 \} ^{256}`$ is a randomly generated seed used to deterministically form the public matrix $A$ in the NTT domain via rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.
+    This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $`\rho \in \{ 0, 1 \} ^{256}`$ is a randomly generated seed used to deterministically form the public matrix $A$ in the NTT domain via rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.
 
- Therefore, the encapsulation key is given by:  
+    Therefore, the encapsulation key is given by:
 
- $$(\rho, t) = key \textunderscore gen(A, s, e), \text{where } A = \text{SampleMatrixNTT}(\rho)$$
+    $$(\rho, t) = key \textunderscore gen(A, s, e), \text{where } A = \text{SampleMatrixNTT}(\rho)$$
 
-2. **Indistinguishability argument:**  
-   - If $(A, t)$ is an MLWE instance, then $t$ has been derived from the secret vector $s$ and error vector $e$, making its structure non-random but masked by small noise.  
-   - If $(A, t')$ is a "random" tuple, then $t'$ is chosen independently of $A$ and does not contain structured secrets.  
-   - The security of Kyber relies on the fact that no efficient algorithm can distinguish between these two cases  with a non-negligible probability, i.e., decide whether $t'$ is related to $A$ (that is, $t ' = t$) given an arbitrary tuple $(A,t') \in R_q^{k \times k} \times R_q^k$.
+2. **Indistinguishability argument:**
+  - If $(A, t)$ is an MLWE instance, then $t$ has been derived from the secret vector $s$ and error vector $e$, making its structure non-random but masked by small noise.
+  - If $(A, t')$ is a "random" tuple, then $t'$ is chosen independently of $A$ and does not contain structured secrets.
+  - The security of Kyber relies on the fact that no efficient algorithm can distinguish between these two cases with a non-negligible probability, i.e., decide whether $t'$ is related to $A$ (that is, $t ' = t$) given an arbitrary tuple $(A,t') \in R_q^{k \times k} \times R_q^k$.
 
 Thus, the MLWE-based public key in Kyber is computationally indistinguishable from a random vector with elements in $R_q$, ensuring security under the Decisional MLWE assumption. In the remaining part of this document, the terms MLWE and DMLWE will be used interchangeably.
 
@@ -241,18 +240,18 @@ In practice, we replace the transformation $T_{pass}$ and its inverse $T_{pass}^
 
 - **Alice** encrypts her Kyber public share $(\rho, t)$ where public matrix $A = \text{SampleMatrixNTT}(\rho)$ using AES with the pre-shared key $k$:
 
- $$(\rho', t) = (\text{AES-Enc}_k(\rho),t)$$
+  $$(\rho', t) = (\text{AES-Enc}_k(\rho),t)$$
 
- She sends over the ciphertext $(\rho', t)$ to **Bob**.  
+  She sends over the ciphertext $(\rho', t)$ to **Bob**.
 
 > [!NOTE]
 > Encrypting $\rho$ essentially masks the relationship between $A$ and $t$. Due to the properties of the underlying setup, we can be certain that $t \neq A' \cdot s + e \text{, where } A'=\text{SampleMatrixNTT}(\rho ')$. However due to the DMLWE argument, this is only known to the party with possession of the private key; whereas to everybody else, the tuple $(\rho ',t)$ looks like a valid public key, since $\rho '$ is essentially a random bitstring and $t$ appears as a random vector in $R_q^k$.
 
 - **Bob** decrypts the encrypted share using the same key $k$ to retrieve the original MLWE tuple:
 
- $$(\rho, t) = (\text{AES-Dec}_k(\rho '), t)$$
+  $$(\rho, t) = (\text{AES-Dec}_k(\rho '), t)$$
 
- Since AES ciphertexts are computationally indistinguishable from ideal random byte sequences, an attacker intercepting $\rho '$ sees only random noise.
+  Since AES ciphertexts are computationally indistinguishable from ideal random byte sequences, an attacker intercepting $\rho '$ sees only random noise.
 
 ### 4.3. Protection from offline brute-force attacks
 
@@ -323,7 +322,7 @@ This is the second state in the initiator state machine.
 
 ### 5.4. Key derivation
 
-This is the third state in the initiator state machine and the second state in the responder state machine. Both Alice and Bob derive the session key with a set of common steps. This stage can be implemented as a common procedure for both roles. 
+This is the third state in the initiator state machine and the second state in the responder state machine. Both Alice and Bob derive the session key with a set of common steps. This stage can be implemented as a common procedure for both roles.
 
 Alice derives the session key by performing the following:
 
@@ -339,14 +338,13 @@ This is the fourth state in the initiator state machine and the third state in t
 
 ![](./kappa_verification.png)
 
-
 - Alice generates her proof message as follows and sends it to Bob:
 
-    _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
+  _Proof<sub>A</sub>_ = HMAC(MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"First proof message (Proof_A)"_, _K<sub>MAC</sub>_)
 
 - Bob generates his proof message as follows and sends it to Alice:
-  
-    _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
+
+  _Proof<sub>B</sub>_ = HMAC(MAX(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || MIN(_ID<sub>A</sub>_, _ID<sub>B</sub>_) || _"Second proof message (Proof_B)"_, _K<sub>MAC</sub>_)
 
 ### 5.6. Verification completion
 
@@ -360,17 +358,19 @@ If the proof messages match on both sides, Alice and Bob have derived the same s
 
 KAPPA provides three levels of security with tradeoffs in ease of storage of the master password. For each level, the active password(s) can be generated by either party but must be transferred to the peer before a handshake can be started. The three modes are listed as follows:
 
+KAPPA provides three password-authentication models offering different levels of tradeoff between security and ease of use:
+
 - **KAPPA0 - static password (least secure)**
- Authentication is done with a static pre-shared master password used over multiple handshakes. Once configured, the password must be expired and re-generated either through a timeout/TTL mechanism or manually.
+  Authentication is done with a static pre-shared master password used over multiple handshakes. This form of authentication requires parties to regularly rotate passwords for a weaker assurance of forward secrecy.
 
 - **KAPPA1 - password bundle (more secure)**
- Both parties store a preset bundle of N one-time use passwords (_Password<sub>1</sub>_, _Password<sub>2</sub>_, ..., _Password<sub>N</sub>_). The initiator randomly selects a password _Password<sub>k</sub>_ to be used for the handshake sends and deletes it from the bundle. To indicate which password needs to be picked, the initiator sends the password identifier k to the responder as part of the initial message. Using this scheme, the two peers can initiate a maximum of N handshakes total before having to re-generate the password(s).
+  Both parties store a preset bundle of N one-time use randomly generated passwords {_Password<sub>1</sub>_, _Password<sub>2</sub>_, ..., _Password<sub>N</sub>_}. The initiator selects a candidate password _Password<sub>1<=k<=N</sub>_ from this bundle to use as the master password for the current session, and sends the password identifier _k_ to the responder as part of the initial message. Both parties then delete this password from their bundles. The pair can therefore perform a maximum of N successful handshakes thereafter having to establish (a) new password(s).
 
 - **KAPPA2 - one-time password (most secure)**
- The initiator generates a new random _Password_ which will be used for one session and then erased. The application prompts the responder to enter the one-time password which is required to progress the handshake.
+  The initiator generates a new phonetic _Password_ by randomly sampling words from a pre-defined dictionary which will be used only for the current session. The application prompts the responder to enter the one-time password which is required to progress the handshake.
 
 > [!CAUTION]
-> In most cases, the security of an application using KAPPA depends on how master keys are managed outside the protocol. While KAPPA implementations shall offer a secure way for clients to generate password sets, the process of transferring master keys from the source to the target site is beyond the scope of this protocol.
+> In most cases, the security of an application using KAPPA depends on how master keys are managed outside the protocol. While KAPPA implementations shall offer a secure way for clients to generate password sets, the process of transferring master keys from the source to the target site and secure storage of a password for its lifetime are concepts beyond the scope of this specification.
 
 ## 7. Security considerations
 
@@ -388,7 +388,7 @@ The proposed scheme is resistant to such an attack by an attacker attempting to 
 
 - An attacker trying to impersonate Alice, for example, cannot efficiently verify a password guess without interacting with Bob (or Alice), and such an interaction is detectable ([section 4.3](#43-protection-from-offline-brute-force-attacks)). In order to limit this possibility of online attacks, a rate-limiting behavior must be enforced on the number of authentication attempts.
 
-### 7.2 Denial-of-Service 
+### 7.2 Denial-of-Service
 
 It is well known that most practical PAKE-like schemes are susceptible to denial-of-service (DoS) attacks. KAPPA is no exception, as it does not impose restrictions on who can initiate a handshake. In this scheme, an honest party engaged in an active handshake only aborts upon detecting an authentication failure. An adversary can exploit this by repeatedly initiating failed handshakes, forcing one or both honest parties attempting to communicate to incrementally increase the cooldown period between handshake attempts. This ultimately results in a successful DoS attack, preventing legitimate communication.
 
