@@ -13,14 +13,6 @@
 #define GCC_VERSION_AT_LEAST(major, minor) 0
 #endif
 
-#if defined(__clang__) && defined(__clang_minor__)
-#define CLANG_VERSION_AT_LEAST(major, minor)                                   \
-  ((__clang__ > (major)) ||                                                    \
-   ((__clang__ == (major)) && (__clang_minor__ >= (minor))))
-#else
-#define CLANG_VERSION_AT_LEAST(major, minor) 0
-#endif
-
 #if defined(__GNUC__) && !defined(__clang__)
 
 #if GCC_VERSION_AT_LEAST(3, 1)
@@ -67,7 +59,7 @@
 #define ATTRIBUTE_NOTHROW
 #endif
 
-#elif defined(__clang__) /* __GNUC__ && !__clang__ */
+#else /* defined(__GNUC__) && !defined(__clang__) */
 
 #define ATTRIBUTE_ALWAYS_INLINE
 #define ATTRIBUTE_NORETURN
@@ -85,6 +77,8 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
+
+#include <errno.h>
 
 #include "endianness.h"
 
@@ -184,14 +178,28 @@ const char *zt_error_str(error_t err);
  * Logging routines
  */
 
+#if GCC_VERSION_AT_LEAST(2, 5)
+extern void zt_debug_vprintf(const char *func, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+
+extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...)
+    __attribute__((format(printf, 3, 4)));
+
+extern void zt_info_vprintf(const char *file, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+
+extern void zt_error_vprintf_exit(const char *f, int ln, const char *fmt, ...)
+    __attribute__((noreturn, format(printf, 3, 4)));
+
+extern void zt_warn_vprintf(const char *fmt, ...)
+    __attribute__((format(printf, 1, 2)));
+#else
 extern void zt_debug_vprintf(const char *func, const char *fmt, ...);
-
 extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...);
-
-extern void zt_info_vprintf(const char *fmt, ...);
-
-extern void zt_error_vprintf_exit(const char *file, int line, const char *fmt,
-                                  ...);
+extern void zt_info_vprintf(const char *file, const char *fmt, ...);
+extern void zt_error_vprintf_exit(const char *f, int ln, const char *fmt, ...);
+extern void zt_warn_vprintf(const char *fmt, ...);
+#endif
 
 #ifdef ASSERT
 #undef ASSERT
@@ -209,19 +217,22 @@ extern void zt_error_vprintf_exit(const char *file, int line, const char *fmt,
   } while (0)
 
 #else /* !defined(DEBUG) */
+
 #define PRINTDEBUG(fmt, ...)
-#define ASSERT(cond)                                                           \
-  do {                                                                         \
-    (void)(cond);                                                              \
-  } while (0) /* NOP */
+
+#define ASSERT(cond) (cond)
+
 #endif
 
 #define PRINTERROR(fmt, ...)                                                   \
   zt_error_vprintf(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define PRINTINFO(fmt, ...) zt_info_vprintf(fmt, ##__VA_ARGS__)
+#define PRINTFATAL(fmt, ...)                                                   \
+  zt_error_vprintf_exit(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define PRINTWARN(fmt, ...) PRINTERROR("[WARNING] " fmt, ##__VA_ARGS__)
+#define PRINTINFO(fmt, ...) zt_info_vprintf(__func__, fmt, ##__VA_ARGS__)
+
+#define PRINTWARN(fmt, ...) zt_warn_vprintf(fmt, ##__VA_ARGS__)
 
 #if defined(_MSC_VER)
 #include <intrin.h> // __fastfail
@@ -423,17 +434,17 @@ char *zt_strmemdup(const void *m, size_t n);
 #define zt_memcpy(dst, src, len) zt_mem_memcpy(dst, src, len)
 #define zt_memmove(dst, src, len) zt_mem_memmove(dst, src, len)
 #define zt_memcmp(a, b, len) zt_mem_memcmp(a, b, len)
-#else // defined(USE_SAFE_MEM)
+#else /* defined(USE_SAFE_MEM) */
 #define zt_malloc(size) malloc(size)
 #define zt_calloc(nmemb, size) calloc(nmemb, size)
 #define zt_realloc(ptr, size) realloc(ptr, size)
 #define zt_free(ptr) free(ptr)
 #define zt_memset(mem, ch, len) memset(mem, ch, len)
-#define zt_memzero(mem, len) zt_mem_memset(mem, 0, len)
+#define zt_memzero(mem, len) memset(mem, 0, len)
 #define zt_memcpy(dst, src, len) memcpy(dst, src, len)
 #define zt_memmove(dst, src, len) memmove(dst, src, len)
 #define zt_memcmp(a, b, len) memcmp(a, b, len)
-#endif // !defined(USE_SAFE_MEM)
+#endif /* !defined(USE_SAFE_MEM) */
 
 #include "timeout.h" // transitive #include "time_utils.h"
 

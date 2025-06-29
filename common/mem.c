@@ -5,34 +5,33 @@
 
 #include "defines.h"
 
-#include <errno.h>
 #include <malloc.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-// As of the development phase, this has not yet been tested is strictly
-// experimental. Define this macro at your own risk.
-#undef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
-#undef __LARGE_ALLOC_SIZE
-#undef __LARGE_ALLOC_ALIGN_SIZE
+#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
+#define __LARGE_ALLOC_SIZE (1UL << 14)                  /* ~4 pages */
+#define __LARGE_ALLOC_ALIGN_SIZE sysconf(_SC_PAGE_SIZE) /* 4 KiB */
+#endif
 
 void *zt_mem_malloc(size_t size) {
   void *ptr;
 
   ASSERT(size > 0);
 
-#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
   if (size >= __LARGE_ALLOC_SIZE) {
     size = (size & ~(__LARGE_ALLOC_ALIGN_SIZE - 1)) + __LARGE_ALLOC_ALIGN_SIZE;
     if (!(ptr = aligned_alloc(__LARGE_ALLOC_ALIGN_SIZE, size))) {
-      PRINTDEBUG("aligned_alloc(%zu, %zu) failed\n", __LARGE_ALLOC_SIZE, size);
+      PRINTDEBUG("aligned_alloc() failed (%s)", strerror(errno));
       return NULL;
     }
     if (mlock(ptr, malloc_usable_size(ptr))) {
-      PRINTDEBUG("mlock(%zu) failed\n", size);
+      PRINTDEBUG("mlock() failed (%s)", strerror(errno));
       return NULL;
     }
 #else
@@ -40,7 +39,7 @@ void *zt_mem_malloc(size_t size) {
 #endif
   } else {
     if (!(ptr = malloc(size)))
-      PRINTDEBUG("malloc(%zu) failed %s\n", size, strerror(errno));
+      PRINTDEBUG("malloc() failed (%s)", strerror(errno));
   }
   return ptr;
 }
@@ -51,7 +50,12 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
   ASSERT(nmemb > 0);
   ASSERT(size > 0);
 
-#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
+  /* check for an overflow */
+  if (size * nmemb < size && size && nmemb) {
+    PRINTDEBUG("not enough memory");
+    return NULL;
+  }
   if (size * nmemb >= __LARGE_ALLOC_SIZE) {
     ptr = zt_malloc(size * nmemb);
     if (ptr)
@@ -61,7 +65,7 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
 #endif
   } else {
     if (!(ptr = calloc(nmemb, size)))
-      PRINTDEBUG("calloc(%zu, %zu) failed %s\n", nmemb, size, strerror(errno));
+      PRINTDEBUG("calloc() failed (%s)", strerror(errno));
   }
   return ptr;
 }
@@ -72,7 +76,7 @@ void zt_mem_free(void *ptr) {
 
   ASSERT(malloc_usable_size(ptr) > 0);
 
-#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
   size_t size = malloc_usable_size(ptr);
   if (malloc_usable_size(ptr) >= __LARGE_ALLOC_SIZE) {
     if (munlock(ptr, size)) {
@@ -83,7 +87,7 @@ void zt_mem_free(void *ptr) {
        * in it. Even more the reason to only call zt_free() with valid
        * arguments!
        */
-      PRINTDEBUG("munlock(%zu) failed (%s)\n", size, strerror(errno));
+      PRINTDEBUG("munlock() failed (%s)", strerror(errno));
       memzero(ptr, size);
       __FKILL();
     }
@@ -96,7 +100,7 @@ void *zt_mem_realloc(void *ptr, size_t size) {
   ASSERT(size > 0);
 
   memzero(ptr, size);
-#ifdef __ZTLIB_ENVIRON_SECURE_LARGE_ALLOC
+#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
   zt_free(ptr);
   ptr = zt_malloc(size);
 #else
