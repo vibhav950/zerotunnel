@@ -26,20 +26,20 @@ typedef enum {
 /** A pointer type for @p hmac_st, which is defined later */
 typedef struct hmac_st *hmac_ptr_t;
 
-typedef error_t (*hmac_alloc_func_t)(hmac_ptr_t *h, size_t key_len,
-                                     size_t out_len, hmac_alg_t alg);
+typedef err_t (*hmac_alloc_func_t)(hmac_ptr_t *h, size_t key_len,
+                                   size_t out_len, hmac_alg_t alg);
 
 typedef void (*hmac_dealloc_func_t)(hmac_ptr_t ctx);
 
-typedef error_t (*hmac_init_func_t)(hmac_ptr_t h, const uint8_t *key,
-                                    size_t key_len);
+typedef err_t (*hmac_init_func_t)(hmac_ptr_t h, const uint8_t *key,
+                                  size_t key_len);
 
-typedef error_t (*hmac_update_func_t)(hmac_ptr_t h, const uint8_t *data,
-                                      size_t data_len);
+typedef err_t (*hmac_update_func_t)(hmac_ptr_t h, const uint8_t *data,
+                                    size_t data_len);
 
-typedef error_t (*hmac_compute_func_t)(hmac_ptr_t h, const uint8_t *msg,
-                                       size_t msg_len, uint8_t *digest,
-                                       size_t digest_len);
+typedef err_t (*hmac_compute_func_t)(hmac_ptr_t h, const uint8_t *msg,
+                                     size_t msg_len, uint8_t *digest,
+                                     size_t digest_len);
 
 typedef struct hmac_intf_st {
   hmac_alloc_func_t alloc;
@@ -67,16 +67,16 @@ int hmac_flag_get(hmac_t *h, hmac_flag_t flag);
 
 size_t hmac_digest_len(hmac_t *h);
 
-error_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
-                        size_t out_len, hmac_alg_t alg);
+err_t hmac_intf_alloc(const hmac_intf_t *intf, hmac_t **h, size_t key_len,
+                      size_t out_len, hmac_alg_t alg);
 
 void hmac_dealloc(hmac_t *h);
 
-error_t hmac_init(hmac_t *h, const uint8_t *key, size_t key_len);
+err_t hmac_init(hmac_t *h, const uint8_t *key, size_t key_len);
 
-error_t hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len);
+err_t hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len);
 
-error_t hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
-                     uint8_t *digest, size_t digest_len);
+err_t hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
+                   uint8_t *digest, size_t digest_len);
 
 #endif /* __HMAC_H__ */

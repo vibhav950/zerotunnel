@@ -27,7 +27,7 @@
 #define KDF_FLAG_UNSET(kdf, flag) (void)((kdf)->flags &= ~flag)
 
 /**  */
-static error_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
+static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   extern const kdf_intf_t kdf_intf;
   kdf_ossl_ctx *kdf_ctx;
   EVP_KDF *pkdf;
@@ -122,8 +122,10 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   scrypt_r = KDF_SCRYPT_CFABLE_R;
   scrypt_p = MIN(KDF_SCRYPT_CFABLE_P, zt_cpu_get_processor_count());
   scrypt_maxmem = KDF_SCRYPT_CFABLE_MAXMEM;
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw,
+                                           pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt,
+                                           salt_len);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_N, &scrypt_n);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_R, &scrypt_r);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_P, &scrypt_p);
@@ -160,8 +162,10 @@ static int _kdf_hlp_argon2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   iteration_cost = KDF_ARGON2_CFABLE_ITER;
   lanes = KDF_ARGON2_CFABLE_LANES;
 
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw,
+                                           pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt,
+                                           salt_len);
   *p++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ITER, &iteration_cost);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_THREADS, &threads);
   *p++ = OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ARGON2_LANES, &lanes);
@@ -190,8 +194,10 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   ASSERT(key_len);
 
   iter = KDF_PBKDF2_CFABLE_ITER;
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw, pw_len);
-  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt, salt_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, (void *)pw,
+                                           pw_len);
+  *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, (void *)salt,
+                                           salt_len);
   *p++ = OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_ITER, &iter);
   *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, SN_sha512, 0);
   *p = OSSL_PARAM_construct_end();
@@ -202,9 +208,9 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
 }
 
 /**  */
-static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
-                             size_t password_len, const uint8_t *salt,
-                             size_t salt_len, const uint8_t ctr128[16]) {
+static err_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
+                           size_t password_len, const uint8_t *salt,
+                           size_t salt_len, const uint8_t ctr128[16]) {
   kdf_ossl_ctx *kdf_ctx;
   uint8_t *pw, *slt;
   uint32_t *ctr32;
@@ -258,11 +264,11 @@ static error_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
 }
 
 /**  */
-static error_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
-                               size_t additional_data_len, uint8_t *key,
-                               size_t key_len) {
+static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
+                             size_t additional_data_len, uint8_t *key,
+                             size_t key_len) {
   int rv;
-  error_t ret = ERR_SUCCESS;
+  err_t ret = ERR_SUCCESS;
   kdf_ossl_ctx *kdf_ctx;
   kdf_alg_t alg;
   uint8_t *buf, *pbuf;

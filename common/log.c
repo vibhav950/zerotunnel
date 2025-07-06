@@ -28,7 +28,7 @@
 
 #define FG_BOLD "\x1B[1m"
 
-const char *zt_error_str(error_t err) {
+const char *zt_error_str(err_t err) {
   switch (err) {
   case ERR_SUCCESS:
     return "success";

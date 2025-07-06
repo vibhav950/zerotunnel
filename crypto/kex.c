@@ -29,7 +29,7 @@ int kex_flag_get(kex_t *kex, kex_flag_t flag) {
   return (kex) && (kex->flags & flag);
 }
 
-error_t kex_intf_alloc(const kex_intf_t *intf, kex_t **kex, kex_curve_t curve) {
+err_t kex_intf_alloc(const kex_intf_t *intf, kex_t **kex, kex_curve_t curve) {
   if (!intf || !intf->alloc || !kex)
     return ERR_NULL_PTR;
 
@@ -43,24 +43,23 @@ void kex_dealloc(kex_t *kex) {
   ((kex)->intf)->dealloc(kex);
 }
 
-error_t kex_key_gen(kex_t *kex) {
+err_t kex_key_gen(kex_t *kex) {
   if (!kex || !kex->intf)
     return ERR_NULL_PTR;
 
   return ((kex)->intf)->key_gen(kex);
 }
 
-error_t kex_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data) {
+err_t kex_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data) {
   if (!kex || !kex->intf)
     return ERR_NULL_PTR;
 
   return ((kex)->intf)->get_peer_data(kex, peer_data);
 }
 
-error_t kex_new_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
-                          const uint8_t *ec_pub, size_t ec_pub_len,
-                          const uint8_t *ec_curvename,
-                          size_t ec_curvename_len) {
+err_t kex_new_peer_data(kex_t *kex, kex_peer_share_t *peer_data,
+                        const uint8_t *ec_pub, size_t ec_pub_len,
+                        const uint8_t *ec_curvename, size_t ec_curvename_len) {
   if (!kex || !kex->intf)
     return ERR_NULL_PTR;
 
@@ -76,9 +75,9 @@ void kex_free_peer_data(kex_t *kex, kex_peer_share_t *peer_data) {
   ((kex)->intf)->free_peer_data(peer_data);
 }
 
-error_t kex_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
-                              unsigned char **shared_key,
-                              size_t *shared_key_len) {
+err_t kex_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
+                            unsigned char **shared_key,
+                            size_t *shared_key_len) {
   if (!kex || !kex->intf)
     return ERR_NULL_PTR;
 
@@ -86,8 +85,8 @@ error_t kex_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
       ->derive_shared_key(kex, peer_data, shared_key, shared_key_len);
 }
 
-error_t kex_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
-                                 size_t *pubkey_len) {
+err_t kex_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
+                               size_t *pubkey_len) {
   if (!kex || !kex->intf)
     return ERR_NULL_PTR;
 

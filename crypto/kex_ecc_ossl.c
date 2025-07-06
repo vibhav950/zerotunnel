@@ -31,8 +31,8 @@
 /**
  *
  */
-static error_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
-  error_t ret = ERR_SUCCESS;
+static err_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
+  err_t ret = ERR_SUCCESS;
   extern const kex_intf_t kex_ecc_intf;
   kex_ossl_ctx *ossl_ctx = NULL;
   EVP_PKEY_CTX *paramgen_ctx = NULL;
@@ -131,8 +131,8 @@ static void ossl_kex_ecc_dealloc(kex_t *kex) {
 /**
  *
  */
-static error_t ossl_kex_ecc_key_gen(kex_t *kex) {
-  error_t ret = ERR_SUCCESS;
+static err_t ossl_kex_ecc_key_gen(kex_t *kex) {
+  err_t ret = ERR_SUCCESS;
   kex_ossl_ctx *ossl_ctx;
   EVP_PKEY_CTX *keygen_ctx = NULL;
   EVP_PKEY *ec_key = NULL;
@@ -158,9 +158,9 @@ cleanup:
 /**
  *
  */
-static error_t ossl_kex_ecc_get_peer_data(kex_t *kex,
-                                          kex_peer_share_t *peer_data) {
-  error_t ret = ERR_SUCCESS;
+static err_t ossl_kex_ecc_get_peer_data(kex_t *kex,
+                                        kex_peer_share_t *peer_data) {
+  err_t ret = ERR_SUCCESS;
   kex_ossl_ctx *ossl_ctx;
   unsigned char *pubkey = NULL;
   char *curvename = NULL;
@@ -248,11 +248,11 @@ cleanup:
   return ret;
 }
 
-static error_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
-                                          const uint8_t *ec_pub,
-                                          size_t ec_pub_len,
-                                          const uint8_t *ec_curvename,
-                                          size_t ec_curvename_len) {
+static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
+                                        const uint8_t *ec_pub,
+                                        size_t ec_pub_len,
+                                        const uint8_t *ec_curvename,
+                                        size_t ec_curvename_len) {
   PRINTDEBUG("");
 
   if (!peer_data)
@@ -281,11 +281,11 @@ static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
 /**
  *
  */
-static error_t ossl_kex_ecc_derive_shared_key(kex_t *kex,
-                                              kex_peer_share_t *peer_data,
-                                              unsigned char **shared_key,
-                                              size_t *shared_key_len) {
-  error_t ret = ERR_SUCCESS;
+static err_t ossl_kex_ecc_derive_shared_key(kex_t *kex,
+                                            kex_peer_share_t *peer_data,
+                                            unsigned char **shared_key,
+                                            size_t *shared_key_len) {
+  err_t ret = ERR_SUCCESS;
   kex_ossl_ctx *ossl_ctx;
   EVP_PKEY *peer_key = NULL;
   EVP_PKEY_CTX *derive_ctx = NULL, *peer_key_ctx = NULL;
@@ -362,9 +362,9 @@ cleanup:
 /**
  *
  */
-static error_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
-                                                 size_t *pubkey_len) {
-  error_t ret = ERR_SUCCESS;
+static err_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
+                                               size_t *pubkey_len) {
+  err_t ret = ERR_SUCCESS;
   kex_ossl_ctx *ossl_ctx;
   size_t required;
   int ec_nid;

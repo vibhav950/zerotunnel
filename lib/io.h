@@ -5,6 +5,8 @@
 
 #include <limits.h>
 
+// clang-format off
+
 /** File descriptor readable */
 #define ZT_IO_READABLE 0x01
 /** File descriptor writable */
@@ -54,23 +56,25 @@ typedef struct _zt_fileinfo_st {
   uint32_t reserved;
 } zt_fileinfo_t;
 
-error_t zt_file_delete(const char *filepath);
+// clang-format on
 
-error_t zt_file_zdelete(const char *filepath);
+err_t zt_file_delete(const char *filepath);
 
-error_t zt_file_rename(const char *oldpath, const char *newpath);
+err_t zt_file_zdelete(const char *filepath);
+
+err_t zt_file_rename(const char *oldpath, const char *newpath);
 
 off_t zt_file_getsize(int fd);
 
-error_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode);
+err_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode);
 
 void zt_fio_close(zt_fio_t *fio);
 
-error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info);
+err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info);
 
-// error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
-error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread);
+// err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
+err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread);
 
-error_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize);
+err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize);
 
 #endif /* __IO_H__ */

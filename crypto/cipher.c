@@ -32,12 +32,10 @@ int cipher_flag_get(cipher_t *c, cipher_flag_t flag) {
   return (c) && (c->flags & flag);
 }
 
-size_t cipher_tag_len(cipher_t *c) {
-  return (c) ? c->tag_len : 0;
-}
+size_t cipher_tag_len(cipher_t *c) { return (c) ? c->tag_len : 0; }
 
-error_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c,
-                          size_t key_len, size_t tag_len, cipher_alg_t alg) {
+err_t cipher_intf_alloc(const cipher_intf_t *intf, cipher_t **c, size_t key_len,
+                        size_t tag_len, cipher_alg_t alg) {
   if (!intf || !intf->alloc || !c)
     return ERR_NULL_PTR;
 
@@ -51,38 +49,38 @@ void cipher_dealloc(cipher_t *c) {
   ((c)->intf)->dealloc(c);
 }
 
-error_t cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
-                    cipher_operation_t oper) {
+err_t cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
+                  cipher_operation_t oper) {
   if (!c || !c->intf)
     return ERR_NULL_PTR;
 
   return ((c)->intf)->init(c, key, key_len, oper);
 }
 
-error_t cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
+err_t cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   if (!c || !c->intf)
     return ERR_NULL_PTR;
 
   return ((c)->intf)->set_iv(c, iv, iv_len);
 }
 
-error_t cipher_set_aad(cipher_t *c, const uint8_t *aad, size_t aad_len) {
+err_t cipher_set_aad(cipher_t *c, const uint8_t *aad, size_t aad_len) {
   if (!c || !c->intf)
     return ERR_NULL_PTR;
 
   return ((c)->intf)->set_aad(c, aad, aad_len);
 }
 
-error_t cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
-                       uint8_t *out, size_t *out_len) {
+err_t cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                     uint8_t *out, size_t *out_len) {
   if (!c || !c->intf)
     return ERR_NULL_PTR;
 
   return ((c)->intf)->encrypt(c, in, in_len, out, out_len);
 }
 
-error_t cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
-                       uint8_t *out, size_t *out_len) {
+err_t cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                     uint8_t *out, size_t *out_len) {
   if (!c || !c->intf)
     return ERR_NULL_PTR;
 

@@ -40,10 +40,10 @@ static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
   return clientstate_names[state];
 }
 
-static error_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
-                                              struct zt_addrinfo **ai_list,
-                                              timediff_t timeout_msec) {
-  error_t ret = ERR_SUCCESS;
+static err_t zt_client_resolve_host_timeout(zt_client_connection_t *conn,
+                                            struct zt_addrinfo **ai_list,
+                                            timediff_t timeout_msec) {
+  err_t ret = ERR_SUCCESS;
   struct zt_addrinfo *ai_head = NULL, *ai_tail = NULL, *ai_cur;
   struct addrinfo hints, *res = NULL, *p;
   size_t saddr_len;
@@ -240,9 +240,9 @@ cleanup:
   return ret;
 }
 
-static error_t zt_client_tcp_conn0(zt_client_connection_t *conn,
-                                   struct zt_addrinfo *ai_list) {
-  error_t ret = ERR_SUCCESS;
+static err_t zt_client_tcp_conn0(zt_client_connection_t *conn,
+                                 struct zt_addrinfo *ai_list) {
+  err_t ret = ERR_SUCCESS;
   struct zt_addrinfo *ai_cur, *ai_estab = NULL;
   int sockfd, on;
 
@@ -378,7 +378,7 @@ exit:
   return ret;
 }
 
-static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
+static err_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
   int rv, flags;
   int sockfd;
   struct zt_addrinfo *ai_estab;
@@ -441,7 +441,7 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
 
 /**
  * @param[in] conn The client connection context.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Send the message present in `conn->msgbuf` to the peer. All messages with
  * application-level payloads are encrypted.
@@ -453,8 +453,8 @@ static error_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
  * sent (either because of a timeout or other error), the function returns an
  * `ERR_TCP_SEND`.
  */
-static error_t client_send(zt_client_connection_t *conn) {
-  error_t ret;
+static err_t client_send(zt_client_connection_t *conn) {
+  err_t ret;
   size_t len, tosend, taglen;
   uint8_t *rawptr;
   bool is_encrypted;
@@ -513,7 +513,7 @@ static error_t client_send(zt_client_connection_t *conn) {
 /**
  * @param[in] conn The client connection context.
  * @param[in] expect The expected message type.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Receive a message from the peer and store it in `conn->msgbuf`.
  *
@@ -527,8 +527,8 @@ static error_t client_send(zt_client_connection_t *conn) {
  *
  * Encrypted payload data is decrypted in-place in `conn->msgbuf->data[]`.
  */
-static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
-  error_t ret = ERR_SUCCESS;
+static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
+  err_t ret = ERR_SUCCESS;
   ssize_t nread;
   size_t datalen, taglen;
   uint8_t *rawptr, *dataptr;
@@ -601,9 +601,9 @@ out:
   return ret;
 }
 
-error_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
-                     bool *done) {
-  error_t ret = ERR_SUCCESS;
+err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
+                   bool *done) {
+  err_t ret = ERR_SUCCESS;
   struct passwd *master_pass;
   zt_fileinfo_t fileinfo;
   zt_fio_t *fileptr;
@@ -791,7 +791,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
     case CLIENT_TRANSFER: {
       size_t nread;
-      error_t rv;
+      err_t rv;
 
       zt_msg_set_type(conn->msgbuf, MSG_DATA);
       for (;;) {

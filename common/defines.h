@@ -171,9 +171,9 @@ typedef enum {
   ERR_FIO_READ,                   /* fio read failed */
   ERR_FIO_WRITE,                  /* fio write failed */
   ERR_EOF,                        /* end of file */
-} error_t;
+} err_t;
 
-const char *zt_error_str(error_t err);
+const char *zt_error_str(err_t err);
 
 /**
  * Logging routines

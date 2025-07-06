@@ -17,24 +17,24 @@ typedef enum {
 /* Forward declaration */
 typedef struct kem_st *kem_ptr_t;
 
-typedef error_t (*kem_alloc_func_t)(kem_ptr_t *kem, kem_alg_t alg);
+typedef err_t (*kem_alloc_func_t)(kem_ptr_t *kem, kem_alg_t alg);
 
 typedef void (*kem_dealloc_func_t)(kem_ptr_t kem);
 
 typedef void (*kem_mem_free_func_t)(void *ptr, size_t len);
 
-typedef error_t (*kem_keygen_func_t)(kem_ptr_t kem, uint8_t **pubkey,
-                                     size_t *pubkey_len);
+typedef err_t (*kem_keygen_func_t)(kem_ptr_t kem, uint8_t **pubkey,
+                                   size_t *pubkey_len);
 
-typedef error_t (*kem_encapsulate_func_t)(kem_ptr_t kem,
-                                          const uint8_t *peer_pubkey,
-                                          size_t peer_pubkey_len, uint8_t **ct,
-                                          size_t *ct_len, uint8_t **ss,
-                                          size_t *ss_len);
+typedef err_t (*kem_encapsulate_func_t)(kem_ptr_t kem,
+                                        const uint8_t *peer_pubkey,
+                                        size_t peer_pubkey_len, uint8_t **ct,
+                                        size_t *ct_len, uint8_t **ss,
+                                        size_t *ss_len);
 
-typedef error_t (*kem_decapsulate_func_t)(kem_ptr_t kem, const uint8_t *ct,
-                                          size_t ct_len, uint8_t **ss,
-                                          size_t *ss_len);
+typedef err_t (*kem_decapsulate_func_t)(kem_ptr_t kem, const uint8_t *ct,
+                                        size_t ct_len, uint8_t **ss,
+                                        size_t *ss_len);
 
 typedef struct kem_intf_st {
   kem_alloc_func_t alloc;
@@ -61,19 +61,19 @@ int kem_intf_alg_is_supported(const kem_intf_t *intf, kem_alg_t alg);
 
 int kem_flag_get(kem_t *kem, kem_flag_t flag);
 
-error_t kem_intf_alloc(const kem_intf_t *intf, kem_t **kem, kem_alg_t alg);
+err_t kem_intf_alloc(const kem_intf_t *intf, kem_t **kem, kem_alg_t alg);
 
 void kem_dealloc(kem_t *kem);
 
 void kem_mem_free(const kem_intf_t *intf, void *ptr, size_t len);
 
-error_t kem_keygen(kem_t *kem, uint8_t **pubkey, size_t *pubkey_len);
+err_t kem_keygen(kem_t *kem, uint8_t **pubkey, size_t *pubkey_len);
 
-error_t kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
-                        size_t peer_pubkey_len, uint8_t **ct, size_t *ct_len,
-                        uint8_t **ss, size_t *ss_len);
+err_t kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
+                      size_t peer_pubkey_len, uint8_t **ct, size_t *ct_len,
+                      uint8_t **ss, size_t *ss_len);
 
-error_t kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len, uint8_t **ss,
-                        size_t *ss_len);
+err_t kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len,
+                      uint8_t **ss, size_t *ss_len);
 
 #endif /* __KEM_H__ */

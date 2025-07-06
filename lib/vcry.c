@@ -149,7 +149,7 @@ struct vcry_ctx_st {
 
 static struct vcry_ctx_st *vctx;
 static int initialized;
-static error_t __vcry_err_val;
+static err_t __vcry_err_val;
 
 #define VCRY_EXPECT(retval, expectval, jmp)                                    \
   do { if ((ret = (retval)) != (expectval))                                    \
@@ -231,7 +231,7 @@ static error_t __vcry_err_val;
 
 // clang-format on
 
-error_t vcry_module_init(void) {
+err_t vcry_module_init(void) {
   if (initialized)
     return ERR_SUCCESS;
 
@@ -252,11 +252,11 @@ void vcry_set_role_responder(void) {
     vctx->role = vcry_hshake_role_responder;
 }
 
-error_t vcry_get_last_err(void) { return __vcry_err_val; }
+err_t vcry_get_last_err(void) { return __vcry_err_val; }
 
 void vcry_clear_last_err(void) { __vcry_err_val = ERR_SUCCESS; }
 
-error_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
+err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
   if (!authpass)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
@@ -308,8 +308,8 @@ static const uint8_t *vcry_decr_nonce(void) {
   return iv;
 }
 
-error_t vcry_set_cipher_from_id(int id) {
-  error_t ret;
+err_t vcry_set_cipher_from_id(int id) {
+  err_t ret;
   size_t key_len;
   cipher_alg_t alg;
 
@@ -352,7 +352,7 @@ error_t vcry_set_cipher_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_cipher_from_name(const char *name) {
+err_t vcry_set_cipher_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_cipher_entry_arr, {
@@ -364,8 +364,8 @@ error_t vcry_set_cipher_from_name(const char *name) {
   return vcry_set_cipher_from_id(id);
 }
 
-error_t vcry_set_aead_from_id(int id) {
-  error_t ret;
+err_t vcry_set_aead_from_id(int id) {
+  err_t ret;
   size_t key_len;
   cipher_alg_t alg;
 
@@ -409,7 +409,7 @@ error_t vcry_set_aead_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_aead_from_name(const char *name) {
+err_t vcry_set_aead_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_aead_entry_arr, {
@@ -428,8 +428,8 @@ size_t vcry_get_aead_tag_len(void) {
   return cipher_tag_len(vctx->aead);
 }
 
-error_t vcry_set_hmac_from_id(int id) {
-  error_t ret;
+err_t vcry_set_hmac_from_id(int id) {
+  err_t ret;
   size_t key_len;
   hmac_alg_t alg;
 
@@ -480,7 +480,7 @@ error_t vcry_set_hmac_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_hmac_from_name(const char *name) {
+err_t vcry_set_hmac_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_hmac_entry_arr, {
@@ -499,8 +499,8 @@ size_t vcry_get_hmac_digest_len(void) {
   return hmac_digest_len(vctx->mac);
 }
 
-error_t vcry_set_ecdh_from_id(int id) {
-  error_t ret;
+err_t vcry_set_ecdh_from_id(int id) {
+  err_t ret;
   kex_curve_t curve;
 
   switch (id) {
@@ -544,7 +544,7 @@ error_t vcry_set_ecdh_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_ecdh_from_name(const char *name) {
+err_t vcry_set_ecdh_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_ecdh_entry_arr, {
@@ -556,8 +556,8 @@ error_t vcry_set_ecdh_from_name(const char *name) {
   return vcry_set_ecdh_from_id(id);
 }
 
-error_t vcry_set_kem_from_id(int id) {
-  error_t ret;
+err_t vcry_set_kem_from_id(int id) {
+  err_t ret;
   kem_alg_t alg;
 
   switch (id) {
@@ -590,7 +590,7 @@ error_t vcry_set_kem_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_kem_from_name(const char *name) {
+err_t vcry_set_kem_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_kem_entry_arr, {
@@ -602,8 +602,8 @@ error_t vcry_set_kem_from_name(const char *name) {
   return vcry_set_kem_from_id(id);
 }
 
-error_t vcry_set_kdf_from_id(int id) {
-  error_t ret;
+err_t vcry_set_kdf_from_id(int id) {
+  err_t ret;
   kdf_alg_t alg;
 
   switch (id) {
@@ -636,7 +636,7 @@ error_t vcry_set_kdf_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-error_t vcry_set_kdf_from_name(const char *name) {
+err_t vcry_set_kdf_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_kdf_entry_arr, {
@@ -662,10 +662,10 @@ error_t vcry_set_kdf_from_name(const char *name) {
  *
  * Note: This function is called by the initiator of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
-  error_t ret = ERR_SUCCESS;
+err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
+  err_t ret = ERR_SUCCESS;
   kex_peer_share_t keyshare_mine;
   uint8_t *p = NULL;
   uint64_t *p64 = NULL;
@@ -808,13 +808,13 @@ clean2:
  *
  * Note: This function is called by the responder of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
-                               size_t peerdata_theirs_len,
-                               uint8_t **peerdata_mine,
-                               size_t *peerdata_mine_len) {
-  error_t ret = ERR_SUCCESS;
+err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
+                             size_t peerdata_theirs_len,
+                             uint8_t **peerdata_mine,
+                             size_t *peerdata_mine_len) {
+  err_t ret = ERR_SUCCESS;
   kex_peer_share_t keyshare_mine;
   uint8_t *p = NULL;
   uint64_t *p64 = NULL;
@@ -984,10 +984,10 @@ clean1:
  *
  * Note: This function is called by the initiator of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
-  error_t ret;
+err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
+  err_t ret;
   uint8_t *p = NULL;
   uint64_t *p64 = NULL;
   uint8_t *peer_ct = NULL;
@@ -1055,8 +1055,8 @@ error_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
  * the shared secret derived from the PQ-KEM key encapsultion, PQK is the PQ-KEM
  * public key, and DHEK_A and DHEK_B are the DHE public keys of Alice and Bob.
  */
-error_t vcry_derive_session_key(void) {
-  error_t ret = ERR_SUCCESS;
+err_t vcry_derive_session_key(void) {
+  err_t ret = ERR_SUCCESS;
   uint8_t *shared_secret;
   uint8_t *pqpub;
   uint8_t *buf, *p, *tmp, *dhek_a, *dhek_b;
@@ -1171,12 +1171,12 @@ clean2:
  *
  * NOTE: This function is called by the initiator of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
-                                       size_t *verify_msg_len, const char *id_a,
-                                       const char *id_b) {
-  error_t ret;
+err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
+                                     size_t *verify_msg_len, const char *id_a,
+                                     const char *id_b) {
+  err_t ret;
   const char *id1, *id2;
 
   if (!verify_msg || !verify_msg_len)
@@ -1244,12 +1244,12 @@ error_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
  *
  * NOTE: This function is called by the responder of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t vcry_responder_verify_initiate(uint8_t **verify_msg,
-                                       size_t *verify_msg_len, const char *id_a,
-                                       const char *id_b) {
-  error_t ret;
+err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
+                                     size_t *verify_msg_len, const char *id_a,
+                                     const char *id_b) {
+  err_t ret;
   const char *id1, *id2;
 
   if (!verify_msg || !verify_msg_len)
@@ -1312,12 +1312,12 @@ error_t vcry_responder_verify_initiate(uint8_t **verify_msg,
  *
  * NOTE: This function is called by the initiator of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t
-vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
-                               const char *id_a, const char *id_b) {
-  error_t ret;
+err_t vcry_initiator_verify_complete(
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
+    const char *id_b) {
+  err_t ret;
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
   const char *id1, *id2;
 
@@ -1374,12 +1374,12 @@ vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
  *
  * NOTE: This function is called by the responder of the handshake process.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  */
-error_t
-vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
-                               const char *id_a, const char *id_b) {
-  error_t ret;
+err_t vcry_responder_verify_complete(
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
+    const char *id_b) {
+  err_t ret;
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
   const char *id1, *id2;
 
@@ -1501,14 +1501,14 @@ void vcry_module_release(void) {
  *
  * This function may only be called after the handshake is complete.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  *
  * If the buffer pointed to by \p out is too small to store the encrypted data
  * and the tag, the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
-error_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
-                          size_t ad_len, uint8_t *out, size_t *out_len) {
-  error_t ret;
+err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
+                        size_t ad_len, uint8_t *out, size_t *out_len) {
+  err_t ret;
   size_t tag_len;
 
   if (!in || !out || !out_len)
@@ -1564,14 +1564,14 @@ error_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
  *
  * This function may only be called after the handshake is complete.
  *
- * Returns an `error_t` status code.
+ * Returns an `err_t` status code.
  *
  * If the buffer pointed to by \p out is too small to store the decrypted data,
  * the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
-error_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
-                          size_t ad_len, uint8_t *out, size_t *out_len) {
-  error_t ret;
+err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
+                        size_t ad_len, uint8_t *out, size_t *out_len) {
+  err_t ret;
   size_t tag_len;
 
   if (!in || !out || !out_len)

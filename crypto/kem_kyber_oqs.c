@@ -32,7 +32,7 @@
 /**
  *
  */
-static error_t liboqs_kem_alloc(kem_t **kem, kem_alg_t alg) {
+static err_t liboqs_kem_alloc(kem_t **kem, kem_alg_t alg) {
   extern const kem_intf_t kem_kyber_intf;
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
@@ -111,8 +111,8 @@ static void liboqs_kem_mem_free(void *ptr, size_t len) {
 /**
  *
  */
-static error_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
-                                      size_t *pubkey_len) {
+static err_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
+                                    size_t *pubkey_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
   uint8_t *privkey;
@@ -157,10 +157,10 @@ static error_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
 /**
  *
  */
-static error_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
-                                      size_t peer_pubkey_len, uint8_t **ct,
-                                      size_t *ct_len, uint8_t **ss,
-                                      size_t *ss_len) {
+static err_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
+                                    size_t peer_pubkey_len, uint8_t **ct,
+                                    size_t *ct_len, uint8_t **ss,
+                                    size_t *ss_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
   kem_alg_t alg;
@@ -220,9 +220,9 @@ static error_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
 /**
  *
  */
-static error_t liboqs_kem_decapsulate(kem_t *kem, const uint8_t *ct,
-                                      size_t ct_len, uint8_t **ss,
-                                      size_t *ss_len) {
+static err_t liboqs_kem_decapsulate(kem_t *kem, const uint8_t *ct,
+                                    size_t ct_len, uint8_t **ss,
+                                    size_t *ss_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
 

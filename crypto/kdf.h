@@ -18,18 +18,18 @@ typedef enum {
 /* Forward declaration */
 typedef struct kdf_st *kdf_ptr_t;
 
-typedef error_t (*kdf_alloc_func_t)(kdf_ptr_t *kdf, kdf_alg_t alg);
+typedef err_t (*kdf_alloc_func_t)(kdf_ptr_t *kdf, kdf_alg_t alg);
 
 typedef void (*kdf_dealloc_func_t)(kdf_ptr_t kdf);
 
-typedef error_t (*kdf_init_func_t)(kdf_ptr_t kdf, const uint8_t *password,
-                                   size_t password_len, const uint8_t *salt,
-                                   size_t salt_len, const uint8_t ctr128[16]);
+typedef err_t (*kdf_init_func_t)(kdf_ptr_t kdf, const uint8_t *password,
+                                 size_t password_len, const uint8_t *salt,
+                                 size_t salt_len, const uint8_t ctr128[16]);
 
-typedef error_t (*kdf_derive_func_t)(kdf_ptr_t kdf,
-                                     const uint8_t *additional_data,
-                                     size_t additional_data_len, uint8_t *key,
-                                     size_t key_len);
+typedef err_t (*kdf_derive_func_t)(kdf_ptr_t kdf,
+                                   const uint8_t *additional_data,
+                                   size_t additional_data_len, uint8_t *key,
+                                   size_t key_len);
 
 typedef struct kdf_intf_st {
   kdf_alloc_func_t alloc;
@@ -65,15 +65,14 @@ int kdf_intf_alg_is_supported(const kdf_intf_t *intf, kdf_alg_t alg);
 
 int kdf_flag_get(kdf_t *kdf, kdf_flag_t flag);
 
-error_t kdf_intf_alloc(const kdf_intf_t *intf, kdf_t **kdf, kdf_alg_t alg);
+err_t kdf_intf_alloc(const kdf_intf_t *intf, kdf_t **kdf, kdf_alg_t alg);
 
 void kdf_dealloc(kdf_t *kdf);
 
-error_t kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
-                 const uint8_t *salt, size_t salt_len,
-                 const uint8_t ctr128[16]);
+err_t kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
+               const uint8_t *salt, size_t salt_len, const uint8_t ctr128[16]);
 
-error_t kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
-                   size_t additional_data_len, uint8_t *key, size_t key_len);
+err_t kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
+                 size_t additional_data_len, uint8_t *key, size_t key_len);
 
 #endif /* __KDF_H__ */

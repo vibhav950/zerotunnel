@@ -145,11 +145,11 @@ bool zt_io_waitfor_write(int fd, timediff_t timeout_msec) {
 
 /**
  * @param[in] filepath The path of the file to delete.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Delete a file.
  */
-error_t zt_file_delete(const char *filepath) {
+err_t zt_file_delete(const char *filepath) {
   if (unlink(filepath) == -1) {
     PRINTERROR("failed to unlink(2) file %s (%s)", filepath, strerror(errno));
     return ERR_INVALID;
@@ -159,11 +159,11 @@ error_t zt_file_delete(const char *filepath) {
 
 /**
  * @param[in] filepath The path of the file to delete.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Zero out and delete a file.
  */
-error_t zt_file_zdelete(const char *filepath) {
+err_t zt_file_zdelete(const char *filepath) {
   int fd = open(filepath, O_WRONLY);
   if (fd == -1) {
     PRINTERROR("failed to open(2) file %s (%s)", filepath, strerror(errno));
@@ -181,11 +181,11 @@ error_t zt_file_zdelete(const char *filepath) {
 /**
  * @param[in] oldpath The path of the file to rename.
  * @param[in] newpath The new path of the file.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Rename a file.
  */
-error_t zt_file_rename(const char *oldpath, const char *newpath) {
+err_t zt_file_rename(const char *oldpath, const char *newpath) {
   struct stat st;
   char *p;
 
@@ -246,7 +246,7 @@ off_t zt_file_getsize(int fd) {
  * @param[in] fio An fio structure to be initialized.
  * @param[in] filepath The path of the file to open.
  * @param[in] mode The mode in which to open the file.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Open a file in the specified mode. The caller must call `zt_fio_close()`
  * on this @p fio after use.
@@ -256,7 +256,7 @@ off_t zt_file_getsize(int fd) {
  * If the file is opened in read-only mode (FIO_RDONLY), a shared lock is
  * acquired instead.
  */
-error_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
+err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   int fd = -1;
   int flags = 0;
   off_t size;
@@ -361,11 +361,11 @@ void zt_fio_close(zt_fio_t *fio) {
 /**
  * @param[in] fio An open fio. See `zt_fio_open()`.
  * @param[out] info The file info pointer.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Get the file information for the file represented by the `fio`.
  */
-error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
+err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
   char *p;
 
   if (unlikely(!fio || !info))
@@ -393,7 +393,7 @@ error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
 // @param[in] fio An open fio. See `zt_fio_open()`.
 // @param[out] buf A pointer to a pointer to the buffer with the data read.
 // @param[out] bufsize The number of readable bytes placed in @p *buf.
-// @return An `error_t` status code.\n\n
+// @return An `err_t` status code.\n\n
 // Reads a portion of the underlying file using a sliding window fashion.
 // This function provides sequential read access to a file by `mmap()`ing fixed
 // size page-aligned chunks into the address space of this process. Each call to
@@ -403,7 +403,7 @@ error_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
 // is called after the file EOF is reached, @p *bufsize is set to 0 and
 // `ERR_EOF` is returned.\n\n
 // `zt_fio_close()` will perform the required `munmap()` on the final chunk.
-error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
+err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
   int fd, flags;
   void *maddr;
   off_t size, offset;
@@ -460,14 +460,14 @@ error_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
  * @param[out] buf A pointer to a buffer to read into.
  * @param[in] bufsize The size of the buffer to read into.
  * @param[out] nread The number of bytes read.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Reads at most @p bufsize bytes of data from the file represented by @p fio
  * into @p buf.
  *
  * If the file EOF is reached, @p nread is set to 0 and `ERR_EOF` is returned.
  */
-error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
+err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   ssize_t rc;
 
   if (unlikely(!fio || !buf || !nread))
@@ -498,12 +498,12 @@ error_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
  * @param[in] fio An open fio. See `zt_fio_open()`.
  * @param[in] buf A pointer to the buffer with data to write.
  * @param[in] bufsize The number of bytes to write.
- * @return An `error_t` status code.
+ * @return An `err_t` status code.
  *
  * Writes @p bufsize bytes from @p buf to the file represented by @p fio.
  * Partial writes are treated as errors.
  */
-error_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
+err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
   ssize_t rc;
 
   if (unlikely(!fio || !buf))

@@ -25,8 +25,8 @@
 /**
  *
  */
-static error_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
-                               hmac_alg_t alg) {
+static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
+                             hmac_alg_t alg) {
   extern const hmac_intf_t hmac_intf;
   hmac_ossl_ctx *hmac;
   const EVP_MD *md;
@@ -119,7 +119,7 @@ static void ossl_hmac_dealloc(hmac_t *h) {
 /**
  *
  */
-static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
+static err_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   hmac_ossl_ctx *ctx;
   hmac_alg_t alg;
   EVP_PKEY *mac_key;
@@ -172,7 +172,7 @@ static error_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 /**
  *
  */
-static error_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
+static err_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   hmac_ossl_ctx *ctx;
 
   PRINTDEBUG("msg_len=%zu", msg_len);
@@ -194,8 +194,8 @@ static error_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   return ERR_SUCCESS;
 }
 
-static error_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
-                                 uint8_t *digest, size_t digest_len) {
+static err_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
+                               uint8_t *digest, size_t digest_len) {
   hmac_ossl_ctx *ctx;
   uint8_t md_value[EVP_MAX_MD_SIZE];
   size_t len;

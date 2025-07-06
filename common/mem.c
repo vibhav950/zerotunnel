@@ -5,6 +5,7 @@
 
 #include "defines.h"
 
+#include <errno.h>
 #include <malloc.h>
 #include <stdarg.h>
 #include <stdio.h>

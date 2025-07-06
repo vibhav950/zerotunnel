@@ -28,9 +28,9 @@
 /**
  *
  */
-static error_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
-                                 size_t tag_len ATTRIBUTE_UNUSED,
-                                 cipher_alg_t alg) {
+static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
+                               size_t tag_len ATTRIBUTE_UNUSED,
+                               cipher_alg_t alg) {
   extern const cipher_intf_t cipher_intf;
   cipher_ossl_ctx *cipher_ctx;
   const EVP_CIPHER *evp;
@@ -108,8 +108,8 @@ static void ossl_cipher_dealloc(cipher_t *c) {
 /**
  *
  */
-static error_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
-                                cipher_operation_t oper) {
+static err_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
+                              cipher_operation_t oper) {
   cipher_ossl_ctx *ctx;
   cipher_alg_t alg;
 
@@ -159,8 +159,7 @@ static error_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
 /**
  *
  */
-static error_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv,
-                                  size_t iv_len) {
+static err_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   cipher_ossl_ctx *ctx;
   cipher_alg_t alg;
 
@@ -194,9 +193,9 @@ static error_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv,
 /**
  *
  */
-static error_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
-                                   const uint8_t *aad ATTRIBUTE_UNUSED,
-                                   size_t aad_len ATTRIBUTE_UNUSED) {
+static err_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
+                                 const uint8_t *aad ATTRIBUTE_UNUSED,
+                                 size_t aad_len ATTRIBUTE_UNUSED) {
   PRINTDEBUG("aad_len=%zu", aad_len);
 
   return ERR_INVALID;
@@ -205,9 +204,8 @@ static error_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
 /**
  *
  */
-static error_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in,
-                                   size_t in_len, uint8_t *out,
-                                   size_t *out_len) {
+static err_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                                 uint8_t *out, size_t *out_len) {
   int len;
   cipher_ossl_ctx *ctx;
 
@@ -243,9 +241,8 @@ static error_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in,
 /**
  *
  */
-static error_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in,
-                                   size_t in_len, uint8_t *out,
-                                   size_t *out_len) {
+static err_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
+                                 uint8_t *out, size_t *out_len) {
   int len;
   cipher_ossl_ctx *ctx;
 
