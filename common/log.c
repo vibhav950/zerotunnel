@@ -52,6 +52,8 @@ const char *zt_error_str(error_t err) {
     return "internal library failure";
   case ERR_INVALID:
     return "invalid operation sequence";
+  case ERR_OPERATION_LIMIT_REACHED:
+    return "operation limit reached";
   case ERR_INVALID_DATUM:
     return "mismatch from expected data";
   case ERR_AUTH_FAIL:

@@ -2,9 +2,9 @@ CC := gcc
 CFLAGS := -Wno-pedantic -std=gnu17 -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS -D__ZTLIB_ENVIRON_SAFE_MEM
 LIBS := -lcrypto -lssl -loqs -lm -pthread
 
-all: bin/vcry_handshake_test
+all: bin/vcry_handshake_test_ipc
 
-bin/vcry_handshake_test: bin/vcry_handshake_test.o \
+bin/vcry_handshake_test_ipc: bin/vcry_handshake_test_ipc.o \
                     bin/vcry.o \
                     bin/cipher_ossl.o \
                     bin/aead_ossl.o \
@@ -31,7 +31,7 @@ bin/vcry_handshake_test: bin/vcry_handshake_test.o \
 
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
 
-bin/vcry_handshake_test.o: tests/vcry_handshake_test.c
+bin/vcry_handshake_test_ipc.o: tests/vcry_handshake_test_ipc.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/vcry.o: lib/vcry.c
@@ -105,6 +105,6 @@ bin/systemrand.o: random/systemrand.c
 
 .PHONY: clean
 clean:
-	rm -f bin/*.o bin/vcry_handshake_test
+	rm -f bin/*.o bin/vcry_handshake_test_ipc
 
 

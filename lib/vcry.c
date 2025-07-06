@@ -12,24 +12,62 @@
 #include <string.h>
 
 // clang-format off
-#define VCRY_FLAG_SET(x)              ((void)(vctx.flags |= (x)))
-#define VCRY_FLAG_GET(x)              ((int)(vctx.flags & (x)))
 
-#define VCRY_ERR_SET(x)               (__vcry_err_val = (x))
+struct _vcry_alg_entry_st {
+  const char *name;
+  int id;
+};
 
-#define VCRY_EXPECT(retval, expectval, jmp)                                    \
-  do { if ((ret = (retval)) != (expectval))                                    \
-    { VCRY_ERR_SET(retval); goto jmp; }                                        \
-  } while (0)
+static const struct _vcry_alg_entry_st _vcry_cipher_entry_arr[] = {
+    { "AES-CTR-128", VCRY_CIPHER_AES_CTR_128 },
+    { "AES-CTR-192", VCRY_CIPHER_AES_CTR_192 },
+    { "AES-CTR-256", VCRY_CIPHER_AES_CTR_256 },
+    { "CHACHA20", VCRY_CIPHER_CHACHA20 },
+    { NULL, -1 }
+};
 
-#define VCRY_HSHAKE_ROLE()            (vctx.role)
+static const struct _vcry_alg_entry_st _vcry_aead_entry_arr[] = {
+    { "AES-GCM-128", VCRY_AEAD_AES_GCM_128 },
+    { "AES-GCM-192", VCRY_AEAD_AES_GCM_192 },
+    { "AES-GCM-256", VCRY_AEAD_AES_GCM_256 },
+    { "CHACHA20-POLY1305", VCRY_AEAD_CHACHA20_POLY1305 },
+    { NULL, -1 }
+};
 
-#define VCRY_STATE()                  (vctx.state)
-#define VCRY_STATE_CHANGE(nextstate)  ((void)(vctx.state = (nextstate)))
+static const struct _vcry_alg_entry_st _vcry_hmac_entry_arr[] = {
+    { "HMAC-SHA256", VCRY_HMAC_SHA256 },
+    { "HMAC-SHA384", VCRY_HMAC_SHA384 },
+    { "HMAC-SHA512", VCRY_HMAC_SHA512 },
+    { "HMAC-SHA3-256", VCRY_HMAC_SHA3_256 },
+    { "HMAC-SHA3-384", VCRY_HMAC_SHA3_384 },
+    { "HMAC-SHA3-512", VCRY_HMAC_SHA3_512 },
+    { NULL, -1 }
+};
 
-#define vcry_mac_key()                (vctx.skey + VCRY_MAC_KEY_OFFSET)
-#define vcry_enc_key()                (vctx.skey + VCRY_ENC_KEY_OFFSET)
-#define vcry_enc_iv()                 (vctx.skey + VCRY_ENC_IV_OFFSET)
+static const struct _vcry_alg_entry_st _vcry_ecdh_entry_arr[] = {
+    { "ECDH-SECP256K1", VCRY_KEX_ECDH_SECP256K1 },
+    { "ECDH-SECP384R1", VCRY_KEX_ECDH_SECP384R1 },
+    { "ECDH-SECP521R1", VCRY_KEX_ECDH_SECP521R1 },
+    { "ECDH-PRIME239V3", VCRY_KEX_ECDH_PRIME239V3 },
+    { "ECDH-PRIME256V1", VCRY_KEX_ECDH_PRIME256V1 },
+    { "ECDH-X25519", VCRY_KEX_ECDH_X25519 },
+    { "ECDH-X448", VCRY_KEX_ECDH_X448 },
+    { NULL, -1 }
+};
+
+static const struct _vcry_alg_entry_st _vcry_kem_entry_arr[] = {
+    { "KEM-KYBER512", VCRY_KEM_KYBER512 },
+    { "KEM-KYBER768", VCRY_KEM_KYBER768 },
+    { "KEM-KYBER1024", VCRY_KEM_KYBER1024 },
+    { NULL, -1 }
+};
+
+static struct _vcry_alg_entry_st _vcry_kdf_entry_arr[] = {
+    { "KDF-PBKDF2", VCRY_KDF_PBKDF2 },
+    { "KDF-SCRYPT", VCRY_KDF_SCRYPT },
+    { "KDF-ARGON2", VCRY_KDF_ARGON2 },
+    { NULL, -1 }
+};
 
 /**
  * Roles
@@ -99,24 +137,120 @@ struct vcry_ctx_st {
     pqk_len, /** len(pqk) for initiator and len(pqk_peer) for responder */
     ss_len;
 
+  uint64_t
+    seqno_ini, /** initiator's sequence number */
+    seqno_res;      /** responder's sequence number */
+
   int
     role,  /** role in handshake */
     state, /** most recent state marked 'complete' */
     flags; /** flags for validating the global config */
 };
 
-#ifdef VCRY_THREAD_LOCAL
-static __thread struct vcry_ctx_st vctx;
-static __thread error_t __vcry_err_val;
-#else
-static struct vcry_ctx_st vctx;
+static struct vcry_ctx_st *vctx;
+static int initialized;
 static error_t __vcry_err_val;
-#endif
+
+#define VCRY_EXPECT(retval, expectval, jmp)                                    \
+  do { if ((ret = (retval)) != (expectval))                                    \
+    { VCRY_ERR_SET(retval); goto jmp; }                                        \
+  } while (0)
+
+#define VCRY_FLAG_SET(x)           ((void)(vctx->flags |= (x)))
+#define VCRY_FLAG_GET(x)           ((int)(vctx->flags & (x)))
+
+#define VCRY_ERR_SET(x)            (__vcry_err_val = (x))
+
+#define VCRY_HSHAKE_ROLE()         (vctx->role)
+
+#define VCRY_STATE()               (vctx->state)
+#define VCRY_STATE_CHANGE(next)    ((void)(vctx->state = (next)))
+
+#define VCRY_K_MAC_INI_OFFSET      (0UL)
+#define VCRY_K_MAC_RES_OFFSET      (VCRY_K_MAC_INI_OFFSET + VCRY_K_MAC_LEN)
+#define VCRY_K_ENCR_INI_OFFSET     (VCRY_K_MAC_RES_OFFSET + VCRY_K_MAC_LEN)
+#define VCRY_K_ENCR_RES_OFFSET     (VCRY_K_ENCR_INI_OFFSET + VCRY_K_ENCR_LEN)
+#define VCRY_IV_ENCR_INI_OFFSET    (VCRY_K_ENCR_RES_OFFSET + VCRY_K_ENCR_LEN)
+#define VCRY_IV_ENCR_RES_OFFSET    (VCRY_IV_ENCR_INI_OFFSET + VCRY_IV_ENCR_LEN)
+
+#define vcry_k_mac_ini()           (vctx->skey + VCRY_K_MAC_INI_OFFSET)
+#define vcry_k_mac_res()           (vctx->skey + VCRY_K_MAC_RES_OFFSET)
+
+/** Encryption key (ini/res) */
+#define vcry_encr_key()                                                        \
+  (vctx->skey + (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator              \
+                     ? VCRY_K_ENCR_INI_OFFSET                                  \
+                     : VCRY_K_ENCR_RES_OFFSET))
+/** Decryption key (ini/res) */
+#define vcry_decr_key()                                                        \
+  (vctx->skey + (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator              \
+                     ? VCRY_K_ENCR_RES_OFFSET                                  \
+                     : VCRY_K_ENCR_INI_OFFSET))
+
+/** The encryption IV for the encryption nonce (ini/res) */
+#define _vcry_encr_iv()                                                        \
+  (vctx->skey + (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator              \
+                     ? VCRY_IV_ENCR_INI_OFFSET                                 \
+                     : VCRY_IV_ENCR_RES_OFFSET))
+/** The decryption IV for the decryption nonce (ini/res) */
+#define _vcry_decr_iv()                                                        \
+  (vctx->skey + (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator              \
+                     ? VCRY_IV_ENCR_RES_OFFSET                                 \
+                     : VCRY_IV_ENCR_INI_OFFSET))
+
+/** Self sequence number (ini/res) */
+#define _vcry_seqno_self()                                                     \
+  (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator ? vctx->seqno_ini          \
+                                                    : vctx->seqno_res)
+/** Peer sequence number (ini/res) */
+#define _vcry_seqno_peer()                                                     \
+  (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator ? vctx->seqno_res          \
+                                                    : vctx->seqno_ini)
+
+#define _vcry_seqno_self_incr64()                                              \
+  do {                                                                         \
+    if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator)                      \
+      vctx->seqno_ini++;                                                       \
+    else                                                                       \
+      vctx->seqno_res++;                                                       \
+  } while (0)
+
+#define _vcry_seqno_peer_incr64()                                              \
+  do {                                                                         \
+    if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator)                      \
+      vctx->seqno_res++;                                                       \
+    else                                                                       \
+      vctx->seqno_ini++;                                                       \
+  } while (0)
+
+#define VCRY_ALG_LOOP(arr, stmt)                                               \
+  const struct _vcry_alg_entry_st *p;                                          \
+  for (p = (arr); p->name; p++) {                                              \
+    stmt;                                                                      \
+  }
+
 // clang-format on
 
-void vcry_set_role_initiator(void) { vctx.role = vcry_hshake_role_initiator; }
+error_t vcry_module_init(void) {
+  if (initialized)
+    return ERR_SUCCESS;
 
-void vcry_set_role_responder(void) { vctx.role = vcry_hshake_role_responder; }
+  vctx = zt_calloc(1, sizeof(struct vcry_ctx_st));
+  if (!vctx)
+    return VCRY_ERR_SET(ERR_MEM_FAIL);
+  initialized = 1;
+  return ERR_SUCCESS;
+}
+
+void vcry_set_role_initiator(void) {
+  if (initialized)
+    vctx->role = vcry_hshake_role_initiator;
+}
+
+void vcry_set_role_responder(void) {
+  if (initialized)
+    vctx->role = vcry_hshake_role_responder;
+}
 
 error_t vcry_get_last_err(void) { return __vcry_err_val; }
 
@@ -126,11 +260,52 @@ error_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
   if (!authpass)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
-  vctx.authpass = zt_memdup(authpass, authkey_len);
-  if (!vctx.authpass)
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
+  vctx->authpass = zt_memdup(authpass, authkey_len);
+  if (!vctx->authpass)
     return VCRY_ERR_SET(ERR_MEM_FAIL);
-  vctx.authkey_len = authkey_len;
+  vctx->authkey_len = authkey_len;
   return ERR_SUCCESS;
+}
+
+/** The encryption nonce (ini/res) */
+static const uint8_t *vcry_encr_nonce(void) {
+  static uint8_t iv[16];
+  uint64_t sn;
+
+  zt_memcpy(iv, _vcry_encr_iv(), VCRY_IV_ENCR_LEN);
+
+#ifdef __LITTLE_ENDIAN__
+  sn = BSWAP64(_vcry_seqno_self());
+#else
+  sn = _vcry_seqno_self();
+#endif
+
+  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sn;
+
+  _vcry_seqno_self_incr64();
+  return iv;
+}
+
+/** The decryption nonce (ini/res) */
+static const uint8_t *vcry_decr_nonce(void) {
+  static uint8_t iv[16];
+  uint64_t sn;
+
+  zt_memcpy(iv, _vcry_decr_iv(), VCRY_IV_ENCR_LEN);
+
+#ifdef __LITTLE_ENDIAN__
+  sn = BSWAP64(_vcry_seqno_peer());
+#else
+  sn = _vcry_seqno_peer();
+#endif
+
+  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sn;
+
+  _vcry_seqno_peer_incr64();
+  return iv;
 }
 
 error_t vcry_set_cipher_from_id(int id) {
@@ -160,12 +335,15 @@ error_t vcry_set_cipher_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
     PRINTERROR("cipher algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = cipher_intf_alloc(&cipher_intf, &vctx.cipher, key_len, 0, alg)) !=
+  if ((ret = cipher_intf_alloc(&cipher_intf, &vctx->cipher, key_len, 0, alg)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -177,14 +355,12 @@ error_t vcry_set_cipher_from_id(int id) {
 error_t vcry_set_cipher_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "AES-CTR-128"))
-    id = VCRY_CIPHER_AES_CTR_128;
-  else if (!strcmp(name, "AES-CTR-192"))
-    id = VCRY_CIPHER_AES_CTR_192;
-  else if (!strcmp(name, "AES-CTR-256"))
-    id = VCRY_CIPHER_AES_CTR_256;
-  else if (!strcmp(name, "CHACHA20"))
-    id = VCRY_CIPHER_CHACHA20;
+  VCRY_ALG_LOOP(_vcry_cipher_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_cipher_from_id(id);
 }
 
@@ -215,12 +391,15 @@ error_t vcry_set_aead_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
     PRINTERROR("aead algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = cipher_intf_alloc(&aead_intf, &vctx.aead, key_len,
+  if ((ret = cipher_intf_alloc(&aead_intf, &vctx->aead, key_len,
                                AES_GCM_AUTH_TAG_LEN_LONG, alg)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
@@ -233,26 +412,20 @@ error_t vcry_set_aead_from_id(int id) {
 error_t vcry_set_aead_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "AES-GCM-128"))
-    id = VCRY_AEAD_AES_GCM_128;
-  else if (!strcmp(name, "AES-GCM-192"))
-    id = VCRY_AEAD_AES_GCM_192;
-  else if (!strcmp(name, "AES-GCM-256"))
-    id = VCRY_AEAD_AES_GCM_256;
-  else if (!strcmp(name, "CHACHA20-POLY1305"))
-    id = VCRY_AEAD_CHACHA20_POLY1305;
+  VCRY_ALG_LOOP(_vcry_aead_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_aead_from_id(id);
 }
 
-error_t vcry_get_aead_tag_len(size_t *len) {
-  if (!len)
-    return VCRY_ERR_SET(ERR_NULL_PTR);
+size_t vcry_get_aead_tag_len(void) {
+  if (unlikely(VCRY_FLAG_GET(vcry_fl_aead_set) != vcry_fl_aead_set))
+    return 0;
 
-  if (VCRY_FLAG_GET(vcry_fl_aead_set) != vcry_fl_aead_set)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
-  *len = cipher_tag_len(vctx.aead);
-  return ERR_SUCCESS;
+  return cipher_tag_len(vctx->aead);
 }
 
 error_t vcry_set_hmac_from_id(int id) {
@@ -290,12 +463,15 @@ error_t vcry_set_hmac_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!hmac_intf_alg_is_supported(&hmac_intf, alg)) {
     PRINTERROR("HMAC algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = hmac_intf_alloc(&hmac_intf, &vctx.mac, key_len, key_len, alg)) !=
+  if ((ret = hmac_intf_alloc(&hmac_intf, &vctx->mac, key_len, key_len, alg)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -307,30 +483,20 @@ error_t vcry_set_hmac_from_id(int id) {
 error_t vcry_set_hmac_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "HMAC-SHA256"))
-    id = VCRY_HMAC_SHA256;
-  else if (!strcmp(name, "HMAC-SHA384"))
-    id = VCRY_HMAC_SHA384;
-  else if (!strcmp(name, "HMAC-SHA512"))
-    id = VCRY_HMAC_SHA512;
-  else if (!strcmp(name, "HMAC-SHA3-256"))
-    id = VCRY_HMAC_SHA3_256;
-  else if (!strcmp(name, "HMAC-SHA3-384"))
-    id = VCRY_HMAC_SHA3_384;
-  else if (!strcmp(name, "HMAC-SHA3-512"))
-    id = VCRY_HMAC_SHA3_512;
+  VCRY_ALG_LOOP(_vcry_hmac_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_hmac_from_id(id);
 }
 
-error_t vcry_get_hmac_digest_len(size_t *len) {
-  if (!len)
-    return VCRY_ERR_SET(ERR_NULL_PTR);
+size_t vcry_get_hmac_digest_len(void) {
+  if (unlikely(VCRY_FLAG_GET(vcry_fl_mac_set) != vcry_fl_mac_set))
+    return 0;
 
-  if (VCRY_FLAG_GET(vcry_fl_mac_set) != vcry_fl_mac_set)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
-  *len = hmac_digest_len(vctx.mac);
-  return ERR_SUCCESS;
+  return hmac_digest_len(vctx->mac);
 }
 
 error_t vcry_set_ecdh_from_id(int id) {
@@ -363,12 +529,15 @@ error_t vcry_set_ecdh_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!kex_intf_curve_is_supported(&kex_ecc_intf, curve)) {
     PRINTERROR("curve not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = kex_intf_alloc(&kex_ecc_intf, &vctx.kex, curve)) != ERR_SUCCESS)
+  if ((ret = kex_intf_alloc(&kex_ecc_intf, &vctx->kex, curve)) != ERR_SUCCESS)
     return VCRY_ERR_SET(ret);
 
   VCRY_FLAG_SET(vcry_fl_kex_set);
@@ -378,20 +547,12 @@ error_t vcry_set_ecdh_from_id(int id) {
 error_t vcry_set_ecdh_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "ECDH-SECP256K1"))
-    id = VCRY_KEX_ECDH_SECP256K1;
-  else if (!strcmp(name, "ECDH-SECP384R1"))
-    id = VCRY_KEX_ECDH_SECP384R1;
-  else if (!strcmp(name, "ECDH-SECP521R1"))
-    id = VCRY_KEX_ECDH_SECP521R1;
-  else if (!strcmp(name, "ECDH-PRIME239V3"))
-    id = VCRY_KEX_ECDH_PRIME239V3;
-  else if (!strcmp(name, "ECDH-PRIME256V1"))
-    id = VCRY_KEX_ECDH_PRIME256V1;
-  else if (!strcmp(name, "ECDH-X25519"))
-    id = VCRY_KEX_ECDH_X25519;
-  else if (!strcmp(name, "ECDH-X448"))
-    id = VCRY_KEX_ECDH_X448;
+  VCRY_ALG_LOOP(_vcry_ecdh_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_ecdh_from_id(id);
 }
 
@@ -414,12 +575,15 @@ error_t vcry_set_kem_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!kem_intf_alg_is_supported(&kem_kyber_intf, alg)) {
     PRINTERROR("KEM algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = kem_intf_alloc(&kem_kyber_intf, &vctx.kem, alg)) != ERR_SUCCESS)
+  if ((ret = kem_intf_alloc(&kem_kyber_intf, &vctx->kem, alg)) != ERR_SUCCESS)
     return VCRY_ERR_SET(ret);
 
   VCRY_FLAG_SET(vcry_fl_kem_set);
@@ -429,12 +593,12 @@ error_t vcry_set_kem_from_id(int id) {
 error_t vcry_set_kem_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "KEM-KYBER512"))
-    id = VCRY_KEM_KYBER512;
-  else if (!strcmp(name, "KEM-KYBER768"))
-    id = VCRY_KEM_KYBER768;
-  else if (!strcmp(name, "KEM-KYBER1024"))
-    id = VCRY_KEM_KYBER1024;
+  VCRY_ALG_LOOP(_vcry_kem_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_kem_from_id(id);
 }
 
@@ -457,12 +621,15 @@ error_t vcry_set_kdf_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
   if (!kdf_intf_alg_is_supported(&kdf_intf, alg)) {
     PRINTERROR("KDF algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
-  if ((ret = kdf_intf_alloc(&kdf_intf, &vctx.kdf, alg)) != ERR_SUCCESS)
+  if ((ret = kdf_intf_alloc(&kdf_intf, &vctx->kdf, alg)) != ERR_SUCCESS)
     return VCRY_ERR_SET(ret);
 
   VCRY_FLAG_SET(vcry_fl_kdf_set);
@@ -472,12 +639,12 @@ error_t vcry_set_kdf_from_id(int id) {
 error_t vcry_set_kdf_from_name(const char *name) {
   int id = -0xfff;
 
-  if (!strcmp(name, "KDF-PBKDF2"))
-    id = VCRY_KDF_PBKDF2;
-  else if (!strcmp(name, "KDF-SCRYPT"))
-    id = VCRY_KDF_SCRYPT;
-  else if (!strcmp(name, "KDF-ARGON2"))
-    id = VCRY_KDF_ARGON2;
+  VCRY_ALG_LOOP(_vcry_kdf_entry_arr, {
+    if (!strcasecmp(name, p->name)) {
+      id = p->id;
+      break;
+    }
+  });
   return vcry_set_kdf_from_id(id);
 }
 
@@ -524,12 +691,12 @@ error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     return VCRY_ERR_SET(ERR_INVALID);
   }
 
-  if (zt_systemrand_bytes(vctx.salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
+  if (zt_systemrand_bytes(vctx->salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
     return VCRY_ERR_SET(ERR_INTERNAL);
 
   uint8_t ctr128[16];
   zt_memset(ctr128, 0xef, sizeof(ctr128)); /* trivial counter for kdf_init() */
-  if ((ret = kdf_init(vctx.kdf, vctx.authpass, vctx.authkey_len, vctx.salt,
+  if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
                       VCRY_HSHAKE_SALT0_LEN, ctr128)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -538,33 +705,34 @@ error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     return VCRY_ERR_SET(ERR_MEM_FAIL);
 
   /** Derive the master key from the master password (auth key) */
-  VCRY_EXPECT(kdf_derive(vctx.kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
+  VCRY_EXPECT(kdf_derive(vctx->kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
                          strlen(VCRY_HSHAKE_CONST0), k_pass,
                          VCRY_MASTER_KEY_LEN),
               ERR_SUCCESS, clean2);
 
   /** Generate the PQ-KEM keypair */
-  VCRY_EXPECT(kem_keygen(vctx.kem, &pqk, &pqk_len), ERR_SUCCESS, clean2);
+  VCRY_EXPECT(kem_keygen(vctx->kem, &pqk, &pqk_len), ERR_SUCCESS, clean2);
 
   /** Generate the DHE private key */
-  VCRY_EXPECT(kex_key_gen(vctx.kex), ERR_SUCCESS, clean2);
+  VCRY_EXPECT(kex_key_gen(vctx->kex), ERR_SUCCESS, clean2);
 
   /** Get the DHE public key share */
-  VCRY_EXPECT(kex_get_peer_data(vctx.kex, &keyshare_mine), ERR_SUCCESS, clean2);
+  VCRY_EXPECT(kex_get_peer_data(vctx->kex, &keyshare_mine), ERR_SUCCESS,
+              clean2);
 
   /**
    * Encrypt the PQ-KEM public seed value using the master key
    */
-  VCRY_EXPECT(cipher_init(vctx.cipher, k_pass, VCRY_MASTER_KEY_LEN,
+  VCRY_EXPECT(cipher_init(vctx->cipher, k_pass, VCRY_MASTER_KEY_LEN,
                           CIPHER_OPERATION_ENCRYPT),
               ERR_SUCCESS, clean1);
 
-  VCRY_EXPECT(cipher_set_iv(vctx.cipher, vctx.salt + VCRY_HSHAKE_SALT0_LEN,
+  VCRY_EXPECT(cipher_set_iv(vctx->cipher, vctx->salt + VCRY_HSHAKE_SALT0_LEN,
                             VCRY_HSHAKE_SALT1_LEN),
               ERR_SUCCESS, clean1);
 
   tmp_len = 0;
-  VCRY_EXPECT(cipher_encrypt(vctx.cipher, NULL, KEM_KYBER_PUBLIC_SEED_SIZE,
+  VCRY_EXPECT(cipher_encrypt(vctx->cipher, NULL, KEM_KYBER_PUBLIC_SEED_SIZE,
                              NULL, &tmp_len),
               ERR_BUFFER_TOO_SMALL, clean1);
 
@@ -576,7 +744,7 @@ error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
     goto clean1;
   }
 
-  VCRY_EXPECT(cipher_encrypt(vctx.cipher, pqk + rho_offs,
+  VCRY_EXPECT(cipher_encrypt(vctx->cipher, pqk + rho_offs,
                              KEM_KYBER_PUBLIC_SEED_SIZE, pqkenc + rho_offs,
                              &tmp_len),
               ERR_SUCCESS, clean0);
@@ -607,11 +775,11 @@ error_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   p += keyshare_mine.ec_curvename_len;
   zt_memcpy(p, pqkenc, pqkenc_len);
   p += pqkenc_len;
-  zt_memcpy(p, vctx.salt, VCRY_HSHAKE_SALT_LEN);
+  zt_memcpy(p, vctx->salt, VCRY_HSHAKE_SALT_LEN);
 
   /** This memory is freed in vcry_module_release() */
-  vctx.pqk = pqk;
-  vctx.pqk_len = pqk_len;
+  vctx->pqk = pqk;
+  vctx->pqk_len = pqk_len;
 
   VCRY_STATE_CHANGE(vcry_hs_initiate);
 
@@ -619,7 +787,7 @@ clean0:
   memzero(pqkenc, pqkenc_len);
   zt_free(pqkenc);
 clean1:
-  kex_free_peer_data(vctx.kex, &keyshare_mine);
+  kex_free_peer_data(vctx->kex, &keyshare_mine);
 clean2:
   memzero(k_pass, VCRY_MASTER_KEY_LEN);
   zt_free(k_pass);
@@ -692,7 +860,7 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
 
   p = (uint8_t *)(peerdata_theirs + (3 * sizeof(uint64_t)));
   /** Must be freed using kex_free_peer_data() while releasing the module */
-  if ((ret = kex_new_peer_data(vctx.kex, &vctx.peer_ec_share, p,
+  if ((ret = kex_new_peer_data(vctx->kex, &vctx->peer_ec_share, p,
                                peer_ec_pub_len, p + peer_ec_pub_len,
                                peer_ec_curvename_len)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
@@ -701,12 +869,12 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
 
   /** Set the session salt */
   p += peer_pqkenc_len;
-  zt_memcpy(vctx.salt, p, VCRY_HSHAKE_SALT_LEN);
+  zt_memcpy(vctx->salt, p, VCRY_HSHAKE_SALT_LEN);
 
   /** Compute K_pass */
   uint8_t ctr128[16];
   zt_memset(ctr128, 0xef, sizeof(ctr128));
-  if ((ret = kdf_init(vctx.kdf, vctx.authpass, vctx.authkey_len, vctx.salt,
+  if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
                       VCRY_HSHAKE_SALT0_LEN, ctr128)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -714,7 +882,7 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   if (!(k_pass = zt_malloc(VCRY_MASTER_KEY_LEN)))
     return VCRY_ERR_SET(ERR_MEM_FAIL);
 
-  VCRY_EXPECT(kdf_derive(vctx.kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
+  VCRY_EXPECT(kdf_derive(vctx->kdf, (const uint8_t *)VCRY_HSHAKE_CONST0,
                          strlen(VCRY_HSHAKE_CONST0), k_pass,
                          VCRY_MASTER_KEY_LEN),
               ERR_SUCCESS, clean1);
@@ -722,16 +890,16 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   /**
    * Decrypt the PQ-KEM public key using the master key
    */
-  VCRY_EXPECT(cipher_init(vctx.cipher, k_pass, VCRY_MASTER_KEY_LEN,
+  VCRY_EXPECT(cipher_init(vctx->cipher, k_pass, VCRY_MASTER_KEY_LEN,
                           CIPHER_OPERATION_DECRYPT),
               ERR_SUCCESS, clean1);
 
-  VCRY_EXPECT(cipher_set_iv(vctx.cipher, vctx.salt + VCRY_HSHAKE_SALT0_LEN,
+  VCRY_EXPECT(cipher_set_iv(vctx->cipher, vctx->salt + VCRY_HSHAKE_SALT0_LEN,
                             VCRY_HSHAKE_SALT1_LEN),
               ERR_SUCCESS, clean1);
 
   peer_pqk_len =
-      peer_pqkenc_len - cipher_tag_len(vctx.cipher);    // size(t_vec || rho)
+      peer_pqkenc_len - cipher_tag_len(vctx->cipher);   // size(t_vec || rho)
   rho_offs = peer_pqk_len - KEM_KYBER_PUBLIC_SEED_SIZE; // size(t_vec)
 
   if (!(peer_pqk = zt_malloc(peer_pqk_len))) {
@@ -740,7 +908,7 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   }
 
   tmp_len = SIZE_MAX; // we just have to pass the minimum size check
-  VCRY_EXPECT(cipher_decrypt(vctx.cipher, peer_pqkenc + rho_offs,
+  VCRY_EXPECT(cipher_decrypt(vctx->cipher, peer_pqkenc + rho_offs,
                              KEM_KYBER_PUBLIC_SEED_SIZE, peer_pqk + rho_offs,
                              &tmp_len),
               ERR_SUCCESS, clean1);
@@ -756,15 +924,16 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
    * directly stored in the VCRY context, we will free with the mandatory
    * closing call to vcry_module_release()
    */
-  VCRY_EXPECT(kem_encapsulate(vctx.kem, peer_pqk, peer_pqkenc_len, &ct, &ct_len,
-                              &vctx.ss, &vctx.ss_len),
+  VCRY_EXPECT(kem_encapsulate(vctx->kem, peer_pqk, peer_pqkenc_len, &ct,
+                              &ct_len, &vctx->ss, &vctx->ss_len),
               ERR_SUCCESS, clean1);
 
   /** Generate the DHE keypair */
-  VCRY_EXPECT(kex_key_gen(vctx.kex), ERR_SUCCESS, clean0);
+  VCRY_EXPECT(kex_key_gen(vctx->kex), ERR_SUCCESS, clean0);
 
   /** Get the DHE public key share */
-  VCRY_EXPECT(kex_get_peer_data(vctx.kex, &keyshare_mine), ERR_SUCCESS, clean0);
+  VCRY_EXPECT(kex_get_peer_data(vctx->kex, &keyshare_mine), ERR_SUCCESS,
+              clean0);
 
   /**
    * Serialize the DHE public key share and attach it to the response
@@ -791,10 +960,10 @@ error_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   zt_memcpy(p, ct, ct_len);
 
   /** This memory is freed in vcry_module_release() */
-  vctx.peer_pqk = peer_pqk;
-  vctx.pqk_len = peer_pqk_len;
+  vctx->peer_pqk = peer_pqk;
+  vctx->pqk_len = peer_pqk_len;
 
-  kex_free_peer_data(vctx.kex, &keyshare_mine);
+  kex_free_peer_data(vctx->kex, &keyshare_mine);
 
   VCRY_STATE_CHANGE(vcry_hs_response);
 
@@ -855,7 +1024,7 @@ error_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
   p = (uint8_t *)(peerdata + (3 * sizeof(uint64_t)));
 
   /** Must be freed using kex_free_peer_data() while releasing the module */
-  if ((ret = kex_new_peer_data(vctx.kex, &vctx.peer_ec_share, p,
+  if ((ret = kex_new_peer_data(vctx->kex, &vctx->peer_ec_share, p,
                                peer_ec_pub_len, p + peer_ec_pub_len,
                                peer_ec_curvename_len)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
@@ -868,8 +1037,8 @@ error_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
    *
    * Note: This memory is freed in the closing call to vcry_module_release()
    */
-  if ((ret = kem_decapsulate(vctx.kem, peer_ct, ct_len, &vctx.ss,
-                             &vctx.ss_len)) != ERR_SUCCESS) {
+  if ((ret = kem_decapsulate(vctx->kem, peer_ct, ct_len, &vctx->ss,
+                             &vctx->ss_len)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
@@ -916,14 +1085,14 @@ error_t vcry_derive_session_key(void) {
     return VCRY_ERR_SET(ERR_INVALID);
   }
 
-  if ((ret = kex_derive_shared_key(vctx.kex, &vctx.peer_ec_share,
+  if ((ret = kex_derive_shared_key(vctx->kex, &vctx->peer_ec_share,
                                    &shared_secret, &shared_secret_len)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
   /** Get own DHE raw public key and store the length in buf_len */
-  VCRY_EXPECT(kex_get_public_key_bytes(vctx.kex, &tmp, &tmp_len), ERR_SUCCESS,
+  VCRY_EXPECT(kex_get_public_key_bytes(vctx->kex, &tmp, &tmp_len), ERR_SUCCESS,
               clean2);
 
   /**
@@ -934,31 +1103,31 @@ error_t vcry_derive_session_key(void) {
   if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator) {
     dhek_a = tmp;
     dhek_a_len = tmp_len;
-    dhek_b = vctx.peer_ec_share.ec_pub;
-    dhek_b_len = vctx.peer_ec_share.ec_pub_len;
-    pqpub = vctx.pqk;
+    dhek_b = vctx->peer_ec_share.ec_pub;
+    dhek_b_len = vctx->peer_ec_share.ec_pub_len;
+    pqpub = vctx->pqk;
   } else {
-    dhek_a = vctx.peer_ec_share.ec_pub;
-    dhek_a_len = vctx.peer_ec_share.ec_pub_len;
+    dhek_a = vctx->peer_ec_share.ec_pub;
+    dhek_a_len = vctx->peer_ec_share.ec_pub_len;
     dhek_b = tmp;
     dhek_b_len = tmp_len;
-    pqpub = vctx.peer_pqk;
+    pqpub = vctx->peer_pqk;
   }
 
-  buf_len =
-      vctx.ss_len + shared_secret_len + vctx.pqk_len + dhek_a_len + dhek_b_len;
+  buf_len = vctx->ss_len + shared_secret_len + vctx->pqk_len + dhek_a_len +
+            dhek_b_len;
   if (!(buf = zt_malloc(buf_len))) {
     ret = VCRY_ERR_SET(ERR_MEM_FAIL);
     goto clean1;
   }
 
   p = buf;
-  zt_memcpy(p, vctx.ss, vctx.ss_len);
-  p += vctx.ss_len;
+  zt_memcpy(p, vctx->ss, vctx->ss_len);
+  p += vctx->ss_len;
   zt_memcpy(p, shared_secret, shared_secret_len);
   p += shared_secret_len;
-  zt_memcpy(p, pqpub, vctx.pqk_len);
-  p += vctx.pqk_len;
+  zt_memcpy(p, pqpub, vctx->pqk_len);
+  p += vctx->pqk_len;
   zt_memcpy(p, dhek_a, dhek_a_len);
   p += dhek_a_len;
   zt_memcpy(p, dhek_b, dhek_b_len);
@@ -966,13 +1135,13 @@ error_t vcry_derive_session_key(void) {
   uint8_t ctr128[16];
   memset(ctr128, 0xab, sizeof(ctr128));
   VCRY_EXPECT(
-      kdf_init(vctx.kdf, buf, buf_len,
-               vctx.salt + VCRY_HSHAKE_SALT0_LEN + VCRY_HSHAKE_SALT1_LEN,
+      kdf_init(vctx->kdf, buf, buf_len,
+               vctx->salt + VCRY_HSHAKE_SALT0_LEN + VCRY_HSHAKE_SALT1_LEN,
                VCRY_HSHAKE_SALT2_LEN, ctr128),
       ERR_SUCCESS, clean0);
 
-  VCRY_EXPECT(kdf_derive(vctx.kdf, (const uint8_t *)VCRY_HSHAKE_CONST1,
-                         strlen(VCRY_HSHAKE_CONST1), vctx.skey,
+  VCRY_EXPECT(kdf_derive(vctx->kdf, (const uint8_t *)VCRY_HSHAKE_CONST1,
+                         strlen(VCRY_HSHAKE_CONST1), vctx->skey,
                          VCRY_SESSION_KEY_LEN),
               ERR_SUCCESS, clean0);
 
@@ -992,7 +1161,7 @@ clean2:
 
 /**
  * Compute the initiator's verification message:
- * Proof_A = HMAC(K_mac, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
+ * Proof_A = HMAC(K_mac_ini, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
  *                "First proof message (Proof_A)")
  *
  * The caller is responsible for freeing the `verify_msg` buffer.
@@ -1038,21 +1207,21 @@ error_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
   if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return VCRY_ERR_SET(ERR_MEM_FAIL);
 
-  if ((ret = hmac_init(vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN)) !=
+  if ((ret = hmac_init(vctx->mac, vcry_k_mac_ini(), VCRY_K_MAC_LEN)) !=
       ERR_SUCCESS) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx.mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, id2, strlen(id2))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST0,
+  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                           strlen(VCRY_VERIFY_CONST0))) != ERR_SUCCESS)) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = hmac_compute(vctx.mac, NULL, 0, *verify_msg,
+  if ((ret = hmac_compute(vctx->mac, NULL, 0, *verify_msg,
                           VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
@@ -1065,7 +1234,7 @@ error_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
 
 /**
  * Compute the responder's verification message:
- * Proof_B = HMAC(K_mac, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
+ * Proof_B = HMAC(K_mac_res, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
  *                "Second proof message (Proof_B)")
  *
  * The caller is responsible for freeing the `verify_msg` buffer.
@@ -1111,21 +1280,21 @@ error_t vcry_responder_verify_initiate(uint8_t **verify_msg,
   if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
     return VCRY_ERR_SET(ERR_MEM_FAIL);
 
-  if ((ret = hmac_init(vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN)) !=
+  if ((ret = hmac_init(vctx->mac, vcry_k_mac_res(), VCRY_K_MAC_LEN)) !=
       ERR_SUCCESS) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx.mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, id2, strlen(id2))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST1,
+  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                           strlen(VCRY_VERIFY_CONST1))) != ERR_SUCCESS)) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = hmac_compute(vctx.mac, NULL, 0, *verify_msg,
+  if ((ret = hmac_compute(vctx->mac, NULL, 0, *verify_msg,
                           VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
     zt_free(*verify_msg);
     return VCRY_ERR_SET(ret);
@@ -1138,7 +1307,7 @@ error_t vcry_responder_verify_initiate(uint8_t **verify_msg,
 
 /**
  * Verify the responder's verification message:
- * Verify(ProofB, (HMAC(K_mac, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
+ * Verify(ProofB, (HMAC(K_mac_res, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
  *                "Second proof message (Proof_B)")))
  *
  * NOTE: This function is called by the initiator of the handshake process.
@@ -1174,19 +1343,19 @@ vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
     id2 = id_a;
   }
 
-  if ((ret = hmac_init(vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN)) !=
+  if ((ret = hmac_init(vctx->mac, vcry_k_mac_res(), VCRY_K_MAC_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx.mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, id2, strlen(id2))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST1,
+  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                           strlen(VCRY_VERIFY_CONST1))) != ERR_SUCCESS)) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = hmac_compute(vctx.mac, NULL, 0, verify_msg_cmp,
+  if ((ret = hmac_compute(vctx->mac, NULL, 0, verify_msg_cmp,
                           VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -1200,7 +1369,7 @@ vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
 
 /**
  * Verify the initiator's verification message:
- * Verify(ProofA, (HMAC(K_mac, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
+ * Verify(ProofA, (HMAC(K_mac_ini, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
  *                "First proof message (Proof_A)")))
  *
  * NOTE: This function is called by the responder of the handshake process.
@@ -1236,19 +1405,19 @@ vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
     id2 = id_a;
   }
 
-  if ((ret = hmac_init(vctx.mac, vcry_mac_key(), VCRY_MAC_KEY_LEN)) !=
+  if ((ret = hmac_init(vctx->mac, vcry_k_mac_ini(), VCRY_K_MAC_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx.mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, id2, strlen(id2))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx.mac, (const uint8_t *)VCRY_VERIFY_CONST0,
+  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                           strlen(VCRY_VERIFY_CONST0))) != ERR_SUCCESS)) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = hmac_compute(vctx.mac, NULL, 0, verify_msg_cmp,
+  if ((ret = hmac_compute(vctx->mac, NULL, 0, verify_msg_cmp,
                           VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -1269,111 +1438,106 @@ void vcry_module_release(void) {
   uint8_t *pqpub;
   size_t pqpub_len;
 
-  kex_free_peer_data(vctx.kex, &vctx.peer_ec_share);
-  kem_mem_free(&kem_kyber_intf, vctx.ss, vctx.ss_len);
+  kex_free_peer_data(vctx->kex, &vctx->peer_ec_share);
+  kem_mem_free(&kem_kyber_intf, vctx->ss, vctx->ss_len);
 
   if (VCRY_FLAG_GET(vcry_fl_cipher_set))
-    cipher_dealloc(vctx.cipher);
+    cipher_dealloc(vctx->cipher);
 
   if (VCRY_FLAG_GET(vcry_fl_aead_set))
-    cipher_dealloc(vctx.aead);
+    cipher_dealloc(vctx->aead);
 
   if (VCRY_FLAG_GET(vcry_fl_mac_set))
-    hmac_dealloc(vctx.mac);
+    hmac_dealloc(vctx->mac);
 
   if (VCRY_FLAG_GET(vcry_fl_kex_set))
-    kex_dealloc(vctx.kex);
+    kex_dealloc(vctx->kex);
 
   if (VCRY_FLAG_GET(vcry_fl_kem_set))
-    kem_dealloc(vctx.kem);
+    kem_dealloc(vctx->kem);
 
   if (VCRY_FLAG_GET(vcry_fl_kdf_set))
-    kdf_dealloc(vctx.kdf);
+    kdf_dealloc(vctx->kdf);
 
   if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator) {
-    kem_mem_free(&kem_kyber_intf, vctx.pqk, vctx.pqk_len);
+    kem_mem_free(&kem_kyber_intf, vctx->pqk, vctx->pqk_len);
   } else if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_responder) {
-    memzero(vctx.peer_pqk, vctx.pqk_len);
-    zt_free(vctx.peer_pqk);
+    memzero(vctx->peer_pqk, vctx->pqk_len);
+    zt_free(vctx->peer_pqk);
   }
 
-  memzero(vctx.authpass, vctx.authkey_len);
-  memzero(vctx.salt, VCRY_HSHAKE_SALT_LEN);
-  memzero(vctx.skey, VCRY_SESSION_KEY_LEN);
+  memzero(vctx->authpass, vctx->authkey_len);
+  zt_free(vctx->authpass);
 
-  zt_free(vctx.authpass);
+  memzero(vctx, sizeof(struct vcry_ctx_st));
+  zt_free(vctx);
+  vctx = NULL;
+  initialized = 0;
 
-  vctx.authpass = NULL;
-  vctx.pqk = NULL;
-  vctx.peer_pqk = NULL;
-  vctx.ss = NULL;
-
-  vctx.authkey_len = 0;
-  vctx.pqk_len = 0;
-  vctx.ss_len = 0;
-
-  vctx.role = 0;
-
-  vctx.state = vcry_hs_none;
-
-  vctx.flags = 0;
+  __vcry_err_val = ERR_SUCCESS;
 }
 
 /**
  * Encrypt data in \p in of size \p in_len using the selected AEAD cipher
- * algorithm with the encryption (key, iv) pair for this session and store the
+ * algorithm with the key material derived for this session, and store the
  * result in \p out.
  * \p out_len must contain the length of the buffer pointed to by \p out,
- * sufficient to store the encrypted data and the tag.
+ * sufficient to store the encrypted data and the authentication tag.
  *
  * \p in and \p out can overlap.
  *
- * The caller must check for the combined length of the encrypted data and the
- * tag is stored in \p out_len after the function returns successfully.
+ * A successful encryption will result in \p out_len being set to the total
+ * length of the encrypted and authenticated payload.
+ *
+ * The client must make sure the output buffer is large enough to hold the
+ * encrypted data as well as the authentication tag. The length of the tag can
+ * be queried by calling `vcry_get_aead_tag_len()`.
  *
  * Performs
- * out[in_len] = AEAD-Enc(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len])
- * and returns out[in_len] || tag[Tag_len].
+ * out[in_len] = AEAD-Enc(in[in_len], k=K_encr_self, iv=nonce, aad=ad[ad_len])
+ * and returns out[in_len] || tag[Tag_len]
+ *
+ * Here, `nonce` = 'sequence_number_self` XOR `IV_self`
  *
  * This function may only be called after the handshake is complete.
  *
  * Returns an `error_t` status code.
  *
  * If the buffer pointed to by \p out is too small to store the encrypted data
- * and the tag, the function returns ERR_BUFFER_TOO_SMALL and sets \p out_len to
- * the required length.
+ * and the tag, the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 error_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
                           size_t ad_len, uint8_t *out, size_t *out_len) {
   error_t ret;
   size_t tag_len;
 
-  if (!in || !in_len || !out || !out_len)
+  if (!in || !out || !out_len)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
   if (VCRY_STATE() != vcry_hs_done)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  tag_len = cipher_tag_len(vctx.aead);
-  if (*out_len < in_len + tag_len) {
-    *out_len = in_len + tag_len;
-    return VCRY_ERR_SET(ERR_BUFFER_TOO_SMALL);
-  }
+  if (_vcry_seqno_self() == UINT64_MAX)
+    return VCRY_ERR_SET(ERR_OPERATION_LIMIT_REACHED);
 
-  if ((ret = cipher_init(vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
+  tag_len = cipher_tag_len(vctx->aead);
+  if (*out_len < in_len + tag_len)
+    return VCRY_ERR_SET(ERR_BUFFER_TOO_SMALL);
+
+  if ((ret = cipher_init(vctx->aead, vcry_encr_key(), VCRY_K_ENCR_LEN,
                          CIPHER_OPERATION_ENCRYPT)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_iv(vctx.aead, vcry_enc_iv(), VCRY_ENC_IV_LEN)) !=
+  if ((ret = cipher_set_iv(vctx->aead, vcry_encr_nonce(), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_aad(vctx.aead, ad, ad_len)) != ERR_SUCCESS)
+  if ((ret = cipher_set_aad(vctx->aead, ad, ad_len)) != ERR_SUCCESS)
     return VCRY_ERR_SET(ret);
 
-  if ((ret = cipher_encrypt(vctx.aead, in, in_len, out, out_len)) !=
+  if ((ret = cipher_encrypt(vctx->aead, in, in_len, out, out_len)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -1383,26 +1547,27 @@ error_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
 
 /**
  * Decrypt data in \p in of size \p in_len using the selected AEAD cipher
- * algorithm with the encryption (key, iv) pair for this session and store the
+ * algorithm with the key material derived for this session, and store the
  * result in \p out.
  * \p out_len must contain the length of the buffer pointed to by \p out,
  * sufficient to store the plaintext.
  *
  * \p in and \p out can overlap.
  *
- * The caller must check for the length of the decrypted data stored in \p
- * out_len after the function returns successfully.
+ * A successful decryption will result in \p out_len being set to the length of
+ * the plaintext data.
  *
  * Performs
- * out[in_len] = AEAD-Dec(in[in_len], k=K_enc, iv=IV_enc, aad=ad[ad_len]).
+ * out[in_len] = AEAD-Dec(in[in_len], k=K_encr_peer, iv=nonce, aad=ad[ad_len])
+ *
+ * Here, `nonce` = `sequence_number_peer` XOR `IV_peer`
  *
  * This function may only be called after the handshake is complete.
  *
  * Returns an `error_t` status code.
  *
  * If the buffer pointed to by \p out is too small to store the decrypted data,
- * the function returns ERR_BUFFER_TOO_SMALL and sets \p out_len to the required
- * length.
+ * the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 error_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
                           size_t ad_len, uint8_t *out, size_t *out_len) {
@@ -1415,31 +1580,32 @@ error_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
   if (VCRY_STATE() != vcry_hs_done)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  tag_len = cipher_tag_len(vctx.aead);
+  if (_vcry_seqno_peer() == UINT64_MAX)
+    return VCRY_ERR_SET(ERR_OPERATION_LIMIT_REACHED);
+
+  tag_len = cipher_tag_len(vctx->aead);
 
   /* Invalid message */
   if (in_len < tag_len)
-    return VCRY_ERR_SET(ERR_INVALID);
+    return VCRY_ERR_SET(ERR_INVALID_DATUM);
 
-  if (*out_len < in_len - tag_len) {
-    *out_len = in_len - tag_len;
+  if (*out_len < in_len - tag_len)
     return VCRY_ERR_SET(ERR_BUFFER_TOO_SMALL);
-  }
 
-  if ((ret = cipher_init(vctx.aead, vcry_enc_key(), VCRY_ENC_KEY_LEN,
+  if ((ret = cipher_init(vctx->aead, vcry_decr_key(), VCRY_K_ENCR_LEN,
                          CIPHER_OPERATION_DECRYPT)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_iv(vctx.aead, vcry_enc_iv(), VCRY_ENC_IV_LEN)) !=
+  if ((ret = cipher_set_iv(vctx->aead, vcry_decr_nonce(), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_aad(vctx.aead, ad, ad_len)) != ERR_SUCCESS)
+  if ((ret = cipher_set_aad(vctx->aead, ad, ad_len)) != ERR_SUCCESS)
     return VCRY_ERR_SET(ret);
 
-  if ((ret = cipher_decrypt(vctx.aead, in, in_len, out, out_len)) !=
+  if ((ret = cipher_decrypt(vctx->aead, in, in_len, out, out_len)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
