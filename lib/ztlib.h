@@ -18,7 +18,7 @@ struct _config {
     *hmac_alg,
     *ecdh_alg,
     *kem_alg,
-    *kdf_alg;
+    *kdf_alg,
     *filename;
   uint16_t
     padding_factor; // ignored unless `config_length_obfuscation=true`

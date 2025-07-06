@@ -479,7 +479,7 @@ static error_t client_send(zt_client_connection_t *conn) {
   if ((conn->state == CLIENT_TRANSFER) && config.config_length_obfuscation) {
     size_t padding;
 
-    vcry_get_aead_tag_len(&taglen);
+    taglen = vcry_get_aead_tag_len();
 
     padding = (len - 1) & (config.padding_factor - 1);
     zt_memset(rawptr + len, 0x00, padding); // FIX: possible side-channel?
@@ -565,10 +565,7 @@ static error_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
 
   is_encrypted = (zt_msg_type(conn->msgbuf) != MSG_HANDSHAKE);
 
-  if (is_encrypted)
-    vcry_get_aead_tag_len(&taglen);
-  else
-    taglen = 0;
+  taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = zt_msg_data_len(conn->msgbuf) + taglen;
 
   /** Read message payload */
@@ -604,14 +601,12 @@ out:
   return ret;
 }
 
-error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
+error_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
+                     bool *done) {
   error_t ret = ERR_SUCCESS;
   struct passwd *master_pass;
   zt_fileinfo_t fileinfo;
   zt_fio_t *fileptr;
-#if 1 // defined(DEBUG)
-  zt_timeval_t start;
-#endif
 
   if (!conn || !done)
     return ERR_NULL_PTR;
@@ -650,11 +645,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
   if ((ret = vcry_get_last_err()) != ERR_SUCCESS)
     goto cleanup;
 
-  for (;;
-#if 1 // defined(DEBUG)
-       start = zt_time_now()
-#endif
-  ) {
+  for (;;) {
     switch (conn->state) {
     case CLIENT_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
@@ -829,7 +820,7 @@ error_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done) {
     }
 
     case CLIENT_DONE: {
-      zt_msg_make(conn->msgbuf, MSG_DONE, NULL, 0);
+      zt_msg_make(conn->msgbuf, MSG_DONE, PTR8("BYE"), 4);
 
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup;

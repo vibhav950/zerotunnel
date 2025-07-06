@@ -26,7 +26,7 @@ typedef struct _zt_client_connection_st {
   zt_msg_t
     *msgbuf;
   char
-    *hostname;
+    *hostname,
     *explicit_port;
   int
     sockfd,

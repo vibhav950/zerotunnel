@@ -168,14 +168,14 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
     if (i != count - 1)
       buf[j++] = sep;
   }
-  buf[j] = '\0';
+  buf[j++] = '\0';
 
-  if (!(pass = zt_malloc(j + 1))) {
-    memzero(buf, j + 1);
+  if (!(pass = zt_malloc(j))) {
+    memzero(buf, j);
     return NULL;
   }
-  strcpy(pass, buf);
-  memzero(buf, j + 1);
+  zt_memcpy(pass, buf, j);
+  memzero(buf, j);
   return pass;
 }
 

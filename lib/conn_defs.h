@@ -31,7 +31,7 @@
 
 #define CLIENT_RESOLVE_RETRIES          5       /* Host resolution retries */
 
-typedef enum {
+enum {
   MSG_HANDSHAKE   = (1 << 0), /* Handshake message type */
   MSG_CONTROL     = (1 << 1), /* Control message */
   MSG_METADATA    = (1 << 2), /* File metadata */
