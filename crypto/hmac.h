@@ -3,25 +3,34 @@
 
 #include "common/defines.h"
 
+// clang-format off
+
 typedef enum {
   HMAC_FLAG_ALLOC = (1U << 0),
-  HMAC_FLAG_INIT = (1U << 1),
+  HMAC_FLAG_INIT  = (1U << 1),
 } hmac_flag_t;
 
-/**
- * This enum MUST NOT be changed, since implementation
- * exists only for the algorithms present in this list
- */
-typedef enum {
-  HMAC_SHA256 = (1U << 0),
-  HMAC_SHA384 = (1U << 1),
-  HMAC_SHA512 = (1U << 2),
-  HMAC_SHA3_256 = (1U << 3),
-  HMAC_SHA3_384 = (1U << 4),
-  HMAC_SHA3_512 = (1U << 5),
-  HMAC_ALG_ALL = HMAC_SHA256 | HMAC_SHA384 | HMAC_SHA512 | HMAC_SHA3_256 |
-                 HMAC_SHA3_384 | HMAC_SHA3_512,
-} hmac_alg_t;
+/* List of potential HMAC algorithms; the underlying
+  crypto library must provide these options at runtime */
+enum {
+  HMAC_SHA256     = (1U << 0),
+  HMAC_SHA384     = (1U << 1),
+  HMAC_SHA512     = (1U << 2),
+  HMAC_SHA3_256   = (1U << 3),
+  HMAC_SHA3_384   = (1U << 4),
+  HMAC_SHA3_512   = (1U << 5),
+  HMAC_ALG_ALL    = HMAC_SHA256 |
+                    HMAC_SHA384 |
+                    HMAC_SHA512 |
+                    HMAC_SHA3_256 |
+                    HMAC_SHA3_384 |
+                    HMAC_SHA3_512,
+};
+
+// clang-format on
+
+/** Fixed-size HMAC identifier */
+typedef uint8_t hmac_alg_t;
 
 /** A pointer type for @p hmac_st, which is defined later */
 typedef struct hmac_st *hmac_ptr_t;

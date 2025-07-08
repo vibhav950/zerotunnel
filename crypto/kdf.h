@@ -3,17 +3,24 @@
 
 #include "common/defines.h"
 
+// clang-format off
+
 typedef enum {
-  KDF_FLAG_ALLOC = (1U << 0),
-  KDF_FLAG_INIT = (1U << 1),
+  KDF_FLAG_ALLOC       = (1U << 0),
+  KDF_FLAG_INIT        = (1U << 1),
   KDF_FLAG_NEED_REINIT = (1U << 2),
 } kdf_flag_t;
 
-typedef enum {
+enum {
   KDF_ALG_scrypt = (1U << 0),
   KDF_ALG_PBKDF2 = (1U << 1),
   KDF_ALG_argon2 = (1U << 2),
-} kdf_alg_t;
+};
+
+// clang-format on
+
+/** Fixed-size KDF identifier */
+typedef uint8_t kdf_alg_t;
 
 /* Forward declaration */
 typedef struct kdf_st *kdf_ptr_t;

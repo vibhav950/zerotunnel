@@ -3,21 +3,30 @@
 
 #include "common/defines.h"
 
+// clang-format off
+
 typedef enum {
-  KEX_FLAG_ALLOC = (1U << 0),
+  KEX_FLAG_ALLOC  = (1U << 0),
   KEX_FLAG_KEYGEN = (1U << 1),
 } kex_flag_t;
 
-/** */
-typedef enum {
-  KEX_CURVE_secp256k1 = (1U << 0),
-  KEX_CURVE_secp384r1 = (1U << 1),
-  KEX_CURVE_secp521r1 = (1U << 2),
-  KEX_CURVE_prime239v3 = (1U << 3),
-  KEX_CURVE_prime256v1 = (1U << 4),
-  KEX_CURVE_X25519 = (1U << 5),
-  KEX_CURVE_X448 = (1U << 6),
-} kex_curve_t;
+/** List of potential KEX curves. For the option(s) to
+  be available at runtime, they must  be made available
+  by the underlying crypto library. */
+enum {
+  KEX_CURVE_secp256k1   = (1U << 0),
+  KEX_CURVE_secp384r1   = (1U << 1),
+  KEX_CURVE_secp521r1   = (1U << 2),
+  KEX_CURVE_prime239v3  = (1U << 3),
+  KEX_CURVE_prime256v1  = (1U << 4),
+  KEX_CURVE_X25519      = (1U << 5),
+  KEX_CURVE_X448        = (1U << 6),
+};
+
+// clang-format on
+
+/* Fixed-size key-exchange curve identifier */
+typedef uint8_t kex_curve_t;
 
 /* kex_* pointers that are required but not yet defined */
 typedef struct kex_st *kex_ptr_t;

@@ -3,28 +3,35 @@
 
 #include "common/defines.h"
 
+// clang-format off
+
 typedef enum {
   CIPHER_FLAG_ALLOC = (1U << 0),
-  CIPHER_FLAG_INIT = (1U << 1),
-  CIPHER_FLAG_AAD = (1U << 2),
+  CIPHER_FLAG_INIT  = (1U << 1),
+  CIPHER_FLAG_AAD   = (1U << 2),
 } cipher_flag_t;
 
-/**
- * This enum MUST NOT be changed, since implementation
- * exists only for the algorithms present in this list
- */
-typedef enum {
-  CIPHER_AES_CTR_128 = (1U << 0),
-  CIPHER_AES_CTR_192 = (1U << 1),
-  CIPHER_AES_CTR_256 = (1U << 2),
-  CIPHER_CHACHA20 = (1U << 3),
-  AEAD_AES_GCM_128 = (1U << 4),
-  AEAD_AES_GCM_192 = (1U << 5),
-  AEAD_AES_GCM_256 = (1U << 6),
+/* List of potential cipher algorithms; the underlying
+  crypto library must provide these options at runtime */
+enum {
+  CIPHER_AES_CTR_128     = (1U << 0),
+  CIPHER_AES_CTR_192     = (1U << 1),
+  CIPHER_AES_CTR_256     = (1U << 2),
+  CIPHER_CHACHA20        = (1U << 3),
+  AEAD_AES_GCM_128       = (1U << 4),
+  AEAD_AES_GCM_192       = (1U << 5),
+  AEAD_AES_GCM_256       = (1U << 6),
   AEAD_CHACHA20_POLY1305 = (1U << 7),
-  AEAD_ALL = AEAD_AES_GCM_128 | AEAD_AES_GCM_192 | AEAD_AES_GCM_256 |
-             AEAD_CHACHA20_POLY1305,
-} cipher_alg_t;
+  AEAD_ALL               = AEAD_AES_GCM_128 |
+                           AEAD_AES_GCM_192 |
+                           AEAD_AES_GCM_256 |
+                           AEAD_CHACHA20_POLY1305,
+};
+
+// clang-format on
+
+/** Fixed-size cipher identifier */
+typedef uint8_t cipher_alg_t;
 
 typedef enum cipher_operation_st {
   CIPHER_OPERATION_DECRYPT = 1,

@@ -3,16 +3,23 @@
 
 #include "common/defines.h"
 
+// clang-format off
+
 typedef enum {
   KEM_FLAG_ALLOC          = (1U << 0),
   KEM_FLAG_KEYGEN         = (1U << 1),
 } kem_flag_t;
 
-typedef enum {
+enum {
   KEM_Kyber_512           = (1U << 0),
   KEM_Kyber_768           = (1U << 1),
   KEM_Kyber_1024          = (1U << 2),
-} kem_alg_t;
+};
+
+// clang-format on
+
+/* Fixed-size KEM algorithm identifier */
+typedef uint8_t kem_alg_t;
 
 /* Forward declaration */
 typedef struct kem_st *kem_ptr_t;
