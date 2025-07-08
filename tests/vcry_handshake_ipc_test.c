@@ -74,12 +74,9 @@ static void initiator_process(int read_fd, int write_fd) {
 
   ASSERT(vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
 
-  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == ERR_SUCCESS);
-  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == ERR_SUCCESS);
-  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == ERR_SUCCESS);
-  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == ERR_SUCCESS);
-  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == ERR_SUCCESS);
-  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == ERR_SUCCESS);
+  ASSERT(vcry_set_crypto_params_from_names(
+             "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
+             "KEM-KYBER512", "KDF-PBKDF2") == ERR_SUCCESS);
 
   /* ============ HANDSHAKE INITIATE ============ */
 
@@ -166,12 +163,9 @@ static void responder_process(int read_fd, int write_fd) {
 
   ASSERT(vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
 
-  ASSERT(vcry_set_cipher_from_name("AES-CTR-256") == ERR_SUCCESS);
-  ASSERT(vcry_set_aead_from_name("AES-GCM-256") == ERR_SUCCESS);
-  ASSERT(vcry_set_hmac_from_name("HMAC-SHA256") == ERR_SUCCESS);
-  ASSERT(vcry_set_ecdh_from_name("ECDH-X25519") == ERR_SUCCESS);
-  ASSERT(vcry_set_kem_from_name("KEM-KYBER512") == ERR_SUCCESS);
-  ASSERT(vcry_set_kdf_from_name("KDF-PBKDF2") == ERR_SUCCESS);
+  ASSERT(vcry_set_crypto_params_from_names(
+             "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
+             "KEM-KYBER512", "KDF-PBKDF2") == ERR_SUCCESS);
 
   /* wait for initiation message */
   read_data = recv_data(read_fd, &read_len);

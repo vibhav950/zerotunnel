@@ -1,29 +1,26 @@
 #ifndef __VCRY_H__
 #define __VCRY_H__
 
-// clang-format off
-
 #include "common/defines.h"
 #include "crypto/cipher.h"
 #include "crypto/hmac.h"
 #include "crypto/kex.h"
 
-/** Ciphers */
+// clang-format off
 
+/** Block ciphers */
 #define VCRY_CIPHER_AES_CTR_128       0x001
 #define VCRY_CIPHER_AES_CTR_192       0x002
 #define VCRY_CIPHER_AES_CTR_256       0x003
 #define VCRY_CIPHER_CHACHA20          0x004
 
 /** AEAD ciphers */
-
 #define VCRY_AEAD_AES_GCM_128         0x021
 #define VCRY_AEAD_AES_GCM_192         0x022
 #define VCRY_AEAD_AES_GCM_256         0x023
 #define VCRY_AEAD_CHACHA20_POLY1305   0x024
 
-/** HMAC */
-
+/** Keyed MACs */
 #define VCRY_HMAC_SHA256              0x031
 #define VCRY_HMAC_SHA384              0x032
 #define VCRY_HMAC_SHA512              0x033
@@ -31,8 +28,7 @@
 #define VCRY_HMAC_SHA3_384            0x035
 #define VCRY_HMAC_SHA3_512            0x036
 
-/** Elliptic Curve Diffie-Hellman */
-
+/** Diffie-Hellman ECC curves */
 #define VCRY_KEX_ECDH_SECP256K1       0x041
 #define VCRY_KEX_ECDH_SECP384R1       0x042
 #define VCRY_KEX_ECDH_SECP521R1       0x043
@@ -41,21 +37,19 @@
 #define VCRY_KEX_ECDH_X25519          0x046
 #define VCRY_KEX_ECDH_X448            0x047
 
-/** PQ-KEM */
-
+/** ML-KEM (Kyber) -- PQ-KEM */
 #define VCRY_KEM_KYBER512             0x051
 #define VCRY_KEM_KYBER768             0x052
 #define VCRY_KEM_KYBER1024            0x053
 
-/** Key Derivation Function */
-
+/** Key derivation functions */
 #define VCRY_KDF_PBKDF2               0x061
 #define VCRY_KDF_SCRYPT               0x062
 #define VCRY_KDF_ARGON2               0x063
 
 /**
- * Salt length
- * len(SALT) = len(SALT0) + len(SALT1) + len(SALT2)
+ * Initiator random salt (salt0 || salt1 || salt2)
+ * len(salt) = len(salt0) + len(salt1) + len(salt2)
  */
 #define VCRY_HSHAKE_SALT_LEN           80UL
 #define VCRY_HSHAKE_SALT0_LEN          32UL
@@ -66,33 +60,36 @@
 #define VCRY_MASTER_KEY_LEN            32UL
 
 
-#define   VCRY_K_MAC_LEN               32UL
-#define  VCRY_K_ENCR_LEN               32UL
+#define VCRY_K_MAC_LEN                 32UL
+#define VCRY_K_ENCR_LEN                32UL
 #define VCRY_IV_ENCR_LEN               12UL
 
-/**
- * K_sess =
- *  K_mac_ini || K_mac_res ||
- *  K_encr_ini || K_encr_res ||
- *  IV_encr_ini || IV_encr_res
- */
+/** K_sess = k0 || k1 || k2 || k3 || iv0 || iv1
+ * where
+ *  - k0 = K_mac_ini
+ *  - k1 = K_mac_res
+ *  - k2 = K_encr_ini
+ *  - k3 = K_encr_res
+ *  - iv0 = IV_encr_ini
+ *  - iv1 = IV_encr_res
+*/
 #define VCRY_SESSION_KEY_LEN                                                   \
   ((VCRY_K_MAC_LEN + VCRY_K_ENCR_LEN + VCRY_IV_ENCR_LEN) << 1)
 
-/**
- * Verification message length
- */
+/** Verification message length */
 #define VCRY_VERIFY_MSG_LEN            32UL
 
 /**
  * Constant strings for key derivation
  */
+
 #define VCRY_HSHAKE_CONST0            "Derive the master key (K_pass)"
 #define VCRY_HSHAKE_CONST1            "Derive the session key (K_sess)"
 
 /**
  * Constant strings for session key verification
  */
+
 #define VCRY_VERIFY_CONST0            "First proof message (Proof_A)"
 #define VCRY_VERIFY_CONST1            "Second proof message (Proof_B)"
 
@@ -113,19 +110,12 @@ err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len);
 
 void vcry_module_release(void);
 
-err_t vcry_set_cipher_from_id(int id);
-err_t vcry_set_aead_from_id(int id);
-err_t vcry_set_hmac_from_id(int id);
-err_t vcry_set_ecdh_from_id(int id);
-err_t vcry_set_kem_from_id(int id);
-err_t vcry_set_kdf_from_id(int id);
+err_t vcry_set_crypto_params(int cipher_id, int aead_id, int hmac_id,
+                             int kex_id, int kem_id, int kdf_id);
 
-err_t vcry_set_cipher_from_name(const char *name);
-err_t vcry_set_aead_from_name(const char *name);
-err_t vcry_set_hmac_from_name(const char *name);
-err_t vcry_set_ecdh_from_name(const char *name);
-err_t vcry_set_kem_from_name(const char *name);
-err_t vcry_set_kdf_from_name(const char *name);
+err_t vcry_set_crypto_params_from_names(
+    const char *cipher_name, const char *aead_name, const char *hmac_name,
+    const char *kex_name, const char *kem_name, const char *kdf_name);
 
 size_t vcry_get_aead_tag_len(void);
 size_t vcry_get_hmac_digest_len(void);

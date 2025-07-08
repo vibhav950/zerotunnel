@@ -223,10 +223,10 @@ static err_t __vcry_err_val;
       vctx->seqno_ini++;                                                       \
   } while (0)
 
-#define VCRY_ALG_LOOP(arr, stmt)                                               \
+#define VCRY_ALG_LOOP(arr, stmts)                                              \
   const struct _vcry_alg_entry_st *p;                                          \
   for (p = (arr); p->name; p++) {                                              \
-    stmt;                                                                      \
+    stmts                                                                      \
   }
 
 // clang-format on
@@ -308,7 +308,7 @@ static const uint8_t *vcry_decr_nonce(void) {
   return iv;
 }
 
-err_t vcry_set_cipher_from_id(int id) {
+static err_t vcry_set_cipher_from_id(int id) {
   err_t ret;
   size_t key_len;
   cipher_alg_t alg;
@@ -335,9 +335,6 @@ err_t vcry_set_cipher_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
     PRINTERROR("cipher algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -352,7 +349,7 @@ err_t vcry_set_cipher_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_cipher_from_name(const char *name) {
+static err_t vcry_set_cipher_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_cipher_entry_arr, {
@@ -364,7 +361,7 @@ err_t vcry_set_cipher_from_name(const char *name) {
   return vcry_set_cipher_from_id(id);
 }
 
-err_t vcry_set_aead_from_id(int id) {
+static err_t vcry_set_aead_from_id(int id) {
   err_t ret;
   size_t key_len;
   cipher_alg_t alg;
@@ -391,9 +388,6 @@ err_t vcry_set_aead_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
     PRINTERROR("aead algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -409,7 +403,7 @@ err_t vcry_set_aead_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_aead_from_name(const char *name) {
+static err_t vcry_set_aead_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_aead_entry_arr, {
@@ -428,7 +422,7 @@ size_t vcry_get_aead_tag_len(void) {
   return cipher_tag_len(vctx->aead);
 }
 
-err_t vcry_set_hmac_from_id(int id) {
+static err_t vcry_set_hmac_from_id(int id) {
   err_t ret;
   size_t key_len;
   hmac_alg_t alg;
@@ -463,9 +457,6 @@ err_t vcry_set_hmac_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!hmac_intf_alg_is_supported(&hmac_intf, alg)) {
     PRINTERROR("HMAC algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -480,7 +471,7 @@ err_t vcry_set_hmac_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_hmac_from_name(const char *name) {
+static err_t vcry_set_hmac_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_hmac_entry_arr, {
@@ -499,7 +490,7 @@ size_t vcry_get_hmac_digest_len(void) {
   return hmac_digest_len(vctx->mac);
 }
 
-err_t vcry_set_ecdh_from_id(int id) {
+static err_t vcry_set_ecdh_from_id(int id) {
   err_t ret;
   kex_curve_t curve;
 
@@ -529,9 +520,6 @@ err_t vcry_set_ecdh_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!kex_intf_curve_is_supported(&kex_ecc_intf, curve)) {
     PRINTERROR("curve not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -544,7 +532,7 @@ err_t vcry_set_ecdh_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_ecdh_from_name(const char *name) {
+static err_t vcry_set_ecdh_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_ecdh_entry_arr, {
@@ -556,7 +544,7 @@ err_t vcry_set_ecdh_from_name(const char *name) {
   return vcry_set_ecdh_from_id(id);
 }
 
-err_t vcry_set_kem_from_id(int id) {
+static err_t vcry_set_kem_from_id(int id) {
   err_t ret;
   kem_alg_t alg;
 
@@ -575,9 +563,6 @@ err_t vcry_set_kem_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!kem_intf_alg_is_supported(&kem_kyber_intf, alg)) {
     PRINTERROR("KEM algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -590,7 +575,7 @@ err_t vcry_set_kem_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_kem_from_name(const char *name) {
+static err_t vcry_set_kem_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_kem_entry_arr, {
@@ -602,7 +587,7 @@ err_t vcry_set_kem_from_name(const char *name) {
   return vcry_set_kem_from_id(id);
 }
 
-err_t vcry_set_kdf_from_id(int id) {
+static err_t vcry_set_kdf_from_id(int id) {
   err_t ret;
   kdf_alg_t alg;
 
@@ -621,9 +606,6 @@ err_t vcry_set_kdf_from_id(int id) {
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
-  if (!initialized)
-    return VCRY_ERR_SET(ERR_NOT_INIT);
-
   if (!kdf_intf_alg_is_supported(&kdf_intf, alg)) {
     PRINTERROR("KDF algorithm not supported\n");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
@@ -636,7 +618,7 @@ err_t vcry_set_kdf_from_id(int id) {
   return ERR_SUCCESS;
 }
 
-err_t vcry_set_kdf_from_name(const char *name) {
+static err_t vcry_set_kdf_from_name(const char *name) {
   int id = -0xfff;
 
   VCRY_ALG_LOOP(_vcry_kdf_entry_arr, {
@@ -648,12 +630,57 @@ err_t vcry_set_kdf_from_name(const char *name) {
   return vcry_set_kdf_from_id(id);
 }
 
+err_t vcry_set_crypto_params(int cipher_id, int aead_id, int hmac_id,
+                             int kex_id, int kem_id, int kdf_id) {
+  err_t ret;
+
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
+  if ((ret = vcry_set_cipher_from_id(cipher_id)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_aead_from_id(aead_id)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_hmac_from_id(hmac_id)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_ecdh_from_id(kex_id)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_kem_from_id(kem_id)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_kdf_from_id(kdf_id)) != ERR_SUCCESS)
+    return ret;
+  return ERR_SUCCESS;
+}
+
+err_t vcry_set_crypto_params_from_names(
+    const char *cipher_name, const char *aead_name, const char *hmac_name,
+    const char *kex_name, const char *kem_name, const char *kdf_name) {
+  err_t ret;
+
+  if (!initialized)
+    return VCRY_ERR_SET(ERR_NOT_INIT);
+
+  if ((ret = vcry_set_cipher_from_name(cipher_name)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_aead_from_name(aead_name)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_hmac_from_name(hmac_name)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_ecdh_from_name(kex_name)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_kem_from_name(kem_name)) != ERR_SUCCESS)
+    return ret;
+  if ((ret = vcry_set_kdf_from_name(kdf_name)) != ERR_SUCCESS)
+    return ret;
+  return ERR_SUCCESS;
+}
+
 /**
  * Initialize the handshake process by generating the following components:
  * 1. The encrypted PQ-KEM public seed (rho) used to generate matrix (A):
  *    PQK_enc = t_vec || Cipher-Enc(rho, K_pass, salt=salt2)
  * 2. The DHE public key: DHEK_A
- * 3. Randomly generated initiator random value: salt = salt1 || salt2 || salt3
+ * 3. Initiator random value: salt = salt1 || salt2 || salt3
  *
  * Compute K_pass = KDF(pass || salt1 || "Compute master key (k_pass)")
  * where KDF is a memory-hard key derivation function (e.g., scrypt/argon2)
