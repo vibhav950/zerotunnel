@@ -1,8 +1,6 @@
 #ifndef __CIPHERSUITES_H__
 #define __CIPHERSUITES_H__
 
-#include "vcry.h"
-
 #define CS_INTERNAL(_) (_cs_##_)
 
 typedef struct _zt_cipher_suite_entry_st {
