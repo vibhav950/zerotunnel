@@ -22,14 +22,17 @@
 
 #define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
 
+// clang-format off
 static const char clientstate_names[][20] = {
-    [CLIENT_NONE] = "CLIENT_NONE",
-    [CLIENT_CONN_INIT] = "CLIENT_CONN_INIT",
-    [CLIENT_AUTH_PING] = "CLIENT_AUTH_PING",
-    [CLIENT_AUTH_PONG] = "CLIENT_AUTH_PONG",
-    [CLIENT_OFFER] = "CLIENT_TRANSFER_OFFER",
-    [CLIENT_TRANSFER] = "CLIENT_TRANSFER",
-    [CLIENT_DONE] = "CLIENT_DONE"};
+    [CLIENT_NONE]           = "CLIENT_NONE",
+    [CLIENT_CONN_INIT]      = "CLIENT_CONN_INIT",
+    [CLIENT_AUTH_INIT]      = "CLIENT_AUTH_INIT",
+    [CLIENT_AUTH_COMPLETE]  = "CLIENT_AUTH_COMPLETE",
+    [CLIENT_OFFER]          = "CLIENT_TRANSFER_OFFER",
+    [CLIENT_TRANSFER]       = "CLIENT_TRANSFER",
+    [CLIENT_DONE]           = "CLIENT_DONE"
+};
+// clang-format on
 
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
@@ -658,11 +661,11 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = zt_client_tcp_conn1(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
       break;
     }
 
-    case CLIENT_AUTH_PING: {
+    case CLIENT_AUTH_INIT: {
       uint8_t *sndbuf;
       size_t sndlen, len;
       passwd_id_t passwd_id;
@@ -747,11 +750,11 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PONG);
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_COMPLETE);
       break;
     }
 
-    case CLIENT_AUTH_PONG: {
+    case CLIENT_AUTH_COMPLETE: {
       uint8_t *rcvbuf, *sndbuf;
       size_t rcvlen, sndlen;
 
@@ -790,7 +793,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         /* handshake will be restarted */
         vcry_module_release();
 
-        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
+        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
         break;
       } /* case MSG_AUTH_RETRY */
 
@@ -870,7 +873,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /** handshake will be restarted */
       vcry_module_release();
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
       break;
     }
 
@@ -967,7 +970,6 @@ cleanup1:
   conn->ai_estab = NULL;
 
 cleanup0:
-
   zt_free(conn->msgbuf);
   conn->msgbuf = NULL;
 
