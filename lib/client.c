@@ -1,5 +1,4 @@
 #include "client.h"
-#include "auth.h"
 #include "ciphersuites.h"
 #include "common/defines.h"
 #include "common/prompts.h"
@@ -424,7 +423,12 @@ static err_t zt_client_tcp_conn1(zt_client_connection_t *conn) {
     conn->first_send = false;
   }
 
-  if (rv == -1 && errno != EAGAIN && errno != EINPROGRESS) {
+  // clang-format off
+  if (rv == -1 &&
+    errno != EAGAIN &&
+    errno != EWOULDBLOCK &&
+    errno != EINPROGRESS) {
+    // clang-format on
     PRINTERROR("connect: failed (%s)", strerror(errno));
     close(conn->sockfd);
     return ERR_TCP_CONNECT;
@@ -627,18 +631,21 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   if (!conn || !done)
     return ERR_NULL_PTR;
 
-  /** Allocate memory for the primary client message buffer */
-  if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
-    return ERR_MEM_FAIL;
+  if (zt_get_hostid(&conn->authid_mine) != 0)
+    return ERR_INTERNAL;
 
   // clang-format off
   if ((ciphersuite_id = zt_cipher_suite_info_from_repr(
            config.ciphersuite,
            &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
            &vcry_algs[3], &vcry_algs[4], &vcry_algs[5])) == 0) {
-    goto cleanup0;
+    return ERR_INVALID;
   }
   // clang-format on
+
+  /** Allocate memory for the primary client message buffer */
+  if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
+    return ERR_MEM_FAIL;
 
   for (;;) {
     switch (conn->state) {
@@ -662,7 +669,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
-      break;
+      ATTRIBUTE_FALLTHROUGH;
     }
 
     case CLIENT_AUTH_INIT: {
@@ -727,7 +734,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      zt_memcpy(zt_msg_data_ptr(conn->msgbuf), config.authid_mine.bytes,
+      zt_memcpy(zt_msg_data_ptr(conn->msgbuf), conn->authid_mine.bytes,
                 AUTHID_BYTES_LEN);
       len = AUTHID_BYTES_LEN;
 
@@ -751,7 +758,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_COMPLETE);
-      break;
+      ATTRIBUTE_FALLTHROUGH;
     }
 
     case CLIENT_AUTH_COMPLETE: {
@@ -777,7 +784,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
 
-        if (!tty_get_answer_is_yes(g_Prompts[HandshakeRetryYesNo])) {
+        if (!tty_get_answer_is_yes(g_CLIPrompts[HandshakeRetryYesNo])) {
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
@@ -805,7 +812,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         }
 
         /* copy peer authid */
-        zt_memcpy(&config.authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
+        zt_memcpy(conn->authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
 
         rcvbuf += AUTHID_BYTES_LEN;
         rcvlen -= AUTHID_BYTES_LEN;
@@ -822,8 +829,8 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* create our verify-initiation message */
         if ((ret = vcry_initiator_verify_initiate(
-                 &sndbuf, &sndlen, config.authid_mine.bytes,
-                 config.authid_peer.bytes)) != ERR_SUCCESS) {
+                 &sndbuf, &sndlen, conn->authid_mine.bytes,
+                 conn->authid_peer.bytes)) != ERR_SUCCESS) {
           PRINTERROR("vcry_initiator_verify_initiate: %s", zt_strerror(ret));
           goto cleanup2;
         }
@@ -835,7 +842,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          * the verification on our end */
         ret = vcry_initiator_verify_complete(
             rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
-            config.authid_mine.bytes, config.authid_peer.bytes);
+            conn->authid_mine.bytes, conn->authid_peer.bytes);
         switch (ret) {
         case ERR_SUCCESS:
           break; /* successful */
@@ -865,7 +872,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * initiation phase.
        */
 
-      if (!tty_get_answer_is_yes(g_Prompts[HandshakeRestartYesNo])) {
+      if (!tty_get_answer_is_yes(g_CLIPrompts[HandshakeRestartYesNo])) {
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -906,7 +913,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
-      break;
+      ATTRIBUTE_FALLTHROUGH;
     }
 
     case CLIENT_TRANSFER: {
@@ -936,7 +943,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_DONE);
-      break;
+      ATTRIBUTE_FALLTHROUGH;
     }
 
     case CLIENT_DONE: {

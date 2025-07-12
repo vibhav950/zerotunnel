@@ -1,6 +1,7 @@
 #ifndef __CLIENT_H__
 #define __CLIENT_H__
 
+#include "auth.h"
 #include "conn_defs.h"
 
 typedef enum {
@@ -28,6 +29,9 @@ typedef struct _zt_client_connection_st {
   char
     *hostname,
     *explicit_port;
+  struct authid
+    authid_mine,   /* local AuthId */
+    authid_peer;   /* peer's AuthId */
   passwd_id_t
     renegotiation_passwd;
   int

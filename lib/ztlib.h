@@ -21,9 +21,6 @@ struct _config {
     port; // ignored unless `config_explicit_port=true`
   auth_type_t
     auth_type;
-  struct authid
-    authid_mine,
-    authid_peer;
   bool
     config_explicit_port : 1,
     config_ipv6 : 1,

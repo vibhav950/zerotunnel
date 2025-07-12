@@ -62,7 +62,7 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
  * @param[in] timeout_msec The wait timeout in milliseconds.
  * @param[in] mode `ZT_NETIO_READABLE`, `ZT_NETIO_WRITABLE`, or the bitwise OR
  * of the two.
- * @return -1 on error or timeout, otherwise check for the bitwise OR of
+ * @return -1 on error, 0 on timeout, otherwise check for the bitwise OR of
  * `ZT_NETIO_READABLE` and `ZT_NETIO_WRITABLE`.
  *
  * Wait for the socket to become readable/writable.

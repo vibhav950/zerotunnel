@@ -37,10 +37,10 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
     if (pollfd.revents & POLLOUT)
       rc |= ZT_IO_WRITABLE;
   } else if (rc == 0) {
-    PRINTERROR("Connection timed out\n");
-    return -1;
+    PRINTERROR("Connection timed out");
+    return 0;
   } else {
-    PRINTERROR("poll(2) failed (%s)\n", strerror(errno));
+    PRINTERROR("poll(2) failed (%s)", strerror(errno));
     return -1;
   }
 
@@ -54,7 +54,7 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
 
   epfd = epoll_create1(0);
   if (epfd == -1) {
-    PRINTERROR("epoll_create1(2) failed (%s)\n", strerror(errno));
+    PRINTERROR("epoll_create1(2) failed (%s)", strerror(errno));
     return -1;
   }
 
@@ -67,7 +67,7 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
     ev.events |= EPOLLOUT;
 
   if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-    PRINTERROR("epoll_ctl(2) failed (%s)\n", strerror(errno));
+    PRINTERROR("epoll_ctl(2) failed (%s)", strerror(errno));
     goto cleanup;
   }
 
@@ -78,10 +78,9 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
     if (events[0].events & EPOLLOUT)
       rc |= ZT_IO_WRITABLE;
   } else if (rc == 0) {
-    PRINTERROR("Connection timed out\n");
-    rc = -1;
+    PRINTERROR("Connection timed out");
   } else {
-    PRINTERROR("epoll_wait(2) failed (%s)\n", strerror(errno));
+    PRINTERROR("epoll_wait(2) failed (%s)", strerror(errno));
     rc = -1;
   }
 
@@ -96,7 +95,7 @@ cleanup:
  * @param[in] timeout_msec The wait timeout in milliseconds.
  * @param[in] mode `ZT_NETIO_READABLE`, `ZT_NETIO_WRITABLE` or the bitwise OR of
  * the two.
- * @return -1 on error or timeout, otherwise check for the bitwise OR of
+ * @return -1 on error, 0 on timeout, otherwise check for the bitwise OR of
  * `ZT_NETIO_READABLE` and `ZT_NETIO_WRITABLE`.
  *
  * Wait for the file descriptor to become readable/writable.
