@@ -56,6 +56,8 @@ const char *zt_error_str(err_t err) {
     return "operation limit reached";
   case ERR_INVALID_DATUM:
     return "mismatch from expected data";
+  case ERR_HSHAKE_ABORTED:
+    return "handshake aborted due to failure";
   case ERR_AUTH_FAIL:
     return "authentication failure";
   case ERR_AGAIN:

@@ -159,6 +159,7 @@ typedef enum {
   ERR_INVALID,                    /* invalid operation (sequence) */
   ERR_OPERATION_LIMIT_REACHED,    /* operation limit reached */
   ERR_INVALID_DATUM,              /* invalid data */
+  ERR_HSHAKE_ABORTED,             /* handshake aborted */
   ERR_AUTH_FAIL,                  /* authentication failed */
   ERR_AGAIN,                      /* try again */
   ERR_TIMEOUT,                    /* operation timed out */
@@ -170,7 +171,7 @@ typedef enum {
   ERR_ALREADY,                    /* already in progress */
   ERR_FIO_READ,                   /* fio read failed */
   ERR_FIO_WRITE,                  /* fio write failed */
-  ERR_EOF,                        /* end of file */
+  ERR_EOF,                        /* end of file reached */
 } err_t;
 
 const char *zt_error_str(err_t err);
