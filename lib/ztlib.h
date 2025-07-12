@@ -13,12 +13,7 @@ struct _config {
     *hostname,
     *passwddb_file,
     *peer_id,
-    *cipher_alg,
-    *aead_alg,
-    *hmac_alg,
-    *ecdh_alg,
-    *kem_alg,
-    *kdf_alg,
+    *ciphersuite,
     *filename;
   uint16_t
     padding_factor; // ignored unless `config_length_obfuscation=true`

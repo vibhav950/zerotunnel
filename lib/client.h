@@ -28,6 +28,8 @@ typedef struct _zt_client_connection_st {
   char
     *hostname,
     *explicit_port;
+  passwd_id_t
+    renegotiation_passwd;
   int
     sockfd,
     sock_flags,
@@ -36,7 +38,8 @@ typedef struct _zt_client_connection_st {
     send_timeout,
     recv_timeout;
   bool
-    first_send;
+    first_send,
+    renegotiation;
   bool
     fl_tcp_fastopen   : 1,  /* is TCP fastopen enabled */
     fl_ipv6           : 1,  /* use IPv6 addressing */
@@ -46,7 +49,9 @@ typedef struct _zt_client_connection_st {
 } zt_client_connection_t;
 // clang-format on
 
-err_t zt_client_do(zt_client_connection_t *conn, void *args, bool *done);
+#define MAX_AUTH_RETRY_COUNT 3
+
+err_t zt_client_run(zt_client_connection_t *conn, void *args, bool *done);
 
 int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
                        size_t nbytes);

@@ -257,12 +257,19 @@ err_t vcry_get_last_err(void) { return __vcry_err_val; }
 void vcry_clear_last_err(void) { __vcry_err_val = ERR_SUCCESS; }
 
 err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
+  uint8_t *old_authpass;
+
   if (!authpass)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
   if (!initialized)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
+  old_authpass = vctx->authpass;
+  if (old_authpass) {
+    memzero(old_authpass, vctx->authkey_len);
+    zt_free(old_authpass);
+  }
   vctx->authpass = zt_memdup(authpass, authkey_len);
   if (!vctx->authpass)
     return VCRY_ERR_SET(ERR_MEM_FAIL);
@@ -331,12 +338,12 @@ static err_t vcry_set_cipher_from_id(int id) {
     key_len = CHACHA20_KEY_LEN;
     break;
   default:
-    PRINTERROR("unknown cipher id (%d)\n", id);
+    PRINTERROR("unknown cipher id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
-    PRINTERROR("cipher algorithm not supported\n");
+    PRINTERROR("cipher algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -384,12 +391,12 @@ static err_t vcry_set_aead_from_id(int id) {
     alg = AEAD_CHACHA20_POLY1305;
     break;
   default:
-    PRINTERROR("unknown aead id (%d)\n", id);
+    PRINTERROR("unknown aead id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
-    PRINTERROR("aead algorithm not supported\n");
+    PRINTERROR("aead algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -453,12 +460,12 @@ static err_t vcry_set_hmac_from_id(int id) {
     alg = HMAC_SHA3_512;
     break;
   default:
-    PRINTERROR("unknown HMAC id (%d)\n", id);
+    PRINTERROR("unknown HMAC id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!hmac_intf_alg_is_supported(&hmac_intf, alg)) {
-    PRINTERROR("HMAC algorithm not supported\n");
+    PRINTERROR("HMAC algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -516,12 +523,12 @@ static err_t vcry_set_ecdh_from_id(int id) {
     curve = KEX_CURVE_X448;
     break;
   default:
-    PRINTERROR("unknown KEX id (%d)\n", id);
+    PRINTERROR("unknown KEX id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kex_intf_curve_is_supported(&kex_ecc_intf, curve)) {
-    PRINTERROR("curve not supported\n");
+    PRINTERROR("curve not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -559,12 +566,12 @@ static err_t vcry_set_kem_from_id(int id) {
     alg = KEM_Kyber_1024;
     break;
   default:
-    PRINTERROR("unknown KEM id (%d)\n", id);
+    PRINTERROR("unknown KEM id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kem_intf_alg_is_supported(&kem_kyber_intf, alg)) {
-    PRINTERROR("KEM algorithm not supported\n");
+    PRINTERROR("KEM algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -602,12 +609,12 @@ static err_t vcry_set_kdf_from_id(int id) {
     alg = KDF_ALG_argon2;
     break;
   default:
-    PRINTERROR("unknown KDF id (%d)\n", id);
+    PRINTERROR("unknown KDF id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kdf_intf_alg_is_supported(&kdf_intf, alg)) {
-    PRINTERROR("KDF algorithm not supported\n");
+    PRINTERROR("KDF algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -708,15 +715,11 @@ err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_none) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_none)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   if (zt_systemrand_bytes(vctx->salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
     return VCRY_ERR_SET(ERR_INTERNAL);
@@ -860,15 +863,11 @@ err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_none) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_none)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   if (peerdata_theirs_len < (3 * sizeof(uint64_t)))
     return VCRY_ERR_SET(ERR_INVALID_DATUM);
@@ -1025,15 +1024,11 @@ err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_initiate) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_initiate)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   if (peerdata_len < (3 * sizeof(uint64_t)))
     return VCRY_ERR_SET(ERR_INVALID_DATUM);
@@ -1098,17 +1093,12 @@ err_t vcry_derive_session_key(void) {
    * so we check the correct state for each role
    */
   if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator) {
-    if (VCRY_STATE() != vcry_hs_complete) {
-      PRINTERROR("Bad invocation: invalid call sequence\n");
+    if (VCRY_STATE() != vcry_hs_complete)
       return VCRY_ERR_SET(ERR_INVALID);
-    }
   } else if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_responder) {
-    if (VCRY_STATE() != vcry_hs_response) {
-      PRINTERROR("Bad invocation: invalid call sequence\n");
+    if (VCRY_STATE() != vcry_hs_response)
       return VCRY_ERR_SET(ERR_INVALID);
-    }
   } else {
-    PRINTERROR("Bad invocation: invalid call for role\n");
     return VCRY_ERR_SET(ERR_INVALID);
   }
 
@@ -1212,15 +1202,11 @@ err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_verify_initiate) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_verify_initiate)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   /** Rearrange so that id1 <= id2 */
   if (strcmp(id_a, id_b) <= 0) {
@@ -1285,15 +1271,11 @@ err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_verify_initiate) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_verify_initiate)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   /** Rearrange so that id1 >= id2 */
   if (strcmp(id_a, id_b) >= 0) {
@@ -1351,15 +1333,11 @@ err_t vcry_initiator_verify_complete(
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_verify_complete) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_verify_complete)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   /** Rearrange so that id1 >= id2 */
   if (strcmp(id_a, id_b) >= 0) {
@@ -1413,15 +1391,11 @@ err_t vcry_responder_verify_complete(
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
 
-  if (VCRY_STATE() != vcry_hs_verify_complete) {
-    PRINTERROR("Bad invocation: invalid call sequence\n");
+  if (VCRY_STATE() != vcry_hs_verify_complete)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
-  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder) {
-    PRINTERROR("Bad invocation: invalid call for role\n");
+  if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder)
     return VCRY_ERR_SET(ERR_INVALID);
-  }
 
   /** Rearrange so that id1 <= id2 */
   if (strcmp(id_a, id_b) <= 0) {

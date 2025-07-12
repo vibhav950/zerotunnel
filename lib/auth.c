@@ -372,22 +372,22 @@ cleanup:
   return ret;
 }
 
-struct passwd *zt_auth_passwd_new(const char *passwddb_file,
-                                  auth_type_t auth_type, const char *peer_id) {
+passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
+                               const char *peer_id, struct passwd **passwd) {
   int rv;
   char *pw;
   passwd_id_t id = -1;
-  struct passwd *passwd;
+  struct passwd *passwd_ret;
 
   if (auth_type == KAPPA_AUTHTYPE_1 && passwddb_file == NULL)
-    return NULL;
+    return -1;
 
   if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     peer_id = ZT_NULL_PEERID_STR;
 
-  if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
+  if (!(passwd_ret = zt_malloc(sizeof(struct passwd)))) {
     PRINTERROR("out of memory");
-    return NULL;
+    return -1;
   }
 
   switch (auth_type) {
@@ -411,31 +411,32 @@ struct passwd *zt_auth_passwd_new(const char *passwddb_file,
     PRINTERROR("unknown auth type %d", auth_type);
     goto err;
   }
-  passwd->id = id;
-  passwd->pw = pw;
-  passwd->pwlen = strlen(pw);
-  return passwd;
+  passwd_ret->id = id;
+  passwd_ret->pw = pw;
+  passwd_ret->pwlen = strlen(pw);
+  *passwd = passwd_ret;
+  return id;
 
 err:
-  zt_free(passwd);
-  return NULL;
+  zt_free(passwd_ret);
+  return -1;
 }
 
-struct passwd *zt_auth_passwd_get(const char *passwddb_file,
-                                  auth_type_t auth_type, const char *peer_id,
-                                  passwd_id_t pwid) {
+passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
+                               const char *peer_id, passwd_id_t pwid,
+                               struct passwd **passwd) {
   char *pw;
-  struct passwd *passwd;
+  struct passwd *passwd_ret;
 
-  if (passwddb_file == NULL)
-    return NULL;
+  if (passwddb_file == NULL && auth_type == KAPPA_AUTHTYPE_1)
+    return -1;
 
   if (peer_id == NULL)
     peer_id = ZT_NULL_PEERID_STR;
 
   if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
     PRINTERROR("out of memory");
-    return NULL;
+    return -1;
   }
 
   switch (auth_type) {
@@ -455,14 +456,15 @@ struct passwd *zt_auth_passwd_get(const char *passwddb_file,
     PRINTERROR("unknown auth type %d", auth_type);
     goto err;
   }
-  passwd->id = pwid;
-  passwd->pw = pw;
-  passwd->pwlen = strlen(pw);
-  return passwd;
+  passwd_ret->id = pwid;
+  passwd_ret->pw = pw;
+  passwd_ret->pwlen = strlen(pw);
+  *passwd = passwd_ret;
+  return pwid;
 
 err:
-  zt_free(passwd);
-  return NULL;
+  zt_free(passwd_ret);
+  return -1;
 }
 
 int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
@@ -579,7 +581,7 @@ int zt_get_hostid(struct authid *authid) {
     return -1;
   }
 
-  zt_memcpy((void *)&authid->bytes[0], (void *)&ret.bytes[0], AUTHID_LEN_BYTES);
+  zt_memcpy((void *)&authid->bytes[0], (void *)&ret.bytes[0], AUTHID_BYTES_LEN);
   return 0;
 }
 

@@ -32,11 +32,13 @@
 #define CLIENT_RESOLVE_RETRIES          5       /* Host resolution retries */
 
 enum {
-  MSG_HANDSHAKE   = (1 << 0), /* Handshake message type */
-  MSG_CONTROL     = (1 << 1), /* Control message */
-  MSG_METADATA    = (1 << 2), /* File metadata */
-  MSG_DATA        = (1 << 3), /* File payload */
-  MSG_DONE        = (1 << 4), /* No further messages sent from now */
+  MSG_HANDSHAKE   = (1 << 0), /* Crypto handshake message */
+  MSG_AUTH_RETRY  = (1 << 1), /* Authentication retry message */
+  MSG_CONTROL     = (1 << 2), /* Control message */
+  MSG_METADATA    = (1 << 3), /* File metadata message */
+  MSG_DATA        = (1 << 4), /* File payload message */
+  MSG_DONE        = (1 << 5), /* No further messages pending */
+  MSG_ANY         = 0xff,
 };
 
 typedef uint8_t zt_msg_type_t;

@@ -1,6 +1,9 @@
 #include "client.h"
 #include "auth.h"
+#include "ciphersuites.h"
 #include "common/defines.h"
+#include "common/prompts.h"
+#include "common/tty_io.h"
 #include "vcry.h"
 #include "ztlib.h"
 
@@ -510,15 +513,19 @@ static err_t client_send(zt_client_connection_t *conn) {
   return ERR_SUCCESS;
 }
 
+#define msg_type_is_expected(msgtype, mask)                                    \
+  (msgtype == MSG_ANY || (msgtype & mask))
+
 /**
  * @param[in] conn The client connection context.
- * @param[in] expect The expected message type.
+ * @param[in] expected_types A bitmask of expected message types.
  * @return An `err_t` status code.
  *
  * Receive a message from the peer and store it in `conn->msgbuf`.
  *
  * The type of the message (resulting `conn->msgbuf->type`) must match
- * @p expect.
+ * one of the types set in the @p expected_types bitmask.
+ * If `expected_types=MSG_ANY`, any valid message type will be accepted.
  *
  * The amount of payload data to be read is indicated by a fixed-size header
  * prefix. If a failure occurs before all of this payload data is received
@@ -527,7 +534,8 @@ static err_t client_send(zt_client_connection_t *conn) {
  *
  * Encrypted payload data is decrypted in-place in `conn->msgbuf->data[]`.
  */
-static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
+static err_t client_recv(zt_client_connection_t *conn,
+                         zt_msg_type_t expected_types) {
   err_t ret = ERR_SUCCESS;
   ssize_t nread;
   size_t datalen, taglen;
@@ -550,15 +558,19 @@ static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expect) {
     goto out;
   }
   if (nread != ZT_MSG_HEADER_SIZE) {
-    PRINTERROR("received malformed header");
+    PRINTERROR("received malformed header (invalid length)");
     ret = ERR_INVALID_DATUM;
     goto out;
   }
 
-  if (!msg_type_isvalid(zt_msg_type(conn->msgbuf) ||
-                        (expect != zt_msg_type(conn->msgbuf)))) {
-    PRINTERROR("invalid message type %u (expected %u)",
-               zt_msg_type(conn->msgbuf), expect);
+  if (!msg_type_isvalid(zt_msg_type(conn->msgbuf))) {
+    PRINTERROR("recieved malformed header (invalid type)");
+    ret = ERR_INVALID_DATUM;
+    goto out;
+  }
+  if (!msg_type_is_expected(zt_msg_type(conn->msgbuf), expected_types)) {
+    PRINTERROR("bad message (expected %u)", zt_msg_type(conn->msgbuf),
+               expected_types);
     ret = ERR_INVALID_DATUM;
     goto out;
   }
@@ -601,68 +613,50 @@ out:
   return ret;
 }
 
-err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
-                   bool *done) {
+err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
+                    bool *done) {
   err_t ret = ERR_SUCCESS;
   struct passwd *master_pass;
-  zt_fileinfo_t fileinfo;
+  int vcry_algs[6];
+  uint8_t ciphersuite_id;
   zt_fio_t *fileptr;
 
   if (!conn || !done)
     return ERR_NULL_PTR;
 
-  /** Allocate memory for primary client message buffer */
+  /** Allocate memory for the primary client message buffer */
   if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
     return ERR_MEM_FAIL;
 
-  /**
-   * Load the master password and setup the VCRY engine
-   */
-
-  if (!(master_pass = zt_auth_passwd_new(config.passwddb_file, config.auth_type,
-                                         config.peer_id))) {
-    zt_free(conn->msgbuf);
-    conn->msgbuf = NULL;
-    return ERR_INTERNAL;
+  // clang-format off
+  if ((ciphersuite_id = zt_cipher_suite_info_from_repr(
+           config.ciphersuite,
+           &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
+           &vcry_algs[3], &vcry_algs[4], &vcry_algs[5])) == 0) {
+    goto cleanup0;
   }
-
-  vcry_set_role_initiator();
-
-  if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
-      ERR_SUCCESS) {
-    goto cleanup;
-  }
-
-  zt_auth_passwd_free(master_pass, NULL);
-
-  vcry_set_cipher_from_name(config.cipher_alg);
-  vcry_set_aead_from_name(config.aead_alg);
-  vcry_set_hmac_from_name(config.hmac_alg);
-  vcry_set_ecdh_from_name(config.ecdh_alg);
-  vcry_set_kem_from_name(config.kem_alg);
-  vcry_set_kdf_from_name(config.kdf_alg);
-
-  if ((ret = vcry_get_last_err()) != ERR_SUCCESS)
-    goto cleanup;
+  // clang-format on
 
   for (;;) {
     switch (conn->state) {
     case CLIENT_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
 
-      if ((ret = zt_client_resolve_host_timeout(
-               conn, &ai_list,
-               (conn->resolve_timeout > 0) ? conn->resolve_timeout
-                                           : ZT_CLIENT_TIMEOUT_RESOLVE)) !=
-          ERR_SUCCESS) {
-        goto cleanup;
-      }
+      /* Do not allow negative timeouts; we do not want an
+       * indefinite wait for host resolution */
+      timediff_t timeout_msec = conn->connect_timeout > 0
+                                    ? conn->connect_timeout
+                                    : ZT_CLIENT_TIMEOUT_CONNECT;
+
+      ret = zt_client_resolve_host_timeout(conn, &ai_list, timeout_msec);
+      if (ret != ERR_SUCCESS)
+        goto cleanup0;
 
       if ((ret = zt_client_tcp_conn0(conn, ai_list)) != ERR_SUCCESS)
-        goto cleanup;
+        goto cleanup1;
 
       if ((ret = zt_client_tcp_conn1(conn)) != ERR_SUCCESS)
-        goto cleanup;
+        goto cleanup2;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
       break;
@@ -670,32 +664,88 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
     case CLIENT_AUTH_PING: {
       uint8_t *sndbuf;
-      size_t sndbuf_len;
+      size_t sndlen, len;
+      passwd_id_t passwd_id;
 
-      if ((ret = vcry_handshake_initiate(&sndbuf, &sndbuf_len)) != ERR_SUCCESS)
-        goto cleanup;
+      static int retrycount = 1; /* number of entries into this state */
+      if (retrycount > MAX_AUTH_RETRY_COUNT) {
+        PRINTERROR("too many handshake failures -- aborting!");
+        ret = ERR_HSHAKE_ABORTED;
+        goto cleanup2;
+      }
+      retrycount++;
 
-      /** Check if the connect() was successful and we have a writable socket
-       */
+      if (conn->renegotiation) {
+        passwd_id = zt_auth_passwd_get(
+            config.passwddb_file, config.auth_type, config.peer_id,
+            conn->renegotiation_passwd, &master_pass);
+      } else {
+        passwd_id = zt_auth_passwd_new(config.passwddb_file, config.auth_type,
+                                       config.peer_id, &master_pass);
+      }
+      if (passwd_id < 0) {
+        ret = ERR_INTERNAL;
+        PRINTERROR("could not load master password for peer_id=%s",
+                   config.peer_id);
+        goto cleanup2;
+      }
+
+      if ((ret = vcry_module_init()) != ERR_SUCCESS) {
+        zt_auth_passwd_free(master_pass, NULL);
+        goto cleanup2;
+      }
+
+      vcry_set_role_initiator();
+
+      if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
+          ERR_SUCCESS) {
+        zt_auth_passwd_free(master_pass, NULL);
+        goto cleanup2;
+      }
+      zt_auth_passwd_free(master_pass, NULL);
+
+      // clang-format off
+      if ((ret = vcry_set_crypto_params(
+               vcry_algs[0], vcry_algs[1], vcry_algs[2],
+               vcry_algs[3], vcry_algs[4], vcry_algs[5])) != ERR_SUCCESS) {
+        goto cleanup2;
+      }
+      // clang-format on
+
+      if ((ret = vcry_handshake_initiate(&sndbuf, &sndlen)) != ERR_SUCCESS) {
+        PRINTERROR("vcry_handshake_initiate: %s", zt_strerror(ret));
+        goto cleanup2;
+      }
+
+      /* Check if the connect() was successful and we have a writable socket */
       if (!zt_tcp_io_waitfor_write(conn->sockfd, conn->connect_timeout)) {
         zt_free(sndbuf);
         ret = ERR_TCP_CONNECT;
-        goto cleanup;
+        goto cleanup2;
       }
 
       zt_memcpy(zt_msg_data_ptr(conn->msgbuf), config.authid_mine.bytes,
-                AUTHID_LEN_BYTES);
+                AUTHID_BYTES_LEN);
+      len = AUTHID_BYTES_LEN;
 
-      zt_memcpy(zt_msg_data_ptr(conn->msgbuf) + AUTHID_LEN_BYTES, sndbuf,
-                sndbuf_len);
+      zt_memcpy(zt_msg_data_ptr(conn->msgbuf) + len, PTRV(&passwd_id),
+                sizeof(passwd_id_t));
+      len += sizeof(passwd_id_t);
+
+      zt_memcpy(zt_msg_data_ptr(conn->msgbuf) + len, PTRV(&ciphersuite_id),
+                sizeof(ciphersuite_id));
+      len += sizeof(ciphersuite_id);
+
+      zt_memcpy(zt_msg_data_ptr(conn->msgbuf) + len, sndbuf, sndlen);
+      len += sndlen;
 
       zt_free(sndbuf);
 
-      zt_msg_set_len(conn->msgbuf, sndbuf_len + AUTHID_LEN_BYTES);
+      zt_msg_set_len(conn->msgbuf, len);
       zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
 
       if ((ret = client_send(conn)) != ERR_SUCCESS)
-        goto cleanup;
+        goto cleanup2;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PONG);
       break;
@@ -705,73 +755,140 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       uint8_t *rcvbuf, *sndbuf;
       size_t rcvlen, sndlen;
 
-      if ((ret = client_recv(conn, MSG_HANDSHAKE)) != ERR_SUCCESS)
-        goto cleanup;
+      zt_msg_type_t expectmask = MSG_AUTH_RETRY | MSG_HANDSHAKE;
+      if ((ret = client_recv(conn, expectmask)) != ERR_SUCCESS)
+        goto cleanup2;
 
-      rcvlen = zt_msg_get_len(conn->msgbuf);
+      rcvlen = zt_msg_data_len(conn->msgbuf);
       rcvbuf = zt_msg_data_ptr(conn->msgbuf);
 
-      if (rcvlen < AUTHID_LEN_BYTES + VCRY_VERIFY_MSG_LEN) {
-        return ERR_INVALID_DATUM;
-        goto cleanup;
+      switch (zt_msg_type(conn->msgbuf)) {
+      case MSG_AUTH_RETRY: {
+        /**
+         * The peer wants to retry authentication and has sent a new password Id
+         * (note that this only happens in KAPPA1 auth mode).
+         *
+         * 1. Warn the user about a possible MITM and ask whether to continue.
+         *
+         * 2. Check if this password Id is available in the passwddb, and offer
+         *    a new Id (not necessarily the same as the one sent by the peer).
+         */
+
+        if (!tty_get_answer_is_yes(g_Prompts[HandshakeRetryYesNo])) {
+          ret = ERR_HSHAKE_ABORTED;
+          goto cleanup2;
+        }
+
+        if (rcvlen < sizeof(passwd_id_t)) {
+          ret = ERR_INVALID_DATUM;
+          goto cleanup2;
+        }
+
+        conn->renegotiation_passwd = ((passwd_id_t *)rcvbuf)[0];
+        conn->renegotiation = true;
+
+        /* handshake will be restarted */
+        vcry_module_release();
+
+        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
+        break;
+      } /* case MSG_AUTH_RETRY */
+
+      case MSG_HANDSHAKE: {
+        /** We should have recieved the expected handshake response */
+        if (rcvlen < AUTHID_BYTES_LEN + VCRY_VERIFY_MSG_LEN) {
+          return ERR_INVALID_DATUM;
+          goto cleanup2;
+        }
+
+        /* copy peer authid */
+        zt_memcpy(&config.authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
+
+        rcvbuf += AUTHID_BYTES_LEN;
+        rcvlen -= AUTHID_BYTES_LEN;
+
+        /* process handshake response */
+        if ((ret = vcry_handshake_complete(
+                 rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
+          PRINTERROR("vcry_handshake_complete: %s", zt_strerror(ret));
+          goto cleanup2;
+        }
+
+        if ((ret = vcry_derive_session_key()) != ERR_SUCCESS)
+          goto cleanup2;
+
+        /* create our verify-initiation message */
+        if ((ret = vcry_initiator_verify_initiate(
+                 &sndbuf, &sndlen, config.authid_mine.bytes,
+                 config.authid_peer.bytes)) != ERR_SUCCESS) {
+          PRINTERROR("vcry_initiator_verify_initiate: %s", zt_strerror(ret));
+          goto cleanup2;
+        }
+
+        zt_msg_make(conn->msgbuf, MSG_HANDSHAKE, sndbuf, sndlen);
+        zt_free(sndbuf);
+
+        /* process the responder's verify-initiation message and complete
+         * the verification on our end */
+        ret = vcry_initiator_verify_complete(
+            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
+            config.authid_mine.bytes, config.authid_peer.bytes);
+        switch (ret) {
+        case ERR_SUCCESS:
+          break; /* successful */
+        case ERR_AUTH_FAIL:
+          goto handshakefailure;
+        default:
+          PRINTERROR("vcry_initiator_verify_complete: %s", zt_strerror(ret));
+          goto cleanup2;
+        }
+
+        /* send our verify-initiation message to the peer */
+        if ((ret = client_send(conn)) != ERR_SUCCESS)
+          goto cleanup2;
+
+        CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
+      } /* case MSG_HANDSHAKE */
+      }
+      break;
+
+    handshakefailure:
+      /**
+       * We are here because although the handshake messages were correctly
+       * structured, there was an authentication failure, likely due to
+       * incorrect credentials. Inform the user about a possible MITM and ask
+       * whether to continue.
+       * If the user chooses to continue, we will restart the handshake from the
+       * initiation phase.
+       */
+
+      if (!tty_get_answer_is_yes(g_Prompts[HandshakeRestartYesNo])) {
+        ret = ERR_HSHAKE_ABORTED;
+        goto cleanup2;
       }
 
-      /* copy peer authid */
-      zt_memcpy(&config.authid_peer, rcvbuf, AUTHID_LEN_BYTES);
+      /** handshake will be restarted */
+      vcry_module_release();
 
-      rcvbuf += AUTHID_LEN_BYTES;
-      rcvlen -= AUTHID_LEN_BYTES;
-
-      /* process handshake response */
-      if ((ret = vcry_handshake_complete(
-               rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
-        goto cleanup;
-      }
-
-      if ((ret = vcry_derive_session_key()) != ERR_SUCCESS)
-        goto cleanup;
-
-      /* create our verify-initiation message */
-      if ((ret = vcry_initiator_verify_initiate(
-               &sndbuf, &sndlen, config.authid_mine.bytes,
-               config.authid_peer.bytes)) != ERR_SUCCESS) {
-        goto cleanup;
-      }
-
-      zt_msg_make(conn->msgbuf, MSG_HANDSHAKE, sndbuf, sndlen);
-
-      zt_free(sndbuf);
-
-      /* process the responder's verify-initiation message and complete
-       * the verification on our end */
-      if ((ret = vcry_initiator_verify_complete(
-               rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
-               config.authid_mine.bytes, config.authid_peer.bytes)) !=
-          ERR_SUCCESS) {
-        goto cleanup;
-      }
-
-      /* send our verify-initiation message to the peer */
-      if ((ret = client_send(conn)) != ERR_SUCCESS)
-        goto cleanup;
-
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_PING);
       break;
     }
 
     case CLIENT_OFFER: {
+      zt_fileinfo_t fileinfo;
+
       /**
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
        */
       if ((ret = zt_fio_open(&fileptr, config.filename, FIO_RDONLY)) !=
           ERR_SUCCESS) {
-        goto cleanup;
+        goto cleanup2;
       }
 
       if ((ret = zt_fio_fileinfo(fileptr, &fileinfo)) != ERR_SUCCESS) {
         zt_fio_close(fileptr);
-        goto cleanup;
+        goto cleanup2;
       }
 
       fileinfo.size = hton64(fileinfo.size);
@@ -782,7 +899,7 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if ((ret = client_send(conn)) != ERR_SUCCESS) {
         zt_fio_close(fileptr);
-        goto cleanup;
+        goto cleanup2;
       }
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
@@ -804,7 +921,7 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         if ((ret = client_send(conn)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
-          goto cleanup;
+          goto cleanup2;
         }
       }
 
@@ -812,7 +929,7 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if (rv != ERR_EOF) {
         ret = rv;
-        goto cleanup;
+        goto cleanup2;
       }
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_DONE);
@@ -823,30 +940,33 @@ err_t zt_client_do(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_msg_make(conn->msgbuf, MSG_DONE, PTR8("BYE"), 4);
 
       if ((ret = client_send(conn)) != ERR_SUCCESS)
-        goto cleanup;
+        goto cleanup2;
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_NONE);
       *done = true;
-      goto cleanup;
+      goto cleanup2;
     }
 
     default: {
       PRINTERROR("bad value for client state");
       ret = ERR_INVALID;
-      goto cleanup;
+      goto cleanup2;
     }
     }
   }
 
-cleanup:
-  shutdown(conn, SHUT_RDWR);
+cleanup2:
+  vcry_module_release();
+
+  shutdown(conn->sockfd, SHUT_RDWR);
   close(conn->sockfd);
   conn->sockfd = -1;
 
+cleanup1:
   zt_addrinfo_free(conn->ai_estab);
   conn->ai_estab = NULL;
 
-  vcry_module_release();
+cleanup0:
 
   zt_free(conn->msgbuf);
   conn->msgbuf = NULL;
