@@ -7,22 +7,25 @@
 
 enum {
   /** User input required */
-  HandshakeRetryYesNo,
-  HandshakeRestartYesNo,
+  OnBadPasswdIdentifier,
+  OnPossibleIncorrectPasswdAttempt,
+  OnFileTransferRequest,
   /** Report status */
-  ServerListening,
+  OnServerListening,
 };
 
 const char *g_CLIPrompts[] = {
-    [HandshakeRetryYesNo] = CAUTIONPROMPT(
-        "Password verification failed... either the password bundle is "
-        "out-of-sync or this is a possible Man-In-The-Middle attack.\n",
+    [OnBadPasswdIdentifier] = CAUTIONPROMPT(
+        "Handshake failed... either the password bundle is out-of-sync/has "
+        "been tampered with, or this is a possible Man-In-The-Middle attack.\n",
         "Do you want to retry? [Y/n] "),
-    [HandshakeRestartYesNo] = CAUTIONPROMPT(
-        "Handshake failed... either your correspondent typed the password "
-        "wrong or this is a possible Man-In-The-Middle attack.\n",
-        "Do you want to retry? [Y/n] "),
-    [ServerListening] = STATUSPROMPT(
+    [OnPossibleIncorrectPasswdAttempt] =
+        CAUTIONPROMPT("Handshake failed... either you or your correspondent "
+                      "entered incorrect credentials, or this is a possible "
+                      "Man-In-The-Middle attack.\n",
+                      "Do you want to retry? [Y/n] "),
+    [OnFileTransferRequest] = "Accept this file transfer? [Y/n] ",
+    [OnServerListening] = STATUSPROMPT(
         "Listening for connections... Your correspondent may now send you a "
         "file using the \'zerotunnel send\' command.\n"),
 };

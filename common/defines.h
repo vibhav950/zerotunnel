@@ -158,6 +158,7 @@ typedef enum {
   ERR_INTERNAL,                   /* internal library error */
   ERR_INVALID,                    /* invalid operation (sequence) */
   ERR_OPERATION_LIMIT_REACHED,    /* operation limit reached */
+  ERR_BAD_CONTROL_FLOW,           /* protocol deviation */
   ERR_INVALID_DATUM,              /* invalid data */
   ERR_HSHAKE_ABORTED,             /* handshake aborted */
   ERR_AUTH_FAIL,                  /* authentication failed */

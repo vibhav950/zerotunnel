@@ -54,6 +54,8 @@ const char *zt_error_str(err_t err) {
     return "invalid operation sequence";
   case ERR_OPERATION_LIMIT_REACHED:
     return "operation limit reached";
+  case ERR_BAD_CONTROL_FLOW:
+    return "deviated from expected control flow";
   case ERR_INVALID_DATUM:
     return "mismatch from expected data";
   case ERR_HSHAKE_ABORTED:
