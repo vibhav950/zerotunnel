@@ -53,8 +53,8 @@ static inline bool isIPv6(const char *addr) {
   return true;
 }
 
-static err_t zt_server_setup_host(zt_server_connection_t *conn,
-                                  struct zt_addrinfo **ai_list) {
+static err_t server_setup_host(zt_server_connection_t *conn,
+                               struct zt_addrinfo **ai_list) {
   err_t ret = ERR_SUCCESS;
   int status;
   struct zt_addrinfo *ai_head = NULL, *ai_tail = NULL, *ai_cur;
@@ -65,10 +65,10 @@ static err_t zt_server_setup_host(zt_server_connection_t *conn,
   ASSERT(conn);
   ASSERT(conn->state == SERVER_CONN_INIT);
 
-  /** check for IPv6 support */
+  /* check for IPv6 support */
   if (isIPv6(conn->hostname)) {
 #ifdef USE_IPV6
-    /** check if the system has IPv6 enabled */
+    /* check if the system has IPv6 enabled */
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s < 0) {
       PRINTERROR("An IPv6 address was specified, but the system does not "
@@ -111,14 +111,14 @@ static err_t zt_server_setup_host(zt_server_connection_t *conn,
     }
 #endif
     else {
-      continue; /** ignore unsupported address families */
+      continue; /* ignore unsupported address families */
     }
 
-    /** ignore elements without required address info */
+    /* Ignore elements without required address info */
     if (!p->ai_addr || !(p->ai_addrlen > 0))
       continue;
 
-    /** ignore elements with bad address length */
+    /* Ignore elements with bad address length */
     if ((size_t)p->ai_addrlen < saddr_len)
       continue;
 
@@ -129,7 +129,7 @@ static err_t zt_server_setup_host(zt_server_connection_t *conn,
       goto cleanup;
     }
 
-    /** copy each member */
+    /* copy each member */
     ai_cur->ai_flags = p->ai_flags;
     ai_cur->ai_family = p->ai_family;
     ai_cur->ai_socktype = p->ai_socktype;
@@ -156,15 +156,15 @@ static err_t zt_server_setup_host(zt_server_connection_t *conn,
     *ai_list = NULL;
 
 cleanup:
-  /** if there was an error, free the zt_addrinfo list before exiting */
+  /* If there was an error, free the zt_addrinfo list before exiting */
   if (res)
     zt_addrinfo_free(ai_head);
   freeaddrinfo(res);
   return ret;
 }
 
-static err_t zt_server_tcp_listen(zt_server_connection_t *conn,
-                                  struct zt_addrinfo *ai_list) {
+static err_t server_tcp_listen(zt_server_connection_t *conn,
+                               struct zt_addrinfo *ai_list) {
   err_t ret = ERR_SUCCESS;
   struct zt_addrinfo *ai_cur, *ai_estab = NULL;
   int sockfd, optval;
@@ -177,9 +177,9 @@ static err_t zt_server_tcp_listen(zt_server_connection_t *conn,
     (sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
                      ai_cur->ai_protocol));
     if (sockfd < 0)
-      continue; // failed; try next candidate
+      continue; /* failed -- try next candidate */
     if (SOCK_CLOEXEC == 0) {
-      /** SOCK_CLOEXEC isn't supported, set O_CLOEXEC using fcntl */
+      /* SOCK_CLOEXEC isn't supported, set O_CLOEXEC using fcntl */
       int flags = fcntl(sockfd, F_GETFD);
       if (flags < 0) {
         PRINTERROR("fcntl: failed to get flags (%s)", strerror(errno));
@@ -194,7 +194,7 @@ static err_t zt_server_tcp_listen(zt_server_connection_t *conn,
     (void)setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&optval,
                      sizeof(optval));
 
-    /** Prepare for a live read if required */
+    /* Prepare for a live read if required */
     if (conn->fl_live_read) {
       int fail = 0;
 
@@ -221,14 +221,14 @@ static err_t zt_server_tcp_listen(zt_server_connection_t *conn,
     }
 
     if (bind(sockfd, ai_cur->ai_addr, ai_cur->ai_addrlen) == 0)
-      break; // success
+      break; /* success */
     else
       PRINTERROR("bind: failed to bind socket (%s)", strerror(errno));
 
-    /** Try to enable TFO */
+    /* try to enable TFO */
     if (conn->fl_tcp_fastopen) {
 #if defined(TCP_FASTOPEN)
-      optval = 5; // allow maximum 5 pending SYNs
+      optval = 5; /* allow maximum 5 pending SYNs */
       if (setsockopt(sockfd, SOL_TCP, TCP_FASTOPEN, (void *)&optval,
                      sizeof(optval)) == -1) {
         PRINTERROR("setsockopt: failed to set TCP_FASTOPEN (%s)",
@@ -267,7 +267,7 @@ static err_t zt_server_tcp_listen(zt_server_connection_t *conn,
   conn->sockfd_flags = fcntl(sockfd, F_GETFL, 0);
   fcntl(sockfd, F_SETFL, conn->sockfd_flags | O_NONBLOCK);
 
-  (void)listen(sockfd, 5); // listen with a backlog of 5
+  (void)listen(sockfd, 5); /* listen with a backlog of 5 */
 
   conn->ai_estab = ai_estab;
   conn->sockfd = sockfd;
@@ -277,7 +277,7 @@ exit:
   return ret;
 }
 
-static err_t zt_server_tcp_accept(zt_server_connection_t *conn) {
+static err_t server_tcp_accept(zt_server_connection_t *conn) {
   int clientfd, flags;
 
   ASSERT(conn);
@@ -329,7 +329,7 @@ static err_t zt_server_tcp_accept(zt_server_connection_t *conn) {
     }
   }
 
-  // keep this if block separate since the compiler can optimize it away
+  /* Keep this if block separate since the compiler can optimize it away */
   if (SOCK_CLOEXEC == 0) {
     flags = fcntl(clientfd, F_GETFD);
     if (flags < 0) {
@@ -341,11 +341,11 @@ static err_t zt_server_tcp_accept(zt_server_connection_t *conn) {
       PRINTERROR("fcntl: failed to set O_CLOEXEC (%s)", strerror(errno));
   }
 
-  /** make this socket non-blocking */
+  /* make this socket non-blocking */
   conn->clientfd_flags = flags = fcntl(clientfd, F_GETFL, 0);
   fcntl(clientfd, F_SETFL, flags | O_NONBLOCK);
 
-  close(conn->sockfd); // close the listening socket
+  close(conn->sockfd); /* close the listening socket */
   conn->sockfd = -1;
   PRINTDEBUG("new connection accepted on fd=%d", clientfd);
 
@@ -388,7 +388,7 @@ static err_t server_send(zt_server_connection_t *conn) {
   len = zt_msg_data_len(conn->msgbuf);
 
   rawptr = zt_msg_data_ptr(conn->msgbuf);
-  rawptr[len++] = MSG_END; // data END marker
+  rawptr[len++] = MSG_END; /* data END marker */
 
   zt_msg_set_len(conn->msgbuf, len); /* update length in header */
 
@@ -450,7 +450,7 @@ static err_t server_recv(zt_server_connection_t *conn,
   rawptr = zt_msg_raw_ptr(conn->msgbuf);
   dataptr = zt_msg_data_ptr(conn->msgbuf);
 
-  /** read the msg header */
+  /* read msg header */
   nread = zt_server_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
   if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
@@ -482,7 +482,7 @@ static err_t server_recv(zt_server_connection_t *conn,
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = zt_msg_data_len(conn->msgbuf) + taglen;
 
-  /** read msg payload */
+  /* read msg payload */
   nread = zt_server_tcp_recv(conn, dataptr, datalen, NULL);
   if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
@@ -497,7 +497,7 @@ static err_t server_recv(zt_server_connection_t *conn,
     goto out;
   }
 
-  /** decrypt encrypted payload */
+  /* decrypt encrypted payload */
   if (is_encrypted) {
     if ((ret = vcry_aead_decrypt(rawptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
                                  rawptr, &nread)) != ERR_SUCCESS) {
@@ -531,7 +531,7 @@ static inline uint64_t filesize_unit_conv(uint64_t size) {
   else if (size > SIZE_KB)
     return size / SIZE_KB;
   else
-    return size; // in bytes
+    return size; /* in bytes */
 }
 
 static inline const char *filesize_unit_str(uint64_t size) {
@@ -542,7 +542,7 @@ static inline const char *filesize_unit_str(uint64_t size) {
   else if (size > SIZE_KB)
     return "KB";
   else
-    return "bytes"; // in bytes
+    return "bytes"; /* in bytes */
 }
 
 err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
@@ -559,19 +559,19 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   if (zt_get_hostid(&conn->authid_self) != 0)
     return ERR_INTERNAL;
 
-  /** Allocate memory for the primary server message buffer */
+  /* Allocate memory for the primary server message buffer */
   if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
     return ERR_MEM_FAIL;
 
-  /** Main message loop */
+  /* main message loop */
   while (1) {
     switch (conn->state) {
     case SERVER_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
-      if ((ret = zt_server_setup_host(conn, &ai_list)) != ERR_SUCCESS)
+      if ((ret = server_setup_host(conn, &ai_list)) != ERR_SUCCESS)
         goto cleanup0;
 
-      if ((ret = zt_server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
+      if ((ret = server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
         goto cleanup0;
 
       tty_printf("%s(address=%s, port=%s, Id=%x)\n",
@@ -587,7 +587,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         int rv;
         timediff_t timeout_msec = conn->idle_timeout > 0
                                       ? conn->idle_timeout
-                                      : -1; // wait indefinitely
+                                      : -1; /* wait indefinitely */
 
         rv = zt_tcp_io_waitfor(conn->sockfd, timeout_msec, ZT_NETIO_READABLE);
         if (rv < 0) {
@@ -599,9 +599,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         }
 
         if (rv > 0) {
-          if ((ret = zt_server_tcp_accept(conn)) != ERR_SUCCESS)
+          if ((ret = server_tcp_accept(conn)) != ERR_SUCCESS)
             goto cleanup1;
-          break; // client connection accepted
+          break; /* client connection accepted  */
         }
       }
 
@@ -648,7 +648,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
-      /** Load the master password */
+      /* Load the master password */
       passwd_id = zt_auth_passwd_get(config.passwddb_file, config.auth_type,
                                      config.peer_id, passwd_id, &master_pass);
 
@@ -685,8 +685,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         }
 
         /**
-         * Successfully loaded a new password; save it and request the peer to
-         * use this passwd
+         * Successfully loaded a new password; save it and request the
+         * peer to retry the handshake with the corresponding passwdId
          */
         conn->expected_passwd.expect = true;
         conn->expected_passwd.id = pwid;
@@ -701,13 +701,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
         break;
       } else if (passwd_id < 0) {
-        /** KAPPA0 and KAPPA2 -- failed to get a password from the user */
+        /* KAPPA0 and KAPPA2 -- failed to get a password from the user */
         PRINTERROR("failed to load master password");
         ret = ERR_INTERNAL; // FIXME: better error code?
         goto cleanup2;
       }
 
-      /** Setup the VCRY module now that we have the required parameters */
+      /* Setup the VCRY module now that we have the required parameters */
       if ((ret = vcry_module_init()) != ERR_SUCCESS) {
         PRINTERROR("vcry_module_init() : %s", zt_strerror(ret));
         goto cleanup2;
@@ -721,7 +721,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         zt_auth_passwd_free(master_pass);
         goto cleanup2;
       }
-      /* we don't need the master passwd anymore -- why keep it in memory? */
+      /* We don't need the master passwd anymore -- why keep it in memory? */
       zt_auth_passwd_free(master_pass);
 
       int vcry_algs[6];
@@ -764,7 +764,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      /** make the handshake response message */
+      /** Make the handshake response message */
       uint8_t *p = zt_msg_data_ptr(conn->msgbuf);
       zt_memcpy(p, conn->authid_self.bytes, AUTHID_BYTES_LEN);
       p += AUTHID_BYTES_LEN;
@@ -831,7 +831,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      /** handshake will be restarted */
+      /* handshake will be restarted */
       vcry_module_release();
 
       SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
@@ -943,7 +943,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       goto cleanup2;
     }
     } /* switch(conn->state) */
-  } /* while(1) */
+  }   /* while(1) */
 
 cleanup2:
   vcry_module_release();

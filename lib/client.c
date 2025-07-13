@@ -78,7 +78,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     return ERR_ALREADY;
 
   if (sigsetjmp(jmpenv, 1)) {
-    /** This is coming from a siglongjmp() after an alarm signal */
+    /* This is coming from a siglongjmp() after an alarm signal */
     PRINTERROR("host resolution timed out");
     ret = ERR_TIMEOUT;
     goto cleanup;
@@ -90,7 +90,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 #ifdef SA_RESTART
     sigact.sa_flags &= ~SA_RESTART;
 #endif
-    /** Set the new action */
+    /* Set the new action */
     sigaction(SIGALRM, &sigact, NULL);
 
     /**
@@ -183,11 +183,11 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
       zt_memcpy(ai_cur->ai_canonname, p->ai_canonname, cname_len);
     }
 
-    /** If the list is empty, set this node as the head */
+    /* If the list is empty, set this node as the head */
     if (!ai_head)
       ai_head = ai_cur;
 
-    /** Add this node to the tail of the list */
+    /* Add this node to the tail of the list */
     if (ai_tail)
       ai_tail->ai_next = ai_cur;
     ai_tail = ai_cur;
@@ -203,11 +203,11 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
 cleanup:
 #if 1 // USE_SIGACT_TIMEOUT
-  /** Deactivate a possibly active timeout before uninstalling the handler */
+  /* Deactivate a possibly active timeout before uninstalling the handler */
   if (!prev_alarm)
     alarm(0);
 
-  /** Restore the old struct */
+  /* Restore the old struct */
   if (have_old_sigact)
     sigaction(SIGALRM, &sigact_old, NULL);
 
@@ -277,7 +277,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
         PRINTERROR("fcntl: failed to set O_CLOEXEC (%s)", strerror(errno));
     }
 
-    /** Try to enable TCP_NODELAY */
+    /* Try to enable TCP_NODELAY */
     if (conn->fl_tcp_nodelay) {
 #ifdef TCP_NODELAY
       on = 1;
@@ -293,7 +293,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
 #endif
     }
 
-    /** Try to enable TCP_FASTOPEN */
+    /* Try to enable TCP_FASTOPEN */
     if (conn->fl_tcp_fastopen) {
 #if defined(TCP_FASTOPEN_CONNECT) /* Linux >= 4.11 */
       on = 1;
@@ -309,7 +309,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
 #endif
     }
 
-    /** We must have TCP keepalive enabled for live reads */
+    /* We must have TCP keepalive enabled for live reads */
     if (conn->fl_live_read) {
       int fail = 0;
 
@@ -409,8 +409,9 @@ static err_t client_tcp_conn1(zt_client_connection_t *conn) {
   if (conn->fl_tcp_fastopen) {
     conn->first_send = true;
     /**
-     * do nothing; we must send the TFO cookie/cookie request using the sendto()
-     * syscall with the `MSG_FASTOPEN` flag as the first send of this connection
+     * Do nothing -- we must send the TFO cookie/cookie request using the
+     * sendto() syscall with the `MSG_FASTOPEN` flag as the first send of
+     * this connection
      */
     rv = 0;
 #elif defined(TCP_FASTOPEN_CONNECT)
@@ -559,7 +560,7 @@ static err_t client_recv(zt_client_connection_t *conn,
   rawptr = zt_msg_raw_ptr(conn->msgbuf);
   dataptr = zt_msg_data_ptr(conn->msgbuf);
 
-  /** Read the message header */
+  /* Read the message header */
   nread = zt_client_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
   if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
@@ -591,7 +592,7 @@ static err_t client_recv(zt_client_connection_t *conn,
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = zt_msg_data_len(conn->msgbuf) + taglen;
 
-  /** Read message payload */
+  /* Read message payload */
   nread = zt_client_tcp_recv(conn, dataptr, datalen, NULL);
   if (nread < 0) {
     PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
@@ -649,7 +650,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   }
   // clang-format on
 
-  /** Allocate memory for the primary client message buffer */
+  /* Allocate memory for the primary client message buffer */
   if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
     return ERR_MEM_FAIL;
 
@@ -692,7 +693,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       retrycount++;
 
       if (conn->renegotiation) {
-        /** we can only get here when auth_type=KAPPA1 */
+        /* We can only get here when auth_type=KAPPA1 */
         passwd_id =
             zt_auth_passwd_load(config.passwddb_file, config.peer_id,
                                 conn->renegotiation_passwd, &master_pass);
@@ -820,13 +821,13 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       } /* case MSG_AUTH_RETRY */
 
       case MSG_HANDSHAKE: {
-        /** We should have recieved the expected handshake response */
+        /* We should have recieved the expected handshake response */
         if (rcvlen < AUTHID_BYTES_LEN + VCRY_VERIFY_MSG_LEN) {
           return ERR_INVALID_DATUM;
           goto cleanup2;
         }
 
-        /* copy peer authid */
+        /* copy peer AuthId */
         zt_memcpy(conn->authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
 
         rcvbuf += AUTHID_BYTES_LEN;
@@ -853,8 +854,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         zt_msg_make(conn->msgbuf, MSG_HANDSHAKE, sndbuf, sndlen);
         zt_free(sndbuf);
 
-        /* process the responder's verify-initiation message and complete
-         * the verification on our end */
+        /* Process the responder's verify-initiation message */
         ret = vcry_initiator_verify_complete(
             rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
             conn->authid_mine.bytes, conn->authid_peer.bytes);
@@ -868,7 +868,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
           goto cleanup2;
         }
 
-        /* send our verify-initiation message to the peer */
+        /* Send our verify-initiation message to the peer */
         if ((ret = client_send(conn)) != ERR_SUCCESS)
           goto cleanup2;
 
@@ -893,7 +893,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      /** handshake will be restarted */
+      /* handshake will be restarted */
       vcry_module_release();
 
       CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
@@ -980,7 +980,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       goto cleanup2;
     }
     } /* switch(conn->state) */
-  } /* while(1) */
+  }   /* while(1) */
 
 cleanup2:
   vcry_module_release();
