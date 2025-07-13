@@ -75,6 +75,8 @@ err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info);
 // err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
 err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread);
 
+err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size);
+
 err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize);
 
 #endif /* __IO_H__ */

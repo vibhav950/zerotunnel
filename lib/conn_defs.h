@@ -29,14 +29,16 @@
 #define ZT_CLIENT_TIMEOUT_SEND_DEFAULT  5000U   /* Server send() timeout (msec) */
 #define ZT_CLIENT_TIMEOUT_RECV_DEFAULT  5000U   /* Server recv() timeout (msec) */
 
-#define CLIENT_RESOLVE_RETRIES          5       /* Host resolution retries */
+#define CLIENT_RESOLVE_RETRIES          5       /* Max host resolution retries */
+
+#define MAX_AUTH_RETRY_COUNT            3       /* Max authentication retries */
 
 enum {
   MSG_HANDSHAKE   = (1 << 0), /* Crypto handshake message */
   MSG_AUTH_RETRY  = (1 << 1), /* Authentication retry message */
   MSG_CONTROL     = (1 << 2), /* Control message */
   MSG_METADATA    = (1 << 3), /* File metadata message */
-  MSG_DATA        = (1 << 4), /* File payload message */
+  MSG_FILEDATA    = (1 << 4), /* File payload message */
   MSG_DONE        = (1 << 5), /* No further messages pending */
   MSG_ANY         = 0xff,
 };
@@ -45,6 +47,9 @@ typedef uint8_t zt_msg_type_t;
 
 /** message data end marker */
 #define MSG_END                                 0x01
+
+/** message flow termination marker */
+#define DONE_MARKER                             "BYE"
 
 /** size of message header */
 #define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))

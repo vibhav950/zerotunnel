@@ -53,8 +53,6 @@ typedef struct _zt_client_connection_st {
 } zt_client_connection_t;
 // clang-format on
 
-#define MAX_AUTH_RETRY_COUNT 3
-
 err_t zt_client_run(zt_client_connection_t *conn, void *args, bool *done);
 
 int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,

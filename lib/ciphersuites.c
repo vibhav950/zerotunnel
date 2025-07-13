@@ -150,7 +150,7 @@ static const zt_cipher_suite_entry_st cs_entries[] = {
 
 // clang-format off
 
-const char *zt_cipher_suite_info(uint8_t csid,
+const char *zt_cipher_suite_info(ciphertsuite_t csid,
                                  int *cipher_algorithm,
                                  int *aead_algorithm,
                                  int *hmac_algorithm,
@@ -178,13 +178,13 @@ const char *zt_cipher_suite_info(uint8_t csid,
   return cs_entries[csid].name;
 }
 
-uint8_t zt_cipher_suite_info_from_alias(const char *alias,
-                                        int *cipher_algorithm,
-                                        int *aead_algorithm,
-                                        int *hmac_algorithm,
-                                        int *kex_curve,
-                                        int *kem_algorithm,
-                                        int *kdf_algorithm) {
+ciphersuite_t zt_cipher_suite_info_from_alias(const char *alias,
+                                              int *cipher_algorithm,
+                                              int *aead_algorithm,
+                                              int *hmac_algorithm,
+                                              int *kex_curve,
+                                              int *kem_algorithm,
+                                              int *kdf_algorithm) {
   size_t idx;
 
   if (!alias || alias[0] == '\0')
@@ -210,13 +210,13 @@ uint8_t zt_cipher_suite_info_from_alias(const char *alias,
   return cs_entries[idx].id;
 }
 
-uint8_t zt_cipher_suite_info_from_name(const char *name,
-                                       int *cipher_algorithm,
-                                       int *aead_algorithm,
-                                       int *hmac_algorithm,
-                                       int *kex_curve,
-                                       int *kem_algorithm,
-                                       int *kdf_algorithm) {
+ciphersuite_t zt_cipher_suite_info_from_name(const char *name,
+                                             int *cipher_algorithm,
+                                             int *aead_algorithm,
+                                             int *hmac_algorithm,
+                                             int *kex_curve,
+                                             int *kem_algorithm,
+                                             int *kdf_algorithm) {
   size_t idx;
 
   if (!name || name[0] == '\0')
@@ -249,13 +249,13 @@ static inline void make_valid(const char *repr, char buf[64]) {
   buf[i] = '\0';
 }
 
-uint8_t zt_cipher_suite_info_from_repr(const char *repr,
-                                       int *cipher_algorithm,
-                                       int *aead_algorithm,
-                                       int *hmac_algorithm,
-                                       int *kex_curve,
-                                       int *kem_algorithm,
-                                       int *kdf_algorithm) {
+ciphersuite_t zt_cipher_suite_info_from_repr(const char *repr,
+                                             int *cipher_algorithm,
+                                             int *aead_algorithm,
+                                             int *hmac_algorithm,
+                                             int *kex_curve,
+                                             int *kem_algorithm,
+                                             int *kdf_algorithm) {
   size_t idx;
   char buf[64];
 

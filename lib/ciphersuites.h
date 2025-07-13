@@ -3,9 +3,11 @@
 
 #define CS_INTERNAL(_) (_cs_##_)
 
+typedef uint8_t ciphersuite_t;
+
 typedef struct _zt_cipher_suite_entry_st {
   const char *name; /* canonical ciphersuite name */
-  const uint8_t id;
+  const ciphersuite_t id;
   const char *alias; /* short ciphersuite name */
   int cipher_algorithm;
   int aead_algorithm;
@@ -61,7 +63,7 @@ typedef struct _zt_cipher_suite_entry_st {
  * @param[in] csid cipher suite identifier
  * @return pointer to the name of the cipher suite, or NULL if not found
  */
-const char *zt_cipher_suite_info(uint8_t csid,
+const char *zt_cipher_suite_info(ciphersuite_t csid,
                                  int *cipher,
                                  int *aead,
                                  int *hmac,
@@ -74,26 +76,26 @@ const char *zt_cipher_suite_info(uint8_t csid,
  * @param[in] alias alias of the cipher suite
  * @return fixed-size cipher suite identifier, or 0 if not found
  */
-uint8_t zt_cipher_suite_info_from_alias(const char *alias,
-                                        int *cipher,
-                                        int *aead,
-                                        int *hmac,
-                                        int *kex,
-                                        int *kem,
-                                        int *kdf);
+ciphersuite_t zt_cipher_suite_info_from_alias(const char *alias,
+                                              int *cipher,
+                                              int *aead,
+                                              int *hmac,
+                                              int *kex,
+                                              int *kem,
+                                              int *kdf);
 
 /**
  * zt_cipher_suite_info_from_name - get cipher suite information from name
  * @param[in] name name of the cipher suite
  * @return fixed-size cipher suite identifier, or 0 if not found
  */
-uint8_t zt_cipher_suite_info_from_name(const char *name,
-                                       int *cipher,
-                                       int *aead,
-                                       int *hmac,
-                                       int *kex,
-                                       int *kem,
-                                       int *kdf);
+ciphersuite_t zt_cipher_suite_info_from_name(const char *name,
+                                             int *cipher,
+                                             int *aead,
+                                             int *hmac,
+                                             int *kex,
+                                             int *kem,
+                                             int *kdf);
 
 /**
  * zt_cipher_suite_info_from_repr - get cipher suite info from a valid string
@@ -101,13 +103,13 @@ uint8_t zt_cipher_suite_info_from_name(const char *name,
  * @param[in] repr name or alias of the cipher suite (delimited by '-' or '_')
  * @return fixed-size cipher suite identifier, or 0 if not found
  */
-uint8_t zt_cipher_suite_info_from_repr(const char *repr,
-                                       int *cipher,
-                                       int *aead,
-                                       int *hmac,
-                                       int *kex,
-                                       int *kem,
-                                       int *kdf);
+ciphersuite_t zt_cipher_suite_info_from_repr(const char *repr,
+                                             int *cipher,
+                                             int *aead,
+                                             int *hmac,
+                                             int *kex,
+                                             int *kem,
+                                             int *kdf);
 
 /**
  * zt_cipher_suite_name_from_alias - get name of a cipher suite from its alias

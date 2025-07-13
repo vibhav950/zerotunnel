@@ -127,7 +127,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   passwd_id_t pwid_cmp;
   bool found = false;
 
-  if (passwddb_file == NULL || peer_id == NULL)
+  if (passwddb_file == NULL || peer_id == NULL || pwid == 0)
     return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
@@ -267,7 +267,7 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   passwd_id_t pwid_cmp;
   bool found = false;
 
-  if (passwddb_file == NULL || peer_id == NULL)
+  if (passwddb_file == NULL || peer_id == NULL || pwid == 0)
     return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
@@ -376,10 +376,10 @@ passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
                                const char *peer_id, struct passwd **passwd) {
   int rv;
   char *pw;
-  passwd_id_t id = -1;
+  passwd_id_t id = 0;
   struct passwd *passwd_ret;
 
-  if (auth_type == KAPPA_AUTHTYPE_1 && passwddb_file == NULL)
+  if ((passwddb_file == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     return -1;
 
   if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
@@ -396,7 +396,7 @@ passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
       goto err;
     break;
   case KAPPA_AUTHTYPE_1:
-    if ((id = zt_auth_passwd_load(passwddb_file, peer_id, id, &pw)) < 0) {
+    if ((id = zt_auth_passwd_load(passwddb_file, peer_id, -1, &pw)) < 0) {
       PRINTERROR("found no matching password entries (peer_id=%s, pwid=%d)",
                  peer_id, id);
       goto err;
@@ -428,10 +428,10 @@ passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
   char *pw;
   struct passwd *passwd_ret;
 
-  if (passwddb_file == NULL && auth_type == KAPPA_AUTHTYPE_1)
+  if ((passwddb_file == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     return -1;
 
-  if (peer_id == NULL)
+  if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     peer_id = ZT_NULL_PEERID_STR;
 
   if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
@@ -442,6 +442,10 @@ passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
   switch (auth_type) {
   case KAPPA_AUTHTYPE_0:
   case KAPPA_AUTHTYPE_2:
+    if (pwid != 0) {
+      PRINTERROR("pwid must be 0 for KAPPA_AUTHTYPE_0 and KAPPA_AUTHTYPE_2");
+      goto err;
+    }
     if (!(pw = auth_passwd_prompt("Enter password: ", 0)))
       goto err;
     break;
@@ -506,7 +510,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
   memzero(idhash_hex, idhash_hex_len);
   zt_free(idhash_hex);
 
-  for (int i = 0; i < n_passwords; i++) {
+  for (int pwidx = 1; pwidx <= n_passwords; ++pwidx) {
     if (auth_passwd_generate(buf, 33) == -1) { // TODO: hardcoded length
       ret = -1;
       goto cleanup;
@@ -518,7 +522,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
       goto cleanup;
     }
 
-    fprintf(fp, ":%u: :%s%c\r\n", i + 1, passwd_b64, '\0');
+    fprintf(fp, ":%u: :%s%c\r\n", pwidx, passwd_b64, '\0');
 
     memzero(passwd_b64, passwd_b64_len);
     zt_free(passwd_b64);

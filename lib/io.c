@@ -193,8 +193,11 @@ err_t zt_file_rename(const char *oldpath, const char *newpath) {
   if (!S_ISREG(st.st_mode))
     return ERR_BAD_ARGS;
 
+  if (!(p = zt_strdup(newpath)))
+    return ERR_MEM_FAIL;
+
   /** newpath may not be a directory */
-  p = basename(newpath);
+  p = basename(p);
   if ((p[0] == '/') || ((p[0] == '.') && (p[1] == '\0')) ||
       ((p[0] == '.') && (p[1] == '.') && (p[2] == '\0'))) {
     return ERR_BAD_ARGS;
@@ -475,6 +478,10 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_READ)))
     return ERR_INVALID;
 
+#if 1 // def USE_POSIX_FADVISE
+  posix_fadvise(fio->fd, fio->offset, bufsize, POSIX_FADV_SEQUENTIAL);
+#endif
+
   rc = read(fio->fd, buf, bufsize);
   switch (rc) {
   case -1:
@@ -489,6 +496,48 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
     break;
   }
   fio->offset += rc;
+
+  return ERR_SUCCESS;
+}
+/**
+ * @param[in] fio An open fio. See `zt_fio_open()`.
+ * @param[in] total_size The total size of the file to write.
+ * @return An `err_t` status code.
+ *
+ * Prepares the file for writing by allocating space for it using
+ * `posix_fallocate(2)`. This is useful for ensuring that the file
+ * has enough space allocated before writing to it.
+ *
+ * Note: Only use this function if the file size is known a priori.
+ */
+err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
+  int rv;
+
+  if (unlikely(!fio))
+    return ERR_NULL_PTR;
+
+  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE)))
+    return ERR_INVALID;
+
+  if (unlikely(total_size <= 0))
+    return ERR_BAD_ARGS;
+
+#if 1 // def USE_POSIX_FALLOCATE
+  if ((rv = posix_fallocate(fio->fd, 0, total_size)) != 0) {
+    switch (rv) {
+    case EOPNOTSUPP:
+      /** This can be returned in one of two scenarios:
+       *  - the underlying libc does not support this operation
+       *  - the underlying filesystem does not support the fallocate(2) syscall
+       *
+       * Return success and try to write the file anyway
+       */
+      return ERR_SUCCESS;
+    default:
+      return ERR_FIO_WRITE;
+    }
+  }
+#endif
 
   return ERR_SUCCESS;
 }
