@@ -369,47 +369,46 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
 static err_t server_send(zt_server_connection_t *conn) {
   err_t ret;
   size_t len, tosend, taglen;
-  uint8_t *rawptr;
+  uint8_t *rawptr, *dataptr;
   bool is_encrypted;
 
   ASSERT(conn);
   ASSERT(conn->state > SERVER_CONN_INIT && conn->state < SERVER_DONE);
   ASSERT(conn->msgbuf);
 
-  if (zt_msg_data_len(conn->msgbuf) > ZT_MAX_TRANSFER_SIZE) {
+  if (MSG_DATA_LEN(conn->msgbuf) > ZT_MSG_MAX_RW_SIZE) {
     PRINTERROR("message data too large (%zu bytes)",
-               zt_msg_data_len(conn->msgbuf));
+               MSG_DATA_LEN(conn->msgbuf));
     return ERR_REQUEST_TOO_LARGE;
   }
 
-  is_encrypted =
-      !(zt_msg_type(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
+  is_encrypted = !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
 
-  len = zt_msg_data_len(conn->msgbuf);
+  len = MSG_DATA_LEN(conn->msgbuf);
 
-  rawptr = zt_msg_data_ptr(conn->msgbuf);
-  rawptr[len++] = MSG_END; /* data END marker */
+  dataptr = MSG_DATA_PTR(conn->msgbuf);
+  dataptr[len++] = MSG_END_BYTE; /* data END marker */
 
-  zt_msg_set_len(conn->msgbuf, len); /* update length in header */
+  MSG_SET_LEN(conn->msgbuf, len); /* update length in header */
 
   if (is_encrypted) {
-    if ((ret = vcry_aead_encrypt(rawptr + ZT_MSG_HEADER_SIZE, len, rawptr,
-                                 ZT_MSG_HEADER_SIZE, rawptr, &tosend)) !=
-        ERR_SUCCESS) {
+    if ((ret = vcry_aead_encrypt(dataptr, len, rawptr, ZT_MSG_HEADER_SIZE,
+                                 dataptr, &tosend)) != ERR_SUCCESS) {
       PRINTERROR("encryption failed");
       return ret;
     }
   } else {
-    tosend = len + ZT_MSG_HEADER_SIZE;
+    tosend = len;
   }
+  tosend += ZT_MSG_HEADER_SIZE; /* add header length */
 
   if (zt_server_tcp_send(conn, rawptr, tosend) != 0) {
-    PRINTERROR("failed to send %zu bytes to peer_id=%s (%s)", tosend,
-               config.peer_id, strerror(errno));
+    PRINTERROR("failed to send %zu bytes to peer (%s)", tosend,
+               strerror(errno));
     return ERR_TCP_SEND;
   }
 
-  zt_msg_set_len(conn->msgbuf, 0);
+  // MSG_SET_LEN(conn->msgbuf, 0);
 
   return ERR_SUCCESS;
 }
@@ -440,21 +439,19 @@ static err_t server_recv(zt_server_connection_t *conn,
   err_t ret = ERR_SUCCESS;
   ssize_t nread;
   size_t taglen, datalen, i;
-  uint8_t *rawptr, *dataptr;
+  uint8_t *p, *datap;
   bool is_encrypted;
 
   ASSERT(conn);
   ASSERT(conn->state > SERVER_CONN_INIT && conn->state <= SERVER_DONE);
   ASSERT(conn->msgbuf);
 
-  rawptr = zt_msg_raw_ptr(conn->msgbuf);
-  dataptr = zt_msg_data_ptr(conn->msgbuf);
+  p = MSG_RAW_PTR(conn->msgbuf);
 
-  /* read msg header */
-  nread = zt_server_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
+  /** Read the msg header */
+  nread = zt_server_tcp_recv(conn, p, ZT_MSG_HEADER_SIZE, NULL);
   if (nread < 0) {
-    PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
-               strerror(errno));
+    PRINTERROR("failed to read TCP data (%s)", strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
@@ -464,29 +461,32 @@ static err_t server_recv(zt_server_connection_t *conn,
     goto out;
   }
 
-  if (!msg_type_isvalid(zt_msg_type(conn->msgbuf))) {
+  if (!msg_type_isvalid(MSG_TYPE(conn->msgbuf))) {
     PRINTERROR("received malformed header (invalid type)");
     ret = ERR_INVALID_DATUM;
     goto out;
   }
 
-  if (!msg_type_is_expected(zt_msg_type(conn->msgbuf), expected_types)) {
+  if (!msg_type_is_expected(MSG_TYPE(conn->msgbuf), expected_types)) {
     PRINTERROR("bad message (expected %u)", expected_types);
     ret = ERR_INVALID_DATUM;
     goto out;
   }
 
-  is_encrypted =
-      !(zt_msg_type(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
+  is_encrypted = !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
 
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
-  datalen = zt_msg_data_len(conn->msgbuf) + taglen;
+  datalen = MSG_DATA_LEN(conn->msgbuf) + taglen;
 
-  /* read msg payload */
-  nread = zt_server_tcp_recv(conn, dataptr, datalen, NULL);
+  /** If the msg is compressed, read the payload into `msgbuf._xbuf[]` */
+  datap = MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION
+              ? MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE
+              : MSG_DATA_PTR(conn->msgbuf);
+
+  /** Read msg payload */
+  nread = zt_server_tcp_recv(conn, datap, datalen, NULL);
   if (nread < 0) {
-    PRINTERROR("failed to read data from peer_id=%s (%s)", config.peer_id,
-               strerror(errno));
+    PRINTERROR("failed to read TCP data (%s)", strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
@@ -497,29 +497,49 @@ static err_t server_recv(zt_server_connection_t *conn,
     goto out;
   }
 
-  /* decrypt encrypted payload */
+  /** Decrypt encrypted payload */
   if (is_encrypted) {
-    if ((ret = vcry_aead_decrypt(rawptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
-                                 rawptr, &nread)) != ERR_SUCCESS) {
+    if ((ret = vcry_aead_decrypt(datap, datalen, p, ZT_MSG_HEADER_SIZE, datap,
+                                 &nread)) != ERR_SUCCESS) {
       PRINTERROR("decryption failed");
       goto out;
     }
   }
 
-  /**
-   * Remove message padding - this loop intentionally iterates through
-   * the entire message payload to avoid leaking the padding length due
-   * to timing differences
-   */
-  for (i = nread; i > 0; --i)
-    if (dataptr[i - 1] == MSG_END)
-      nread = i - 1;
+  zt_msg_flags_t flags = MSG_FLAGS(conn->msgbuf);
+  if (flags & MSG_FL_PADDING) {
+    /**
+     * Remove message padding - this loop intentionally iterates through
+     * the entire message payload to avoid leaking the padding length due
+     * to timing differences
+     */
+    for (i = nread; i > 0; --i)
+      if (datap[i - 1] == MSG_END_BYTE)
+        nread = i;
+  } else if (flags & MSG_FL_COMPRESSION) {
+    const char *rptr = (const char *)datap;
+    char *wptr = (char *)MSG_DATA_PTR(conn->msgbuf);
+
+    nread = LZ4_decompress_safe(rptr, wptr, nread, ZT_MSG_MAX_RW_SIZE + 1);
+    if (nread <= 0) {
+      PRINTERROR("LZ4_decompress_safe() failed (returned %d)", nread);
+      ret = ERR_INVALID_DATUM;
+      goto out;
+    }
+    datap = MSG_DATA_PTR(conn->msgbuf);
+  }
+
+  if (unlikely(datap[nread - 1] != MSG_END_BYTE)) {
+    PRINTERROR("received malformed message (missing end marker)");
+    ret = ERR_INVALID_DATUM;
+    goto out;
+  }
 
 out:
   if (unlikely(ret))
-    zt_msg_set_len(conn->msgbuf, 0);
+    MSG_SET_LEN(conn->msgbuf, 0);
   else
-    zt_msg_set_len(conn->msgbuf, nread);
+    MSG_SET_LEN(conn->msgbuf, nread - 1);
   return ret;
 }
 
@@ -574,7 +594,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
         goto cleanup0;
 
-      tty_printf("%s(address=%s, port=%s, Id=%x)\n",
+      tty_printf("%s\n(address=%s, port=%s, Id=%x)\n",
                  g_CLIPrompts[OnServerListening], conn->self.address,
                  conn->self.port, conn->authid_self.bytes);
 
@@ -627,8 +647,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      rcvlen = zt_msg_data_len(conn->msgbuf);
-      rcvbuf = zt_msg_data_ptr(conn->msgbuf);
+      rcvlen = MSG_DATA_LEN(conn->msgbuf);
+      rcvbuf = MSG_DATA_PTR(conn->msgbuf);
 
       if (rcvlen <
           AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t)) {
@@ -691,8 +711,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         conn->expected_passwd.expect = true;
         conn->expected_passwd.id = pwid;
 
-        zt_msg_make(conn->msgbuf, MSG_AUTH_RETRY, PTRV(&pwid),
-                    sizeof(passwd_id_t));
+        MSG_MAKE(conn->msgbuf, MSG_AUTH_RETRY, PTRV(&pwid), sizeof(passwd_id_t),
+                 0);
         if ((ret = server_send(conn)) != ERR_SUCCESS)
           goto cleanup2;
 
@@ -765,14 +785,14 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       /** Make the handshake response message */
-      uint8_t *p = zt_msg_data_ptr(conn->msgbuf);
+      uint8_t *p = MSG_DATA_PTR(conn->msgbuf);
       zt_memcpy(p, conn->authid_self.bytes, AUTHID_BYTES_LEN);
       p += AUTHID_BYTES_LEN;
       zt_memcpy(p, sndbuf[0], sndlen[0]);
       p += sndlen[0];
       zt_memcpy(p, sndbuf[1], sndlen[1]);
-      zt_msg_set_len(conn->msgbuf, AUTHID_BYTES_LEN + sndlen[0] + sndlen[1]);
-      zt_msg_set_type(conn->msgbuf, MSG_HANDSHAKE);
+      MSG_SET_LEN(conn->msgbuf, AUTHID_BYTES_LEN + sndlen[0] + sndlen[1]);
+      MSG_SET_TYPE(conn->msgbuf, MSG_HANDSHAKE);
 
       zt_free(sndbuf[0]);
       zt_free(sndbuf[1]);
@@ -791,8 +811,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_recv(conn, MSG_HANDSHAKE)) != ERR_SUCCESS)
         goto cleanup2;
 
-      rcvbuf = zt_msg_data_ptr(conn->msgbuf);
-      rcvlen = zt_msg_data_len(conn->msgbuf);
+      rcvbuf = MSG_DATA_PTR(conn->msgbuf);
+      rcvlen = MSG_DATA_LEN(conn->msgbuf);
 
       if (rcvlen < VCRY_VERIFY_MSG_LEN) {
         PRINTERROR("received malformed verification message");
@@ -842,13 +862,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_recv(conn, MSG_METADATA)) != ERR_SUCCESS)
         goto cleanup2;
 
-      if (zt_msg_data_len(conn->msgbuf) != sizeof(zt_fileinfo_t)) {
+      if (MSG_DATA_LEN(conn->msgbuf) != sizeof(zt_fileinfo_t)) {
         PRINTERROR("received malformed metadata message");
         ret = ERR_INVALID_DATUM;
         goto cleanup2;
       }
 
-      zt_memcpy(PTRV(&conn->fileinfo), zt_msg_data_ptr(conn->msgbuf),
+      zt_memcpy(PTRV(&conn->fileinfo), MSG_DATA_PTR(conn->msgbuf),
                 sizeof(zt_fileinfo_t));
 
       conn->fileinfo.size = ntoh64(conn->fileinfo.size);
@@ -892,8 +912,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
           goto cleanup2;
         }
 
-        writelen = MIN(remaining, zt_msg_data_len(conn->msgbuf));
-        rv = zt_fio_write(&fileptr, zt_msg_data_ptr(conn->msgbuf), writelen);
+        writelen = MIN(remaining, MSG_DATA_LEN(conn->msgbuf));
+        rv = zt_fio_write(&fileptr, MSG_DATA_PTR(conn->msgbuf), writelen);
         if (rv != ERR_SUCCESS)
           break;
         remaining -= writelen;
@@ -918,9 +938,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         errfl = true;
       }
 
-      if (zt_msg_data_len(conn->msgbuf) == sizeof(DONE_MARKER) &&
-          zt_memcmp(zt_msg_data_ptr(conn->msgbuf), DONE_MARKER,
-                    sizeof(DONE_MARKER)) == 0) {
+      if (MSG_DATA_LEN(conn->msgbuf) == sizeof(DONE_MSG_UTF8) &&
+          zt_memcmp(MSG_DATA_PTR(conn->msgbuf), DONE_MSG_UTF8,
+                    sizeof(DONE_MSG_UTF8)) == 0) {
         PRINTINFO("transfer done! shutting down...");
       } else {
         ret = ERR_SUCCESS; // TODO: is this a reason for concern?
@@ -943,7 +963,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       goto cleanup2;
     }
     } /* switch(conn->state) */
-  }   /* while(1) */
+  } /* while(1) */
 
 cleanup2:
   vcry_module_release();

@@ -3,8 +3,11 @@
 
 #include "common/defines.h"
 #include "io.h"
+#include "lz4.h"
 
 #include <sys/socket.h>
+
+// clang-format off
 
 /* TCP socket writability */
 #define ZT_NETIO_WRITABLE               ZT_IO_READABLE
@@ -43,67 +46,92 @@ enum {
   MSG_ANY         = 0xff,
 };
 
+enum {
+  MSG_FL_COMPRESSION = (1 << 0), /* Message is compressed */
+  MSG_FL_PADDING     = (1 << 1), /* Message is padded */
+};
+
 typedef uint8_t zt_msg_type_t;
+typedef uint16_t zt_msg_flags_t;
 
-/** message data end marker */
-#define MSG_END                                 0x01
+/** Message data end marker */
+#define MSG_END_BYTE                            0x01
 
-/** message flow termination marker */
-#define DONE_MARKER                             "BYE"
+/** Message flow termination marker */
+#define DONE_MSG_UTF8                           "BYE"
 
-/** size of message header */
-#define ZT_MSG_HEADER_SIZE                      (sizeof(zt_msg_type_t) + sizeof(uint32_t))
+/** Size of message header */
+#define ZT_MSG_HEADER_SIZE                                                     \
+  (sizeof(zt_msg_type_t) + sizeof(uint32_t) + sizeof(zt_msg_flags_t))
 
-/** size of msg suffix */
+/** Size of msg suffix */
 #define ZT_MSG_SUFFIX_SIZE                      32UL
 
-/** size of max `msg.data[]` */
-#define ZT_MAX_TRANSFER_SIZE                    (1UL << 17)
+/** Max size of usable data in `msg.data[]` */
+#define ZT_MSG_MAX_RW_SIZE                      (1UL << 16) /* 64K Bytes */
 
-/** size of `msg.raw[]` */
-#define ZT_MSG_MAX_RAW_SIZE                     (ZT_MSG_HEADER_SIZE + ZT_MAX_TRANSFER_SIZE + ZT_MSG_SUFFIX_SIZE + 1)
+/** Size of `msg.raw[]` */
+#define ZT_MSG_MAX_RAW_SIZE                                                    \
+  (ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE + ZT_MSG_MAX_RW_SIZE + 1)
+
+/** Size of `msg._xbuf[]` */
+#define ZT_MSG_XBUF_SIZE                                                       \
+  (ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE +                                   \
+   LZ4_COMPRESSBOUND(ZT_MSG_MAX_RW_SIZE + 1))
 
 typedef struct _zt_msg_st {
   union {
     struct {
-      zt_msg_type_t type;                     /* Message type */
-      uint32_t len;                           /* Length of `data[]` */
-      uint8_t data[ZT_MAX_TRANSFER_SIZE + 1]; /* Message payload */
+      zt_msg_type_t type;                   /* Message type */
+      uint32_t len;                         /* Length of `data[]` */
+      zt_msg_flags_t flags;                 /* Message flags */
+      uint8_t data[ZT_MSG_MAX_RW_SIZE + 1]; /* Message payload */
     };
     /* Raw data (`type` || `len` || `data[]` || <suffix>) */
     uint8_t raw[ZT_MSG_MAX_RAW_SIZE];
   };
+  uint8_t _xbuf[ZT_MSG_XBUF_SIZE];
 } zt_msg_t;
 
 /** `msg.data[]` pointer */
-#define zt_msg_data_ptr(msgptr)                 ((uint8_t *)(msgptr)->data)
+#define MSG_DATA_PTR(msgptr)                    ((msgptr)->data)
 
 /** `msg.raw[]` pointer */
-#define zt_msg_raw_ptr(msgptr)                  ((uint8_t *)(msgptr)->raw)
+#define MSG_RAW_PTR(msgptr)                     ((msgptr)->raw)
 
-/** length of `msg.data[]` */
-#define zt_msg_data_len(msgptr)                 (ntoh32((msgptr)->len))
+/** `msg._xbuf[]` pointer */
+#define MSG_XBUF_PTR(msgptr)                    ((msgptr)->_xbuf)
 
-/** msg type */
-#define zt_msg_type(msgptr)                     ((msgptr)->type)
+/** Get `msg.len` */
+#define MSG_DATA_LEN(msgptr)                    (ntoh32((msgptr)->len))
 
-/** set `msg.len` */
-#define zt_msg_set_len(msgptr, len_val)         (void)(msgptr->len = hton32(len_val))
+/** Get `msg.type` */
+#define MSG_TYPE(msgptr)                        ((msgptr)->type)
 
-/** set `msg.type` */
-#define zt_msg_set_type(msgptr, type_val)       (void)(msgptr->type = (type_val))
+/** Get `msg.flags` */
+#define MSG_FLAGS(msgptr)                       ((msgptr)->flags)
+
+/** Set `msg.len` */
+#define MSG_SET_LEN(msgptr, len_val)            (void)(msgptr->len = hton32(len_val))
+
+/** Set `msg.type` */
+#define MSG_SET_TYPE(msgptr, type_val)          (void)(msgptr->type = (type_val))
+
+/** Set `msg.flags` */
+#define MSG_SET_FLAGS(msgptr, setflags)         (void)(msgptr->flags = (setflags))
 
 /** Populate message `msgptr` */
-#define zt_msg_make(msgptr, type, data, len)                                   \
+#define MSG_MAKE(msgptr, type, data, len, setflags)                            \
   do {                                                                         \
-    zt_memcpy(zt_msg_data_ptr(msgptr), data, len);                             \
-    zt_msg_set_type(msgptr, type);                                             \
-    zt_msg_set_len(msgptr, len);                                               \
+    zt_memcpy(MSG_DATA_PTR(msgptr), data, len);                                \
+    MSG_SET_TYPE(msgptr, type);                                                \
+    MSG_SET_LEN(msgptr, len);                                                  \
+    MSG_SET_FLAGS(msgptr, setflags);                                           \
   } while (0)
 
-/** check message type validity */
+/** Check message type validity */
 static inline bool msg_type_isvalid(zt_msg_type_t type) {
-  return (type >= MSG_HANDSHAKE && type <= MSG_DONE);
+  return type >= MSG_HANDSHAKE && type <= MSG_DONE;
 }
 
 struct zt_addrinfo {

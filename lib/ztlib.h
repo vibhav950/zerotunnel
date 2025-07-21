@@ -25,6 +25,7 @@ struct _config {
     config_explicit_port : 1,
     config_ipv6 : 1,
     config_live_read : 1,
+    config_lz4_compression : 1,
     config_length_obfuscation : 1,
     config_port : 1,
     config_tcp_nodelay : 1,

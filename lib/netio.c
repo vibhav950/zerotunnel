@@ -147,13 +147,13 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
                  conn->ai_estab->ai_addr, conn->ai_estab->ai_addrlen);
       conn->first_send = false;
 
-      if (n < 0 && errno == EOPNOTSUPP) {
+      if (unlikely(n < 0 && errno == EOPNOTSUPP)) {
         /** TFO disabled on system; fallback to a normal connect() */
         conn->fl_tcp_fastopen = false;
         int rv = connect(conn->sockfd, conn->ai_estab->ai_addr,
                          conn->ai_estab->ai_addrlen);
 
-        if (rv == -1 && errno != EAGAIN && errno != EINPROGRESS) {
+        if (unlikely(rv == -1 && errno != EAGAIN && errno != EINPROGRESS)) {
           PRINTERROR("connect: failed (%s)", strerror(errno));
           close(conn->sockfd);
           return -1;
@@ -168,10 +168,10 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
       n = send(conn->sockfd, buf, nbytes, 0);
     }
 
-    if (n > 0) {
+    if (likely(n > 0)) {
       nwritten += n;
 
-      if ((size_t)n >= nbytes)
+      if (unlikely((size_t)n >= nbytes))
         return 0; // sent exactly nbytes
 
       nbytes -= n;
@@ -232,12 +232,12 @@ ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
   while ((size_t)nread < nbytes) {
     ssize_t n = recv(conn->sockfd, buf + nread, nbytes - nread, 0);
 
-    if (n == 0) { // server said fuck you
+    if (unlikely(n == 0)) {
       PRINTERROR("Unexpected socket shutdown by peer");
       return -1;
     }
 
-    if (n > 0) {
+    if (likely(n > 0)) {
       nread += n;
     } else if (conn->recv_timeout && (errno == EAGAIN)) {
       if (!zt_tcp_io_waitfor_read(conn->sockfd, conn->recv_timeout))
@@ -285,10 +285,10 @@ int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
   while (nbytes) {
     ssize_t n = send(conn->sockfd, buf, nbytes, 0);
 
-    if (n > 0) {
+    if (likely(n > 0)) {
       nwritten += n;
 
-      if ((size_t)n >= nbytes)
+      if (unlikely((size_t)n >= nbytes))
         return 0; /* sent all nbytes */
 
       nbytes -= n;
@@ -342,7 +342,7 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
       return -1;
     }
 
-    if (n > 0) {
+    if (likely(n > 0)) {
       nread += n;
     } else if (conn->recv_timeout && (errno == EAGAIN)) {
       if (!zt_tcp_io_waitfor_read(conn->sockfd, conn->recv_timeout))
