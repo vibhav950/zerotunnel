@@ -10,10 +10,13 @@
 #include <string.h>
 
 #define ASSERT_EQ(a, b) ASSERT((a) == (b))
+#define ASSERT_NEQ(a, b) ASSERT((a) != (b))
 
-#define ASSERT_MEMEQ(a, b, len) ASSERT(!memcmp(a, b, len))
+#define ASSERT_MEMEQ(a, b, len) ASSERT(memcmp(a, b, len) == 0)
+#define ASSERT_MEMNEQ(a, b, len) ASSERT(memcmp(a, b, len) != 0)
 
-#define ASSERT_STREQ(a, b) ASSERT(!strcmp(a, b))
+#define ASSERT_STREQ(a, b) ASSERT(strcmp(a, b) == 0)
+#define ASSERT_STRNEQ(a, b) ASSERT(strcmp(a, b) != 0)
 
 void read_hex(const char *hex, unsigned char *buf, int len);
 

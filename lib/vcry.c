@@ -724,10 +724,8 @@ err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   if (zt_systemrand_bytes(vctx->salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
     return VCRY_ERR_SET(ERR_INTERNAL);
 
-  uint8_t ctr128[16];
-  zt_memset(ctr128, 0xef, sizeof(ctr128)); /* trivial counter for kdf_init() */
   if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
-                      VCRY_HSHAKE_SALT0_LEN, ctr128)) != ERR_SUCCESS) {
+                      VCRY_HSHAKE_SALT0_LEN)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
@@ -898,10 +896,8 @@ err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   zt_memcpy(vctx->salt, p, VCRY_HSHAKE_SALT_LEN);
 
   /** Compute K_pass */
-  uint8_t ctr128[16];
-  zt_memset(ctr128, 0xef, sizeof(ctr128));
   if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
-                      VCRY_HSHAKE_SALT0_LEN, ctr128)) != ERR_SUCCESS) {
+                      VCRY_HSHAKE_SALT0_LEN)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
 
@@ -1149,12 +1145,10 @@ err_t vcry_derive_session_key(void) {
   p += dhek_a_len;
   zt_memcpy(p, dhek_b, dhek_b_len);
 
-  uint8_t ctr128[16];
-  memset(ctr128, 0xab, sizeof(ctr128));
   VCRY_EXPECT(
       kdf_init(vctx->kdf, buf, buf_len,
                vctx->salt + VCRY_HSHAKE_SALT0_LEN + VCRY_HSHAKE_SALT1_LEN,
-               VCRY_HSHAKE_SALT2_LEN, ctr128),
+               VCRY_HSHAKE_SALT2_LEN),
       ERR_SUCCESS, clean0);
 
   VCRY_EXPECT(kdf_derive(vctx->kdf, (const uint8_t *)VCRY_HSHAKE_CONST1,

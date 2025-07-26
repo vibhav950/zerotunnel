@@ -49,49 +49,14 @@
  *
  * Default values are set to:
  *  - Iter (KDF_PBKDF2_CFABLE_ITER) = 8192
- * Note: The implementation must use SHA-512 as the underlying digest (this
- * property is not configurable)
+ * Note: The implementation must use SHA-512 as the underlying digest
+ * (this property is not configurable)
  */
 
 #define KDF_PBKDF2_CFABLE_ITER 8192
 
-/** Macros for 128-bit counter */
 
-/** Set the counter using 4x 32-bit values */
-#define KDF_CTR_SET(kdf, c0, c1, c2, c3)                                       \
-  do {                                                                         \
-    (kdf)->ctr.words[0] = c0;                                                  \
-    (kdf)->ctr.words[1] = c1;                                                  \
-    (kdf)->ctr.words[2] = c2;                                                  \
-    (kdf)->ctr.words[3] = c3;                                                  \
-  } while (0)
-
-/** Get the counter as 4x 32-bit values */
-#define KDF_CTR_GET(kdf, c0, c1, c2, c3)                                       \
-  do {                                                                         \
-    c0 = (kdf)->ctr.words[0];                                                  \
-    c1 = (kdf)->ctr.words[1];                                                  \
-    c2 = (kdf)->ctr.words[2];                                                  \
-    c3 = (kdf)->ctr.words[3];                                                  \
-  } while (0)
-
-/**
- * Add a 32-bit value to the last 4 bytes of the counter, represented in
- * big-endian format
- */
-#if defined(__LITTLE_ENDIAN__)
-#define KDF_CTR_INCR32(kdf, inc)                                               \
-  do {                                                                         \
-    (kdf)->ctr.words[3] = BSWAP32(BSWAP32((kdf)->ctr.words[3]) + inc);         \
-  } while (0)
-#else
-#define KDF_CTR_INCR32(kdf, inc)                                               \
-  do {                                                                         \
-    (kdf)->ctr.words[3] += inc;                                                \
-  } while (0)
-#endif
-
-#if (1) // defined OPENSSL
+#if defined(OPENSSL)
 
 #include <openssl/evp.h>
 
@@ -100,6 +65,14 @@ typedef struct kdf_ossl_ctx_st {
   EVP_KDF_CTX *kctx;
 } kdf_ossl_ctx;
 
-#endif /* OPENSSL */
+#elif defined(GNUTLS)
+
+#include <gnutls/crypto.h>
+
+typedef struct kdf_gtls_ctx_st {
+  gnutls_mac_algorithm_t mac_alg;
+} kdf_gtls_ctx;
+
+#endif
 
 #endif /* __KDF_DEFS_H__ */

@@ -1,9 +1,9 @@
 /**
- * kdf_ossl.c
+ * @file kdf_ossl.c
  *
- * KDF implementation using OpenSSL
+ * @brief KDF implementation using OpenSSL
  *
- * vibhav950 on GitHub
+ * @author vibhav950 on GitHub
  */
 
 // DO NOT REMOVE/MOVE THIS
@@ -26,7 +26,20 @@
 #define KDF_FLAG_GET(kdf, flag) ((kdf)->flags & flag)
 #define KDF_FLAG_UNSET(kdf, flag) (void)((kdf)->flags &= ~flag)
 
-/**  */
+/**
+ * @brief Allocates a new KDF context.
+ * @param kdf Pointer to hold the pointer of the allocated KDF context.
+ * @param alg The KDF algorithm to use, must be one of the KDF_ALG_* values.
+ * @return Returns ERR_SUCCESS on success, or an error code on failure.
+ *         Possible error codes include:
+ *         - `ERR_BAD_ARGS` if the algorithm is not supported.
+ *         - `ERR_MEM_FAIL` if memory allocation fails.
+ *         - `ERR_INTERNAL` if the OpenSSL library fails to initialize the KDF
+ *           context.
+ * @note The caller is responsible for deallocating the KDF context using
+ *       `kdf_dealloc()`.
+ * @note The KDF context must be initialized using `kdf_init()` before use.
+ */
 static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   extern const kdf_intf_t kdf_intf;
   kdf_ossl_ctx *kdf_ctx;
@@ -79,7 +92,11 @@ static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   return ERR_SUCCESS;
 }
 
-/**  */
+/**
+ * @brief Deallocates the KDF context.
+ * @param kdf Pointer to the KDF context.
+ * @return Void.
+ */
 static void ossl_kdf_dealloc(kdf_t *kdf) {
   PRINTDEBUG("");
 
@@ -133,9 +150,7 @@ static int _kdf_hlp_scrypt(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
       OSSL_PARAM_construct_uint(OSSL_KDF_PARAM_SCRYPT_MAXMEM, &scrypt_maxmem);
   *p = OSSL_PARAM_construct_end();
 
-  if (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1)
-    return -1;
-  return 0;
+  return (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1) ? -1 : 0;
 }
 
 /** Helper function for Argon2 KDF */
@@ -173,9 +188,7 @@ static int _kdf_hlp_argon2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
       OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ARGON2_MEMCOST, &memory_cost);
   *p++ = OSSL_PARAM_construct_end();
 
-  if (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1)
-    return -1;
-  return 0;
+  return (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1) ? -1 : 0;
 }
 
 /** Helper function for PBKDF2 KDF */
@@ -202,18 +215,30 @@ static int _kdf_hlp_pbkdf2(kdf_ossl_ctx *kdf_ctx, const uint8_t *pw,
   *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST, SN_sha512, 0);
   *p = OSSL_PARAM_construct_end();
 
-  if (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1)
-    return -1;
-  return 0;
+  return (EVP_KDF_derive(kdf_ctx->kctx, key, key_len, params) != 1) ? -1 : 0;
 }
 
-/**  */
+/**
+ * @brief Initialize the KDF context.
+ * @param kdf Pointer to the KDF context.
+ * @param password Pointer to the password to use for the KDF.
+ * @param password_len Length of the password.
+ * @param salt Pointer to the salt to use for the KDF.
+ * @param salt_len Length of the salt.
+ * @return Returns ERR_SUCCESS on success, or an error code on failure.
+ *         Possible error codes include:
+ *          - `ERR_NULL_PTR` if any of the pointers are null.
+ *          - `ERR_BAD_ARGS` if the password or salt lengths are invalid.
+ *          - `ERR_NOT_ALLOC` if the KDF context is not allocated.
+ * @note This function can be called multiple times to reinitialize the KDF
+ *       context with a new password and salt but the same algorithm as was
+ *       set using `ossl_kdf_alloc()`.
+ */
 static err_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
                            size_t password_len, const uint8_t *salt,
-                           size_t salt_len, const uint8_t ctr128[16]) {
+                           size_t salt_len) {
   kdf_ossl_ctx *kdf_ctx;
   uint8_t *pw, *slt;
-  uint32_t *ctr32;
 
   PRINTDEBUG("password_len=%zu, salt_len=%zu", password_len, salt_len);
 
@@ -228,7 +253,7 @@ static err_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
   if (!KDF_FLAG_GET(kdf, KDF_FLAG_ALLOC))
     return ERR_NOT_ALLOC;
 
-  kdf_ctx = kdf->ctx;
+  kdf_ctx = (kdf_ossl_ctx *)kdf->ctx;
 
   if (!(pw = (uint8_t *)zt_memdup(password, password_len)))
     return ERR_MEM_FAIL;
@@ -252,18 +277,35 @@ static err_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
   kdf->pwlen = password_len;
   kdf->salt = slt;
   kdf->saltlen = salt_len;
-  ctr32 = (uint32_t *)ctr128;
-  KDF_CTR_SET(kdf, ctr32[0], ctr32[1], ctr32[2], ctr32[3]);
-  KDF_FLAG_SET(kdf, KDF_FLAG_INIT);
-  KDF_FLAG_UNSET(kdf, KDF_FLAG_NEED_REINIT);
-  kdf->count = 0; /* Reset this re-initialization counter */
-
   EVP_KDF_CTX_reset(kdf_ctx->kctx);
+  KDF_FLAG_SET(kdf, KDF_FLAG_INIT);
 
   return ERR_SUCCESS;
 }
 
-/**  */
+/**
+ * @brief Derives a key using the KDF context.
+ * @param kdf Pointer to the KDF context.
+ * @param additional_data Pointer to additional data to use for the KDF (can be
+ * NULL).
+ * @param additional_data_len Length of the additional data.
+ * @param key Pointer to the buffer to receive the derived key.
+ * @param key_len Length of the derived key.
+ * @return Returns ERR_SUCCESS on success, or an error code on failure.
+ *         Possible error codes include:
+ *         - `ERR_NULL_PTR` if the key pointer is null or if the additional
+ *           `data pointer is non-null with a non-zero @p additional_data_len.
+ *         - `ERR_BAD_ARGS` if the key length exceeds the maximum allowed
+ * length.
+ *         - `ERR_NOT_INIT` if the KDF context is not initialized.
+ * @warning This function can be called multiple times with a constant/NULL @p
+ * additional_data field which will cause the resulting @p key to also be
+ * identical. To derive keys for different operations but with the same input
+ * key material, it is recommended to call this function while passing the
+ * intent of the key as the @p additional_data parameter. For stronger
+ * independence between derived keys, you may also rekey the KDF context using
+ * `kdf_init()` with a different password and/or salt.
+ */
 static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
                              size_t additional_data_len, uint8_t *key,
                              size_t key_len) {
@@ -271,7 +313,7 @@ static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   err_t ret = ERR_SUCCESS;
   kdf_ossl_ctx *kdf_ctx;
   kdf_alg_t alg;
-  uint8_t *buf, *pbuf;
+  uint8_t *buf;
   size_t buf_len;
 
   PRINTDEBUG("additional_data_len=%zu", additional_data_len);
@@ -289,25 +331,16 @@ static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   if (!KDF_FLAG_GET(kdf, KDF_FLAG_INIT))
     return ERR_NOT_INIT;
 
-  if (kdf->count >= KDF_MAX_REINIT_BYTES) {
-    KDF_FLAG_SET(kdf, KDF_FLAG_NEED_REINIT);
-    return ERR_AGAIN;
-  }
-
   kdf_ctx = kdf->ctx;
   alg = kdf->alg;
 
-  buf_len = kdf->saltlen + 16 + additional_data_len;
+  buf_len = kdf->saltlen + additional_data_len;
   if (!(buf = zt_malloc(buf_len)))
     return ERR_MEM_FAIL;
 
-  pbuf = buf;
-  zt_memcpy(pbuf, kdf->salt, kdf->saltlen);
-  pbuf += kdf->saltlen;
-  zt_memcpy(pbuf, kdf->ctr.bytes, 16);
-  pbuf += 16;
+  zt_memcpy(buf, kdf->salt, kdf->saltlen);
   if (additional_data_len)
-    zt_memcpy(pbuf, additional_data, additional_data_len);
+    zt_memcpy(buf + kdf->saltlen, additional_data, additional_data_len);
 
   switch (alg) {
   case KDF_ALG_scrypt:
@@ -325,10 +358,6 @@ static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   }
   if (rv)
     ret = ERR_INTERNAL;
-
-  /** Increment the counters */
-  KDF_CTR_INCR32(kdf, 1);
-  kdf->count += key_len;
 
   /** Cleanup */
   memzero(buf, buf_len);

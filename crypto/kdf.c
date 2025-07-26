@@ -37,12 +37,11 @@ void kdf_dealloc(kdf_t *kdf) {
 }
 
 err_t kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
-               const uint8_t *salt, size_t salt_len, const uint8_t ctr128[16]) {
+               const uint8_t *salt, size_t salt_len) {
   if (!kdf || !kdf->intf)
     return ERR_NULL_PTR;
 
-  return ((kdf)->intf)
-      ->init(kdf, password, password_len, salt, salt_len, ctr128);
+  return ((kdf)->intf)->init(kdf, password, password_len, salt, salt_len);
 }
 
 err_t kdf_derive(kdf_t *kdf, const uint8_t *additional_data,

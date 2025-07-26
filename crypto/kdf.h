@@ -8,7 +8,6 @@
 typedef enum {
   KDF_FLAG_ALLOC       = (1U << 0),
   KDF_FLAG_INIT        = (1U << 1),
-  KDF_FLAG_NEED_REINIT = (1U << 2),
 } kdf_flag_t;
 
 enum {
@@ -31,7 +30,7 @@ typedef void (*kdf_dealloc_func_t)(kdf_ptr_t kdf);
 
 typedef err_t (*kdf_init_func_t)(kdf_ptr_t kdf, const uint8_t *password,
                                  size_t password_len, const uint8_t *salt,
-                                 size_t salt_len, const uint8_t ctr128[16]);
+                                 size_t salt_len);
 
 typedef err_t (*kdf_derive_func_t)(kdf_ptr_t kdf,
                                    const uint8_t *additional_data,
@@ -46,23 +45,14 @@ typedef struct kdf_intf_st {
   kdf_alg_t supported_algs;
 } kdf_intf_t;
 
-struct _kdf_ctr128 {
-  union {
-    uint8_t bytes[16];
-    uint32_t words[4];
-  };
-};
-
 typedef struct kdf_st {
   const kdf_intf_t *intf;
   void *ctx;
-  struct _kdf_ctr128 ctr;
   uint8_t *pw;
   size_t pwlen;
   uint8_t *salt;
   size_t saltlen;
   kdf_alg_t alg;
-  uint32_t count;
   kdf_flag_t flags;
 } kdf_t;
 
@@ -77,7 +67,7 @@ err_t kdf_intf_alloc(const kdf_intf_t *intf, kdf_t **kdf, kdf_alg_t alg);
 void kdf_dealloc(kdf_t *kdf);
 
 err_t kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
-               const uint8_t *salt, size_t salt_len, const uint8_t ctr128[16]);
+               const uint8_t *salt, size_t salt_len);
 
 err_t kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
                  size_t additional_data_len, uint8_t *key, size_t key_len);

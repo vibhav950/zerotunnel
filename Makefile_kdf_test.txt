@@ -1,0 +1,39 @@
+CC := gcc
+CFLAGS := -Wno-pedantic -Wunused -std=gnu17 -fsanitize=leak -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
+LIBS := -lssl -lcrypto
+
+all: bin/kdf_test
+
+bin/kdf_test: bin/kdf_test.o bin/kdf_ossl.c.o bin/kdf.o bin/x86_cpuid.o bin/log.o bin/memzero.o bin/test_utils.o bin/mem.o bin/cpu.o
+	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
+
+bin/kdf_test.o: tests/kdf_test.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/kdf_ossl.c.o: crypto/kdf_ossl.c
+	$(CC) $(CFLAGS) $(LIBS) -c -o $@ $^
+
+bin/kdf.o: crypto/kdf.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/x86_cpuid.o: common/x86_cpuid.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/log.o: common/log.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/memzero.o: common/memzero.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/mem.o: common/mem.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/cpu.o: common/cpu.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/test_utils.o: tests/test_utils.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+.PHONY: clean
+clean:
+	rm -f bin/*.o bin/kdf_test
