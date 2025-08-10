@@ -1,12 +1,12 @@
 #include "vcry.h"
-#include "crypto/types.h"
-
+#include "common/log.h"
 #include "crypto/cipher_defs.h"
 #include "crypto/hmac_defs.h"
 #include "crypto/kdf.h"
 #include "crypto/kem.h"
 #include "crypto/kem_kyber_defs.h"
 #include "crypto/kex_ecc.h"
+#include "crypto/types.h"
 #include "random/systemrand.h"
 
 #include <string.h>
@@ -338,12 +338,12 @@ static err_t vcry_set_cipher_from_id(int id) {
     key_len = CHACHA20_KEY_LEN;
     break;
   default:
-    PRINTERROR("unknown cipher id (%d)", id);
+    log_error(NULL, "unknown cipher id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
-    PRINTERROR("cipher algorithm not supported");
+    log_error(NULL, "cipher algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -391,12 +391,12 @@ static err_t vcry_set_aead_from_id(int id) {
     alg = AEAD_CHACHA20_POLY1305;
     break;
   default:
-    PRINTERROR("unknown aead id (%d)", id);
+    log_error(NULL, "unknown aead id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
-    PRINTERROR("aead algorithm not supported");
+    log_error(NULL, "aead algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -460,12 +460,12 @@ static err_t vcry_set_hmac_from_id(int id) {
     alg = HMAC_SHA3_512;
     break;
   default:
-    PRINTERROR("unknown HMAC id (%d)", id);
+    log_error(NULL, "unknown HMAC id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!hmac_intf_alg_is_supported(&hmac_intf, alg)) {
-    PRINTERROR("HMAC algorithm not supported");
+    log_error(NULL, "HMAC algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -523,12 +523,12 @@ static err_t vcry_set_ecdh_from_id(int id) {
     curve = KEX_CURVE_X448;
     break;
   default:
-    PRINTERROR("unknown KEX id (%d)", id);
+    log_error(NULL, "unknown KEX id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kex_intf_curve_is_supported(&kex_ecc_intf, curve)) {
-    PRINTERROR("curve not supported");
+    log_error(NULL, "curve not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -566,12 +566,12 @@ static err_t vcry_set_kem_from_id(int id) {
     alg = KEM_Kyber_1024;
     break;
   default:
-    PRINTERROR("unknown KEM id (%d)", id);
+    log_error(NULL, "unknown KEM id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kem_intf_alg_is_supported(&kem_kyber_intf, alg)) {
-    PRINTERROR("KEM algorithm not supported");
+    log_error(NULL, "KEM algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -609,12 +609,12 @@ static err_t vcry_set_kdf_from_id(int id) {
     alg = KDF_ALG_argon2;
     break;
   default:
-    PRINTERROR("unknown KDF id (%d)", id);
+    log_error(NULL, "unknown KDF id (%d)", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kdf_intf_alg_is_supported(&kdf_intf, alg)) {
-    PRINTERROR("KDF algorithm not supported");
+    log_error(NULL, "KDF algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -721,8 +721,7 @@ err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
   if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  if (zt_systemrand_bytes(vctx->salt, VCRY_HSHAKE_SALT_LEN) != ERR_SUCCESS)
-    return VCRY_ERR_SET(ERR_INTERNAL);
+  zt_systemrand_bytes(vctx->salt, VCRY_HSHAKE_SALT_LEN);
 
   if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
                       VCRY_HSHAKE_SALT0_LEN)) != ERR_SUCCESS) {

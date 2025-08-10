@@ -1,4 +1,5 @@
 #include "io.h"
+#include "common/log.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -37,10 +38,10 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
     if (pollfd.revents & POLLOUT)
       rc |= ZT_IO_WRITABLE;
   } else if (rc == 0) {
-    PRINTERROR("Connection timed out");
+    log_error(NULL, "Connection timed out");
     return 0;
   } else {
-    PRINTERROR("poll(2) failed (%s)", strerror(errno));
+    log_error(NULL, "poll(2) failed (%s)", strerror(errno));
     return -1;
   }
 
@@ -54,7 +55,7 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
 
   epfd = epoll_create1(0);
   if (epfd == -1) {
-    PRINTERROR("epoll_create1(2) failed (%s)", strerror(errno));
+    log_error(NULL, "epoll_create1(2) failed (%s)", strerror(errno));
     return -1;
   }
 
@@ -67,7 +68,7 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
     ev.events |= EPOLLOUT;
 
   if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-    PRINTERROR("epoll_ctl(2) failed (%s)", strerror(errno));
+    log_error(NULL, "epoll_ctl(2) failed (%s)", strerror(errno));
     goto cleanup;
   }
 
@@ -78,9 +79,9 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
     if (events[0].events & EPOLLOUT)
       rc |= ZT_IO_WRITABLE;
   } else if (rc == 0) {
-    PRINTERROR("Connection timed out");
+    log_error(NULL, "Connection timed out");
   } else {
-    PRINTERROR("epoll_wait(2) failed (%s)", strerror(errno));
+    log_error(NULL, "epoll_wait(2) failed (%s)", strerror(errno));
     rc = -1;
   }
 
@@ -150,7 +151,8 @@ bool zt_io_waitfor_write(int fd, timediff_t timeout_msec) {
  */
 err_t zt_file_delete(const char *filepath) {
   if (unlink(filepath) == -1) {
-    PRINTERROR("failed to unlink(2) file %s (%s)", filepath, strerror(errno));
+    log_error(NULL, "failed to unlink(2) file %s (%s)", filepath,
+              strerror(errno));
     return ERR_INVALID;
   }
   return ERR_SUCCESS;
@@ -165,13 +167,15 @@ err_t zt_file_delete(const char *filepath) {
 err_t zt_file_zdelete(const char *filepath) {
   int fd = open(filepath, O_WRONLY);
   if (fd == -1) {
-    PRINTERROR("failed to open(2) file %s (%s)", filepath, strerror(errno));
+    log_error(NULL, "failed to open(2) file %s (%s)", filepath,
+              strerror(errno));
     return ERR_INVALID;
   }
   fzero(fd);
   close(fd);
   if (unlink(filepath) == -1) {
-    PRINTERROR("failed to unlink(2) file %s (%s)", filepath, strerror(errno));
+    log_error(NULL, "failed to unlink(2) file %s (%s)", filepath,
+              strerror(errno));
     return ERR_INVALID;
   }
   return ERR_SUCCESS;
@@ -204,8 +208,8 @@ err_t zt_file_rename(const char *oldpath, const char *newpath) {
   }
 
   if (rename(oldpath, newpath) != 0) {
-    PRINTERROR("failed to rename(3) %s to %s (%s)", oldpath, newpath,
-               strerror(errno));
+    log_error(NULL, "failed to rename(3) %s to %s (%s)", oldpath, newpath,
+              strerror(errno));
     return ERR_INVALID;
   }
   return ERR_SUCCESS;
@@ -293,7 +297,8 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
     fd = open(filepath, flags | O_CREAT, 0600);
 
   if (fd == -1) {
-    PRINTERROR("failed to open(2) file %s (%s)", filepath, strerror(errno));
+    log_error(NULL, "failed to open(2) file %s (%s)", filepath,
+              strerror(errno));
     return ERR_BAD_ARGS;
   }
 
@@ -303,8 +308,8 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   fl.l_whence = SEEK_SET;
   fl.l_len = 0; /* entire file */
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fcntl(2): failed to lock file %s (%s)", filepath,
-               strerror(errno));
+    log_error(NULL, "fcntl(2): failed to lock file %s (%s)", filepath,
+              strerror(errno));
     close(fd);
     return ERR_BAD_ARGS;
   }
@@ -436,8 +441,8 @@ err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
 
   maddr = mmap(NULL, pa_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, offset);
   if (maddr == MAP_FAILED) {
-    PRINTERROR("failed to mmap(2) file %s (%s)", fio->name, strerror(errno));
-    return ERR_FIO_READ;
+    log_error(NULL, "failed to mmap(2) file %s (%s)", fio->name,
+strerror(errno)); return ERR_FIO_READ;
   }
 
   madvise(maddr, pa_size, MADV_WILLNEED);
@@ -485,8 +490,8 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   rc = read(fio->fd, buf, bufsize);
   switch (rc) {
   case -1:
-    PRINTERROR("failed to read(2) from file %s (%s)", fio->path,
-               strerror(errno));
+    log_error(NULL, "failed to read(2) from file %s (%s)", fio->path,
+              strerror(errno));
     return ERR_FIO_READ;
   case 0:
     *nread = 0;
@@ -562,8 +567,8 @@ err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
 
   rc = write(fio->fd, buf, bufsize);
   if (rc != bufsize) {
-    PRINTERROR("failed to write(2) to file %s (%s)", fio->path,
-               strerror(errno));
+    log_error(NULL, "failed to write(2) to file %s (%s)", fio->path,
+              strerror(errno));
     return ERR_FIO_WRITE;
   }
 

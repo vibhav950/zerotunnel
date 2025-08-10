@@ -2,6 +2,7 @@
 #include "common/b64.h"
 #include "common/defines.h"
 #include "common/hex.h"
+#include "common/log.h"
 #include "common/ztver.h"
 #include "crypto/sha256.h"
 #include "lib/client.h"
@@ -40,7 +41,7 @@ static char *auth_passwd_prompt(const char *prompt,
 
   rppflags = RPP_ECHO_OFF | RPP_REQUIRE_TTY;
   if (readpassphrase(prompt, buf, sizeof(buf), rppflags) == NULL) {
-    PRINTERROR("readpassphrase(3) failed");
+    log_error(NULL, "readpassphrase(3) failed");
     return NULL;
   }
 
@@ -131,13 +132,14 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
     return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
-    PRINTERROR("open: could not open %s (%s)", passwddb_file, strerror(errno));
+    log_error(NULL, "open: could not open %s (%s)", passwddb_file,
+              strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    PRINTERROR("fdopen: could not open %s (%s)", passwddb_file,
-               strerror(errno));
+    log_error(NULL, "fdopen: could not open %s (%s)", passwddb_file,
+              strerror(errno));
     close(fd);
     return -1;
   }
@@ -148,8 +150,8 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
-               strerror(errno));
+    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
+              strerror(errno));
     fclose(fp);
     close(fd);
     return -1;
@@ -271,13 +273,14 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
     return -1;
 
   if ((fd = open(passwddb_file, O_RDWR)) < 0) {
-    PRINTERROR("open: could not open %s (%s)", passwddb_file, strerror(errno));
+    log_error(NULL, "open: could not open %s (%s)", passwddb_file,
+              strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    PRINTERROR("fdopen: could not open %s (%s)", passwddb_file,
-               strerror(errno));
+    log_error(NULL, "fdopen: could not open %s (%s)", passwddb_file,
+              strerror(errno));
     close(fd);
     return -1;
   }
@@ -288,8 +291,8 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    PRINTERROR("fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
-               strerror(errno));
+    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
+              strerror(errno));
     fclose(fp);
     close(fd);
     return -1;
@@ -386,7 +389,7 @@ passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
     peer_id = ZT_NULL_PEERID_STR;
 
   if (!(passwd_ret = zt_malloc(sizeof(struct passwd)))) {
-    PRINTERROR("out of memory");
+    log_error(NULL, "out of memory");
     return -1;
   }
 
@@ -397,8 +400,9 @@ passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
     break;
   case KAPPA_AUTHTYPE_1:
     if ((id = zt_auth_passwd_load(passwddb_file, peer_id, -1, &pw)) < 0) {
-      PRINTERROR("found no matching password entries (peer_id=%s, pwid=%d)",
-                 peer_id, id);
+      log_error(NULL,
+                "found no matching password entries (peer_id=%s, pwid=%d)",
+                peer_id, id);
       goto err;
     }
     break;
@@ -408,7 +412,7 @@ passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
       goto err;
     break;
   default:
-    PRINTERROR("unknown auth type %d", auth_type);
+    log_error(NULL, "unknown auth type %d", auth_type);
     goto err;
   }
   passwd_ret->id = id;
@@ -435,7 +439,7 @@ passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
     peer_id = ZT_NULL_PEERID_STR;
 
   if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
-    PRINTERROR("out of memory");
+    log_error(NULL, "out of memory");
     return -1;
   }
 
@@ -443,7 +447,8 @@ passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
   case KAPPA_AUTHTYPE_0:
   case KAPPA_AUTHTYPE_2:
     if (pwid != 0) {
-      PRINTERROR("pwid must be 0 for KAPPA_AUTHTYPE_0 and KAPPA_AUTHTYPE_2");
+      log_error(NULL,
+                "pwid must be 0 for KAPPA_AUTHTYPE_0 and KAPPA_AUTHTYPE_2");
       goto err;
     }
     if (!(pw = auth_passwd_prompt("Enter password: ", 0)))
@@ -451,13 +456,13 @@ passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
     break;
   case KAPPA_AUTHTYPE_1:
     if (zt_auth_passwd_load(passwddb_file, peer_id, pwid, &pw) < 0) {
-      PRINTERROR("found no matching entries (peer_id=%s, pwid=%d)", peer_id,
-                 pwid);
+      log_error(NULL, "found no matching entries (peer_id=%s, pwid=%d)",
+                peer_id, pwid);
       goto err;
     }
     break;
   default:
-    PRINTERROR("unknown auth type %d", auth_type);
+    log_error(NULL, "unknown auth type %d", auth_type);
     goto err;
   }
   passwd_ret->id = pwid;
@@ -485,12 +490,13 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     return -1;
 
   if (!n_passwords || n_passwords > 256) {
-    PRINTERROR("requested password bundle of invalid size", n_passwords);
+    log_error(NULL, "requested password bundle of invalid size", n_passwords);
     return -1;
   }
 
   if ((fp = fopen(passwddb_file, "w")) == NULL) {
-    PRINTERROR("fopen: could not open %s (%s)", passwddb_file, strerror(errno));
+    log_error(NULL, "fopen: could not open %s (%s)", passwddb_file,
+              strerror(errno));
     return -1;
   }
 
@@ -498,7 +504,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
 
   if ((idhash_hex_len =
            zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex)) == 0) {
-    PRINTERROR("out of memory");
+    log_error(NULL, "out of memory");
     ret = -1;
     goto cleanup;
   }
@@ -517,7 +523,7 @@ int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
     }
 
     if (zt_b64_encode(buf, 32, &passwd_b64, &passwd_b64_len) == -1) {
-      PRINTERROR("out of memory");
+      log_error(NULL, "out of memory");
       ret = -1;
       goto cleanup;
     }
@@ -581,7 +587,7 @@ int zt_get_hostid(struct authid *authid) {
   base = ZT_APP_AUTHID128();
 
   if (sd_id128_get_machine_app_specific(base, &ret) != 0) {
-    PRINTERROR("failed to get system ID");
+    log_error(NULL, "failed to get system ID");
     return -1;
   }
 

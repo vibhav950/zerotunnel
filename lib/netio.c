@@ -1,4 +1,5 @@
 #include "client.h"
+#include "common/log.h"
 #include "io.h"
 #include "server.h"
 
@@ -28,7 +29,7 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
 
   if (select(sockfd + 1, rsetp, wsetp, NULL,
              (timeout_msec >= 0) ? &tval : NULL) == 0) {
-    PRINTERROR("Connection timed out\n");
+    log_error(NULL, "Connection timed out\n");
     return -1;
   }
 
@@ -46,7 +47,7 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
 
   len = sizeof(error);
   if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
-    PRINTERROR("getsockopt failed (%s)\n", strerror(errno));
+    log_error(NULL, "getsockopt failed (%s)\n", strerror(errno));
     rc = -1;
   }
   // Check for pending socket error
@@ -154,7 +155,7 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
                          conn->ai_estab->ai_addrlen);
 
         if (unlikely(rv == -1 && errno != EAGAIN && errno != EINPROGRESS)) {
-          PRINTERROR("connect: failed (%s)", strerror(errno));
+          log_error(NULL, "connect: failed (%s)", strerror(errno));
           close(conn->sockfd);
           return -1;
         }
@@ -233,7 +234,7 @@ ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
     ssize_t n = recv(conn->sockfd, buf + nread, nbytes - nread, 0);
 
     if (unlikely(n == 0)) {
-      PRINTERROR("Unexpected socket shutdown by peer");
+      log_error(NULL, "Unexpected socket shutdown by peer");
       return -1;
     }
 
@@ -338,7 +339,7 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
     ssize_t n = recv(conn->sockfd, buf + nread, nbytes - nread, 0);
 
     if (n == 0) {
-      PRINTERROR("Unexpected socket shutdown by peer");
+      log_error(NULL, "Unexpected socket shutdown by peer");
       return -1;
     }
 
