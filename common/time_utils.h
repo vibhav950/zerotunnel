@@ -1,6 +1,7 @@
 #ifndef __TIMEDEFS_H__
 #define __TIMEDEFS_H__
 
+#include <limits.h>
 #include <stdint.h>
 #include <sys/time.h>
 #include <time.h>
@@ -10,11 +11,11 @@ typedef struct _zt_timeval_st {
   int tv_usec;   /* microseconds */
 } zt_timeval_t;
 
-#define TYPEOF_TIMEDIFF_T long long
+#define TYPEOF_TIMEDIFF_T long
 #define SIZEOF_TIMEDIFF_T sizeof(TYPEOF_TIMEDIFF_T)
-#define TIMEDIFF_T_FMT "%lld"
-#define TIMEDIFF_T_MAX INT64_MAX
-#define TIMEDIFF_T_MIN INT64_MIN
+#define TIMEDIFF_T_FMT "%ld"
+#define TIMEDIFF_T_MAX LONG_MAX
+#define TIMEDIFF_T_MIN LONG_MIN
 typedef TYPEOF_TIMEDIFF_T timediff_t;
 
 /**
