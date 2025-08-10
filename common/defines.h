@@ -59,6 +59,13 @@
 #define ATTRIBUTE_NOTHROW
 #endif
 
+#if GCC_VERSION_AT_LEAST(2, 5)
+#define ATTRIBUTE_FORMAT_PRINTF(fmt, args)                                     \
+  __attribute__((format(printf, fmt, args)))
+#else
+#define ATTRIBUTE_FORMAT_PRINTF(fmt, args)
+#endif
+
 #else /* defined(__GNUC__) && !defined(__clang__) */
 
 #define ATTRIBUTE_ALWAYS_INLINE
@@ -69,6 +76,7 @@
 #define unlikely(expr) (expr)
 #define likely(expr) (expr)
 #define ATTRIBUTE_NOTHROW
+#define ATTRIBUTE_FORMAT_PRINTF(fmt, args)
 
 #endif
 
@@ -146,96 +154,53 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
 #define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 typedef enum {
-  ERR_SUCCESS,                    /* OK */
-  ERR_NOT_ALLOC,                  /* memory/interface not allocated */
-  ERR_NOT_INIT,                   /* not initialized */
-  ERR_NULL_PTR,                   /* null pointer argument(s) */
-  ERR_BAD_ARGS,                   /* invalid argument(s) */
-  ERR_MEM_FAIL,                   /* out of memory */
-  ERR_BUFFER_TOO_SMALL,           /* buffer too small */
-  ERR_REQUEST_TOO_LARGE,          /* request exceeded allowed maximum size */
-  ERR_NOT_SUPPORTED,              /* operation not supported */
-  ERR_INTERNAL,                   /* internal library error */
-  ERR_INVALID,                    /* invalid operation (sequence) */
-  ERR_OPERATION_LIMIT_REACHED,    /* operation limit reached */
-  ERR_BAD_CONTROL_FLOW,           /* protocol deviation */
-  ERR_INVALID_DATUM,              /* invalid data */
-  ERR_HSHAKE_ABORTED,             /* handshake aborted */
-  ERR_AUTH_FAIL,                  /* authentication failed */
-  ERR_AGAIN,                      /* try again */
-  ERR_TIMEOUT,                    /* operation timed out */
-  ERR_NORESOLVE,                  /* could not resolve host */
-  ERR_TCP_ACCEPT,                 /* failed to accept TCP connection */
-  ERR_TCP_CONNECT,                /* TCP connection failed */
-  ERR_TCP_SEND,                   /* TCP send failed */
-  ERR_TCP_RECV,                   /* TCP receive failed */
-  ERR_ALREADY,                    /* already in progress */
-  ERR_FIO_READ,                   /* fio read failed */
-  ERR_FIO_WRITE,                  /* fio write failed */
-  ERR_EOF,                        /* end of file reached */
+  ERR_SUCCESS,                 /* OK */
+  ERR_NOT_ALLOC,               /* memory/interface not allocated */
+  ERR_NOT_INIT,                /* not initialized */
+  ERR_NULL_PTR,                /* null pointer argument(s) */
+  ERR_BAD_ARGS,                /* invalid argument(s) */
+  ERR_MEM_FAIL,                /* out of memory */
+  ERR_BUFFER_TOO_SMALL,        /* buffer too small */
+  ERR_REQUEST_TOO_LARGE,       /* request exceeded allowed maximum size */
+  ERR_NOT_SUPPORTED,           /* operation not supported */
+  ERR_INTERNAL,                /* internal library error */
+  ERR_INVALID,                 /* invalid operation (sequence) */
+  ERR_OPERATION_LIMIT_REACHED, /* operation limit reached */
+  ERR_BAD_CONTROL_FLOW,        /* protocol deviation */
+  ERR_INVALID_DATUM,           /* invalid data */
+  ERR_HSHAKE_ABORTED,          /* handshake aborted */
+  ERR_AUTH_FAIL,               /* authentication failed */
+  ERR_AGAIN,                   /* try again */
+  ERR_TIMEOUT,                 /* operation timed out */
+  ERR_NORESOLVE,               /* could not resolve host */
+  ERR_TCP_ACCEPT,              /* failed to accept TCP connection */
+  ERR_TCP_CONNECT,             /* TCP connection failed */
+  ERR_TCP_SEND,                /* TCP send failed */
+  ERR_TCP_RECV,                /* TCP receive failed */
+  ERR_ALREADY,                 /* already in progress */
+  ERR_FIO_READ,                /* fio read failed */
+  ERR_FIO_WRITE,               /* fio write failed */
+  ERR_EOF,                     /* end of file reached */
 } err_t;
 
-const char *zt_error_str(err_t err);
-
 /**
- * Logging routines
+ * Log an error message using the global logger and exit with failure.
+ * This function will bypass any logging callbacks installed on the root logger.
  */
-
-#if GCC_VERSION_AT_LEAST(2, 5)
-extern void zt_debug_vprintf(const char *func, const char *fmt, ...)
-    __attribute__((format(printf, 2, 3)));
-
-extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...)
-    __attribute__((format(printf, 3, 4)));
-
-extern void zt_info_vprintf(const char *file, const char *fmt, ...)
-    __attribute__((format(printf, 2, 3)));
-
-extern void zt_error_vprintf_exit(const char *f, int ln, const char *fmt, ...)
-    __attribute__((noreturn, format(printf, 3, 4)));
-
-extern void zt_warn_vprintf(const char *fmt, ...)
-    __attribute__((format(printf, 1, 2)));
-#else
-extern void zt_debug_vprintf(const char *func, const char *fmt, ...);
-extern void zt_error_vprintf(const char *file, int line, const char *fmt, ...);
-extern void zt_info_vprintf(const char *file, const char *fmt, ...);
-extern void zt_error_vprintf_exit(const char *f, int ln, const char *fmt, ...);
-extern void zt_warn_vprintf(const char *fmt, ...);
-#endif
+extern void zt_log_fatal(const char *fmt, ...)
+    ATTRIBUTE_FORMAT_PRINTF(1, 2) ATTRIBUTE_NORETURN;
 
 #ifdef ASSERT
 #undef ASSERT
 #endif
-
 #if defined(DEBUG)
-
-#define PRINTDEBUG(fmt, ...) zt_debug_vprintf(__func__, fmt, ##__VA_ARGS__)
-
 #define ASSERT(cond)                                                           \
   do {                                                                         \
-    ((cond) ? (void)0                                                          \
-            : zt_error_vprintf_exit(__FILE__, __LINE__,                        \
-                                    "Assertion failed `" #cond "`"));          \
+    ((cond) ? (void)0 : zt_log_fatal("Assertion failed `" #cond "`"));         \
   } while (0)
-
-#else /* !defined(DEBUG) */
-
-#define PRINTDEBUG(fmt, ...)
-
+#else
 #define ASSERT(cond) (cond)
-
 #endif
-
-#define PRINTERROR(fmt, ...)                                                   \
-  zt_error_vprintf(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
-
-#define PRINTFATAL(fmt, ...)                                                   \
-  zt_error_vprintf_exit(__FILE__, __LINE__, fmt, ##__VA_ARGS__)
-
-#define PRINTINFO(fmt, ...) zt_info_vprintf(__func__, fmt, ##__VA_ARGS__)
-
-#define PRINTWARN(fmt, ...) zt_warn_vprintf(fmt, ##__VA_ARGS__)
 
 #if defined(_MSC_VER)
 #include <intrin.h> // __fastfail
