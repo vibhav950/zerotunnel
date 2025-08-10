@@ -2,6 +2,7 @@
 #include "ciphersuites.h"
 #include "common/defines.h"
 #include "common/log.h"
+#include "common/progressbar.h"
 #include "common/prompts.h"
 #include "common/tty_io.h"
 #include "vcry.h"
@@ -651,6 +652,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   int vcry_algs[6];
   ciphersuite_t ciphersuite;
   zt_fio_t fileptr;
+  zt_fileinfo_t fileinfo;
 
   if (!conn || !done)
     return ERR_NULL_PTR;
@@ -922,8 +924,6 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
 
     case CLIENT_OFFER: {
-      zt_fileinfo_t fileinfo;
-
       /**
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
@@ -957,6 +957,11 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       size_t nread;
       err_t rv;
 
+      if (zt_progressbar_init() != 0)
+        log_error(NULL, "failed to create progress bar");
+
+      zt_progressbar_begin(config.peer_id, fileinfo.name, fileinfo.size);
+
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {
         rv = zt_fio_read(&fileptr, MSG_DATA_PTR(conn->msgbuf),
@@ -968,11 +973,15 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         if ((ret = client_send(conn)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
+          zt_progressbar_complete();
+          zt_progressbar_destroy();
           goto cleanup2;
         }
+        zt_progressbar_update(nread);
       }
-
       zt_fio_close(&fileptr);
+      zt_progressbar_complete();
+      zt_progressbar_destroy();
 
       if (rv != ERR_EOF) {
         ret = rv;

@@ -5,6 +5,7 @@
 #include "server.h"
 
 #include "common/log.h"
+#include "common/progressbar.h"
 #include "common/prompts.h"
 #include "common/tty_io.h"
 #include "vcry.h"
@@ -911,12 +912,19 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
+      if (zt_progressbar_init() != 0)
+        log_error(NULL, "failed to create progress bar");
+
       remaining = conn->fileinfo.size;
+      zt_progressbar_begin(config.peer_id, conn->fileinfo.name, remaining);
+
       while (remaining > 0) {
         off_t writelen;
 
         if ((ret = server_recv(conn, MSG_FILEDATA)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
+          zt_progressbar_complete();
+          zt_progressbar_destroy();
           goto cleanup2;
         }
 
@@ -924,10 +932,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         rv = zt_fio_write(&fileptr, MSG_DATA_PTR(conn->msgbuf), writelen);
         if (rv != ERR_SUCCESS)
           break;
+
+        zt_progressbar_update(writelen);
         remaining -= writelen;
       }
-
       zt_fio_close(&fileptr);
+      zt_progressbar_complete();
+      zt_progressbar_destroy();
 
       if (remaining) {
         ret = rv;
