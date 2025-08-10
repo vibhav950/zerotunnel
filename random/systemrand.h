@@ -8,17 +8,17 @@
 /**
  * Securely generate \p bytes random bytes into \p.
  */
-int zt_systemrand_bytes(uint8_t *buf, size_t bytes);
+void zt_systemrand_bytes(uint8_t *buf, size_t bytes);
 
 /**
  * Securely generate \p bytes4 4-byte random words into \p buf.
  */
-int zt_systemrand_4bytes(uint32_t *buf, size_t bytes4);
+void zt_systemrand_4bytes(uint32_t *buf, size_t bytes4);
 
 /**
  * Securely generate \p bytes8 8-byte random words into \p buf.
  */
-int zt_systemrand_8bytes(uint64_t *buf, size_t bytes8);
+void zt_systemrand_8bytes(uint64_t *buf, size_t bytes8);
 
 /**
  * Returns a 8-bit random value.

@@ -4,14 +4,18 @@
 #include "rdrand.h"
 
 #if defined(_WIN32)
-#if defined(_MSC_VER)
-#pragma comment(lib, "bcrypt.lib")
-#endif
 #include <bcrypt.h>
 #include <ntstatus.h>
 #include <windows.h>
+#if defined(_MSC_VER)
+#pragma comment(lib, "bcrypt.lib")
+#endif
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
+#endif
 #elif defined(__linux__)
 /* Linux */
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -33,89 +37,80 @@
 #endif
 
 #if defined(_WIN32)
-static int _win32_sys_rand(uint8_t *buf, size_t bytes) {
-  NTSTATUS status;
-
-  status = BCryptGenRandom(NULL, (BYTE *)buf, (DWORD)bytes,
-                           BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-
-  return NT_SUCCESS(status) ? 0 : -1;
+static inline void _win32_sys_rand(uint8_t *buf, size_t bytes) {
+  if (BCryptGenRandom(NULL, (BYTE *)buf, (ULONG)bytes,
+                      BCRYPT_USE_SYSTEM_PREFERRED_RNG) != STATUS_SUCCESS) {
+    // better to fail than return bad random data
+    zt_log_fatal("system RNG failure");
+  }
 }
 #endif // _WIN32
 
 /**
  * Get \p bytes random bytes into \p buf using the platform-dependent
  * random number generator which is chosen at compile-time.
- *
- * Returns 0 on success, -1 on failure.
  */
-int zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
-  int rv = 0;
-#ifndef _WIN32
+void zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
+#if defined(HAVE_DEV_URANDOM)
   int fd;
 #endif
 
   if (!buf || !bytes)
-    return -1;
+    return;
 
 #ifdef _WIN32
-  rv = _win32_sys_rand(buf, bytes);
+  _win32_sys_rand(buf, bytes);
 #elif defined(HAVE_DEV_URANDOM)
   if ((fd = open("/dev/random", O_RDONLY)) < 0)
-    return -1;
+    zt_log_fatal("system RNG failure (%s)", strerror(errno));
 
   if (read(fd, buf, bytes) != (ssize_t)bytes)
-    rv = -1;
+    zt_log_fatal("system RNG failure (%s)", strerror(errno));
 
   close(fd);
 #elif defined(HAVE_ARC4RANDOM)
   arc4random_buf(buf, bytes);
 #endif
-  return rv;
 }
 
 /**
  * For a request where the size is a multiple of 4 bytes, it is advised to use
- * this function over zt_systemrand_bytes() if the underlying architecture is
- * x86. This function uses a runtime check performed by DetectX86CPUFeatures()
+ * this function over `zt_systemrand_bytes()` if the underlying architecture is
+ * x86. This function uses a runtime check performed by `DetectX86CPUFeatures()`
  * at program startup as a prerequisite to determine if the RDRAND instruction
  * is available; if this check fails, we naturally fall back to
- * zt_systemrand_bytes().
- *
- * Returns 0 on success, -1 on failure.
+ * `zt_systemrand_bytes()`.
  */
-int zt_systemrand_4bytes(uint32_t *buf, size_t bytes4) {
+void zt_systemrand_4bytes(uint32_t *buf, size_t bytes4) {
   if (!buf || !bytes4)
-    return -1;
+    return;
 
   if (HasRDRAND()) {
     for (size_t i = 0; i < bytes4; i++)
       if (!rdrand32_step(&buf[i]))
         goto fallback;
-    return 0;
+    return;
   }
 fallback:
-  return zt_systemrand_bytes((uint8_t *)buf, bytes4 * 4);
+  zt_systemrand_bytes(PTR8(buf), bytes4 * 4);
 }
 
 /**
  * For a request where the size is a multiple of 8 bytes, it is advised
- * to use this function over zt_systemrand_bytes() on an x86 machine.
- *
- * Returns 0 on success, -1 on failure.
+ * to use this function over `zt_systemrand_bytes()` on an x86 machine.
  */
-int zt_systemrand_8bytes(uint64_t *buf, size_t bytes8) {
+void zt_systemrand_8bytes(uint64_t *buf, size_t bytes8) {
   if (!buf || !bytes8)
-    return -1;
+    return;
 
   if (HasRDRAND()) {
     for (size_t i = 0; i < bytes8; i++)
       if (!rdrand64_step(&buf[i]))
         goto fallback;
-    return 0;
+    return;
   }
 fallback:
-  return zt_systemrand_bytes((uint8_t *)buf, bytes8 * 8);
+  zt_systemrand_bytes(PTR8(buf), bytes8 * 8);
 }
 
 inline uint8_t zt_rand_u8(void) {
@@ -123,10 +118,7 @@ inline uint8_t zt_rand_u8(void) {
 #if defined(HAVE_ARC4RANDOM)
   rand = arc4random_uniform(UINT8_MAX + 1);
 #else
-  if (zt_systemrand_bytes(&rand, 1) != 0) {
-    PRINTERROR("System RNG failure");
-    __FKILL();
-  }
+  zt_systemrand_bytes(&rand, 1);
 #endif
   return rand;
 }
@@ -136,10 +128,7 @@ inline uint16_t zt_rand_u16(void) {
 #if defined(HAVE_ARC4RANDOM)
   rand = arc4random_uniform(UINT16_MAX + 1);
 #else
-  if (zt_systemrand_bytes((uint8_t *)&rand, 2) != 0) {
-    PRINTERROR("System RNG failure");
-    __FKILL();
-  }
+  zt_systemrand_bytes(PTR8(&rand), 2);
 #endif
   return rand;
 }
@@ -149,20 +138,14 @@ inline uint32_t zt_rand_u32(void) {
 #if defined(HAVE_ARC4RANDOM)
   rand = arc4random();
 #else
-  if (zt_systemrand_4bytes(&rand, 1) != 0) {
-    PRINTERROR("System RNG failure");
-    __FKILL();
-  }
+  zt_systemrand_4bytes(&rand, 1);
 #endif
   return rand;
 }
 
 inline uint64_t zt_rand_u64(void) {
   uint64_t rand;
-  if (zt_systemrand_8bytes(&rand, 1) != 0) {
-    PRINTERROR("System RNG failure");
-    __FKILL();
-  }
+  zt_systemrand_8bytes(&rand, 1);
   return rand;
 }
 
@@ -219,9 +202,8 @@ int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
     charset_len -= 1;
   }
 
-  for (size_t i = 0; i < rstr_len - 1; i++) {
+  for (size_t i = 0; i < rstr_len - 1; i++)
     rstr[i] = p[zt_rand_ranged(charset_len)];
-  }
   rstr[rstr_len - 1] = 0;
 
   return 0;
