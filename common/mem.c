@@ -3,6 +3,7 @@
  * Wrapper for LIBC memory functions.
  */
 
+#include "common/log.h"
 #include "defines.h"
 
 #include <errno.h>
@@ -28,11 +29,11 @@ void *zt_mem_malloc(size_t size) {
   if (size >= __LARGE_ALLOC_SIZE) {
     size = (size & ~(__LARGE_ALLOC_ALIGN_SIZE - 1)) + __LARGE_ALLOC_ALIGN_SIZE;
     if (!(ptr = aligned_alloc(__LARGE_ALLOC_ALIGN_SIZE, size))) {
-      PRINTDEBUG("aligned_alloc() failed (%s)", strerror(errno));
+      log_error(NULL, "aligned_alloc() failed (%s)", strerror(errno));
       return NULL;
     }
     if (mlock(ptr, malloc_usable_size(ptr))) {
-      PRINTDEBUG("mlock() failed (%s)", strerror(errno));
+      log_error(NULL, "mlock() failed (%s)", strerror(errno));
       return NULL;
     }
 #else
@@ -40,7 +41,7 @@ void *zt_mem_malloc(size_t size) {
 #endif
   } else {
     if (!(ptr = malloc(size)))
-      PRINTDEBUG("malloc() failed (%s)", strerror(errno));
+      log_error(NULL, "malloc() failed (%s)", strerror(errno));
   }
   return ptr;
 }
@@ -54,7 +55,7 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
 #ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
   /* check for an overflow */
   if (size * nmemb < size && size && nmemb) {
-    PRINTDEBUG("not enough memory");
+    log_error(NULL, "not enough memory");
     return NULL;
   }
   if (size * nmemb >= __LARGE_ALLOC_SIZE) {
@@ -66,7 +67,7 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
 #endif
   } else {
     if (!(ptr = calloc(nmemb, size)))
-      PRINTDEBUG("calloc() failed (%s)", strerror(errno));
+      log_error(NULL, "calloc() failed (%s)", strerror(errno));
   }
   return ptr;
 }
@@ -88,7 +89,7 @@ void zt_mem_free(void *ptr) {
        * in it. Even more the reason to only call zt_free() with valid
        * arguments!
        */
-      PRINTDEBUG("munlock() failed (%s)", strerror(errno));
+      log_error(NULL, "munlock() failed (%s)", strerror(errno));
       memzero(ptr, size);
       __FKILL();
     }

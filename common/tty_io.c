@@ -6,6 +6,7 @@
  */
 
 #include "tty_io.h"
+#include "log.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -48,7 +49,7 @@ static void cleanup(void) {
   if (restore_termios) {
     restore_termios = 0;
     if (tcsetattr(fileno(ttyfp), TCIFLUSH, &termios_save) != 0)
-      PRINTERROR("tcsetattr() failed (%s)", strerror(errno));
+      log_error(NULL, "tcsetattr() failed (%s)", strerror(errno));
   }
 }
 
@@ -145,7 +146,7 @@ char *tty_getf(const char *promptfmt, ...) {
 
   va_start(ap, promptfmt);
   if (vasprintf(&prompt, promptfmt, ap) < 0)
-    PRINTERROR("vasprintf() failed (%s)", strerror(errno));
+    log_error(NULL, "vasprintf() failed (%s)", strerror(errno));
   va_end(ap);
   answer = tty_get(prompt);
   free(prompt);
