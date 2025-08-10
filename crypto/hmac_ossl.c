@@ -11,16 +11,20 @@
 #error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
 #endif
 
+#include "common/defines.h"
+#include "common/log.h"
 #include "hmac.h"
 #include "hmac_defs.h"
 
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
+// clang-format off
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 
 #define HMAC_FLAG_SET(h, flag) (void)((h)->flags |= flag)
 #define HMAC_FLAG_GET(h, flag) ((h)->flags & flag)
+// clang-format on
 
 /**
  *
@@ -31,8 +35,8 @@ static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
   hmac_ossl_ctx *hmac;
   const EVP_MD *md;
 
-  PRINTDEBUG("key_len=%zu, out_len=%zu alg=%s", key_len, out_len,
-             hmac_alg_to_string(alg));
+  log_debug(NULL, "key_len=%zu, out_len=%zu alg=%s", key_len, out_len,
+            hmac_alg_to_string(alg));
 
   if (key_len != out_len)
     return ERR_BAD_ARGS;
@@ -99,7 +103,7 @@ static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
  *
  */
 static void ossl_hmac_dealloc(hmac_t *h) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC)) {
     hmac_ossl_ctx *hmac = h->ctx;
@@ -124,7 +128,7 @@ static err_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   hmac_alg_t alg;
   EVP_PKEY *mac_key;
 
-  PRINTDEBUG("key_len=%zu", key_len);
+  log_debug(NULL, "key_len=%zu", key_len);
 
   if (!key)
     return ERR_NULL_PTR;
@@ -175,7 +179,7 @@ static err_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 static err_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   hmac_ossl_ctx *ctx;
 
-  PRINTDEBUG("msg_len=%zu", msg_len);
+  log_debug(NULL, "msg_len=%zu", msg_len);
 
   if (msg_len && !msg)
     return ERR_NULL_PTR;
@@ -200,7 +204,7 @@ static err_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
   uint8_t md_value[EVP_MAX_MD_SIZE];
   size_t len;
 
-  PRINTDEBUG("msg_len=%zu, digest_len=%zu", msg_len, digest_len);
+  log_debug(NULL, "msg_len=%zu, digest_len=%zu", msg_len, digest_len);
 
   if (!digest)
     return ERR_NULL_PTR;

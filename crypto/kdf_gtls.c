@@ -12,6 +12,7 @@
 #endif
 
 #include "common/defines.h"
+#include "common/log.h"
 #include "kdf.h"
 #include "kdf_defs.h"
 
@@ -25,7 +26,7 @@ static err_t gtls_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   kdf_gtls_ctx *kdf_ctx;
   gnutls_mac_algorithm_t mac_alg;
 
-  PRINTDEBUG("alg=%s", kdf_alg_to_string(alg));
+  log_debug(NULL, "alg=%s", kdf_alg_to_string(alg));
 
   switch (alg) {
   case KDF_ALG_PBKDF2:
@@ -82,7 +83,7 @@ static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password,
                            size_t salt_len) {
   uint8_t *pw, *slt;
 
-  PRINTDEBUG("password_len=%zu, salt_len=%zu", password_len, salt_len);
+  log_debug(NULL, "password_len=%zu, salt_len=%zu", password_len, salt_len);
 
   if (!password || !salt)
     return ERR_NULL_PTR;
@@ -133,7 +134,7 @@ static err_t gtls_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   size_t buf_len;
   err_t ret = ERR_SUCCESS;
 
-  PRINTDEBUG("additional_data_len=%zu", additional_data_len);
+  log_debug(NULL, "additional_data_len=%zu", additional_data_len);
 
   if (!key)
     return ERR_NULL_PTR;

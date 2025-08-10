@@ -9,6 +9,7 @@
 #endif
 
 #include "common/defines.h"
+#include "common/log.h"
 #include "kex.h"
 #include "kex_ecc.h"
 
@@ -39,7 +40,7 @@ static err_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
   EVP_PKEY *paramgen = NULL;
   int ec_nid, id;
 
-  PRINTDEBUG("curve=%s", kex_curve_name(curve));
+  log_debug(NULL, "curve=%s", kex_curve_name(curve));
 
   switch (curve) {
   case KEX_CURVE_secp256k1:
@@ -110,7 +111,7 @@ cleanup:
  *
  */
 static void ossl_kex_ecc_dealloc(kex_t *kex) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (KEX_FLAG_GET(kex, KEX_FLAG_ALLOC)) {
     kex_ossl_ctx *ctx = (kex_ossl_ctx *)kex->ctx;
@@ -137,7 +138,7 @@ static err_t ossl_kex_ecc_key_gen(kex_t *kex) {
   EVP_PKEY_CTX *keygen_ctx = NULL;
   EVP_PKEY *ec_key = NULL;
 
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!KEX_FLAG_GET(kex, KEX_FLAG_ALLOC))
     return ERR_NOT_ALLOC;
@@ -167,7 +168,7 @@ static err_t ossl_kex_ecc_get_peer_data(kex_t *kex,
   size_t pubkey_len = 0, curvename_len = 0;
   int ec_nid;
 
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!peer_data)
     return ERR_NULL_PTR;
@@ -253,7 +254,7 @@ static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
                                         size_t ec_pub_len,
                                         const uint8_t *ec_curvename,
                                         size_t ec_curvename_len) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!peer_data)
     return ERR_NULL_PTR;
@@ -267,7 +268,7 @@ static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
 }
 
 static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!peer_data)
     return;
@@ -293,7 +294,7 @@ static err_t ossl_kex_ecc_derive_shared_key(kex_t *kex,
   OSSL_PARAM *param = NULL;
   int ec_nid;
 
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!peer_data || !shared_key || !shared_key_len)
     return ERR_NULL_PTR;
@@ -369,7 +370,7 @@ static err_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
   size_t required;
   int ec_nid;
 
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (!pubkey || !pubkey_len)
     return ERR_NULL_PTR;

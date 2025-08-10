@@ -12,6 +12,7 @@
 #endif
 
 #include "common/defines.h"
+#include "common/log.h"
 #include "kdf.h"
 #include "kdf_defs.h"
 
@@ -45,7 +46,7 @@ static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   kdf_ossl_ctx *kdf_ctx;
   EVP_KDF *pkdf;
 
-  PRINTDEBUG("alg=%s", kdf_alg_to_string(alg));
+  log_debug(NULL, "alg=%s", kdf_alg_to_string(alg));
 
   switch (alg) {
   case KDF_ALG_scrypt:
@@ -98,7 +99,7 @@ static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
  * @return Void.
  */
 static void ossl_kdf_dealloc(kdf_t *kdf) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (KDF_FLAG_GET(kdf, KDF_FLAG_ALLOC)) {
     kdf_ossl_ctx *kdf_ctx = kdf->ctx;
@@ -240,7 +241,7 @@ static err_t ossl_kdf_init(kdf_t *kdf, const uint8_t *password,
   kdf_ossl_ctx *kdf_ctx;
   uint8_t *pw, *slt;
 
-  PRINTDEBUG("password_len=%zu, salt_len=%zu", password_len, salt_len);
+  log_debug(NULL, "password_len=%zu, salt_len=%zu", password_len, salt_len);
 
   if (!password || !salt)
     return ERR_NULL_PTR;
@@ -316,7 +317,7 @@ static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   uint8_t *buf;
   size_t buf_len;
 
-  PRINTDEBUG("additional_data_len=%zu", additional_data_len);
+  log_debug(NULL, "additional_data_len=%zu", additional_data_len);
 
   if (!key)
     return ERR_NULL_PTR;

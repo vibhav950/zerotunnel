@@ -14,9 +14,11 @@
 #include "cipher.h"
 #include "cipher_defs.h"
 #include "common/defines.h"
+#include "common/log.h"
 
 #include <openssl/evp.h>
 
+// clang-format off
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 
 #define CIPHER_OPERATION_SET(c, operation) (void)((c)->oper = operation)
@@ -24,6 +26,7 @@
 
 #define CIPHER_FLAG_SET(c, flag) (void)((c)->flags |= flag)
 #define CIPHER_FLAG_GET(c, flag) ((c)->flags & flag)
+// clang-format on
 
 /**
  *
@@ -35,7 +38,7 @@ static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
   cipher_ossl_ctx *cipher_ctx;
   const EVP_CIPHER *evp;
 
-  PRINTDEBUG("key_len=%zu, alg=%s", key_len, cipher_alg_to_string(alg));
+  log_debug(NULL, "key_len=%zu, alg=%s", key_len, cipher_alg_to_string(alg));
 
   switch (alg) {
   case CIPHER_AES_CTR_128:
@@ -89,7 +92,7 @@ static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
  *
  */
 static void ossl_cipher_dealloc(cipher_t *c) {
-  PRINTDEBUG("");
+  log_debug(NULL, "");
 
   if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
     cipher_ossl_ctx *cipher = (cipher_ossl_ctx *)c->ctx;
@@ -113,7 +116,7 @@ static err_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
   cipher_ossl_ctx *ctx;
   cipher_alg_t alg;
 
-  PRINTDEBUG("key_len=%zu", key_len);
+  log_debug(NULL, "key_len=%zu", key_len);
 
   if (!key)
     return ERR_NULL_PTR;
@@ -163,7 +166,7 @@ static err_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   cipher_ossl_ctx *ctx;
   cipher_alg_t alg;
 
-  PRINTDEBUG("iv_len=%zu", iv_len);
+  log_debug(NULL, "iv_len=%zu", iv_len);
 
   if (!iv)
     return ERR_NULL_PTR;
@@ -196,7 +199,7 @@ static err_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
 static err_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
                                  const uint8_t *aad ATTRIBUTE_UNUSED,
                                  size_t aad_len ATTRIBUTE_UNUSED) {
-  PRINTDEBUG("aad_len=%zu", aad_len);
+  log_debug(NULL, "aad_len=%zu", aad_len);
 
   return ERR_INVALID;
 }
@@ -209,7 +212,7 @@ static err_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
   int len;
   cipher_ossl_ctx *ctx;
 
-  PRINTDEBUG("in_len=%zu", in_len);
+  log_debug(NULL, "in_len=%zu", in_len);
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
@@ -246,7 +249,7 @@ static err_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
   int len;
   cipher_ossl_ctx *ctx;
 
-  PRINTDEBUG("in_len=%zu", in_len);
+  log_debug(NULL, "in_len=%zu", in_len);
 
   if (!CIPHER_FLAG_GET(c, CIPHER_FLAG_INIT))
     return ERR_NOT_INIT;
