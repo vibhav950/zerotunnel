@@ -146,8 +146,7 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
   if (sep == 0)
     sep = '-';
 
-  if (zt_systemrand_bytes(randbytes, count) == -1)
-    return NULL;
+  zt_systemrand_bytes(randbytes, count);
 
   digit_idx = have_digits ? zt_rand_ranged(count - 1) : count;
 
