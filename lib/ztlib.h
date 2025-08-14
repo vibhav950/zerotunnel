@@ -6,33 +6,35 @@
 
 #include <stdbool.h>
 
-struct _config {
+// clang-format off
+struct config {
   char
-    *addr_ipv4,
-    *addr_ipv6,
     *hostname,
     *passwddb_file,
-    *peer_id,
     *ciphersuite,
     *filename;
-  uint16_t
-    padding_factor; // ignored unless `config_length_obfuscation=true`
   uint32_t
-    port; // ignored unless `config_explicit_port=true`
+    padding_factor;     /* padding factor of the form: 2^n; 1<=n<=16 */
+  uint16_t
+    port;               /* explicit service port number */
+  char
+    preferred_family;   /* preferred address family: '4' for IPv4, '6' for IPv6 */
+  short
+    password_size;      /* number of chars or words in password */
+  int
+    connect_timeout,    /* positive timeout for connection */
+    idle_timeout,       /* positive timeout for server being idle */
+    recv_timeout,       /* positive timeout for receiving data */
+    send_timeout;       /* positive timeout for sending data */
   auth_type_t
     auth_type;
-  bool
-    config_explicit_port : 1,
-    config_ipv6 : 1,
-    config_live_read : 1,
-    config_lz4_compression : 1,
-    config_length_obfuscation : 1,
-    config_port : 1,
-    config_tcp_nodelay : 1,
-    config_tcp_fastopen : 1,
-    connect_timeout : 1,
-    recv_timeout : 1,
-    resolve_timeout : 1,
-    send_timeout : 1,
-    tcp_fastopen : 1;
-} config;
+  char
+    flag_explicit_port,
+    flag_ipv4_only,
+    flag_ipv6_only,
+    flag_length_obfuscation,
+    flag_live_read,
+    flag_lz4_compression,
+    flag_tcp_nodelay,
+    flag_tcp_fastopen;
+};
