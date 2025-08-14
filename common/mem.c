@@ -40,8 +40,8 @@ void *zt_mem_malloc(size_t size) {
   if (0) {
 #endif
   } else {
-    if (!(ptr = malloc(size)))
-      log_error(NULL, "malloc() failed (%s)", strerror(errno));
+    if (unlikely(!(ptr = malloc(size))))
+      log_error(NULL, "malloc(%zu) failed (%s)", size, strerror(errno));
   }
   return ptr;
 }
@@ -65,9 +65,9 @@ void *zt_mem_calloc(size_t nmemb, size_t size) {
 #else
   if (0) {
 #endif
-  } else {
-    if (!(ptr = calloc(nmemb, size)))
-      log_error(NULL, "calloc() failed (%s)", strerror(errno));
+  } else if (unlikely(!(ptr = calloc(nmemb, size)))) {
+    log_error(NULL, "calloc(%zu, %zu) failed (%s)", nmemb, size,
+              strerror(errno));
   }
   return ptr;
 }
@@ -88,8 +88,11 @@ void zt_mem_free(void *ptr) {
        * means we are exiting without first sweeping process memory with secrets
        * in it. Even more the reason to only call zt_free() with valid
        * arguments!
+       * Forcing an exit here is like blowing up the entire car with a Bazooka
+       * because someone put water in the fuel tank, but I don't know what the
+       * fuck else to do :-)
        */
-      log_error(NULL, "munlock() failed (%s)", strerror(errno));
+      log_error(NULL, "munlock(ptr, %zu) failed (%s)", size, strerror(errno));
       memzero(ptr, size);
       __FKILL();
     }
@@ -106,7 +109,8 @@ void *zt_mem_realloc(void *ptr, size_t size) {
   zt_free(ptr);
   ptr = zt_malloc(size);
 #else
-  ptr = realloc(ptr, size);
+  if (unlikely(!(ptr = realloc(ptr, size)))) {
+    log_error(NULL, "realloc(ptr, %zu) failed (%s)", size, strerror(errno));
 #endif
   return ptr;
 }
@@ -119,7 +123,7 @@ void *zt_mem_memset(void *mem, int ch, size_t len) {
     ;
   return mem;
 #else
-  return memset(mem, ch, len);
+    return memset(mem, ch, len);
 #endif
 }
 
@@ -131,7 +135,7 @@ void *zt_mem_memzero(void *mem, size_t len) {
     ;
   return mem;
 #else
-  return memset(mem, 0x00, len);
+    return memset(mem, 0x00, len);
 #endif
 }
 
@@ -145,7 +149,7 @@ void *zt_mem_memcpy(void *dst, void *src, size_t len) {
     cdst[len] = csrc[len];
   return dst;
 #else
-  return memcpy(dst, src, len);
+    return memcpy(dst, src, len);
 #endif
 }
 
@@ -164,7 +168,7 @@ void *zt_mem_memmove(void *dst, void *src, size_t len) {
       cdst[len] = csrc[len];
   return dst;
 #else
-  return memmove(dst, src, len);
+    return memmove(dst, src, len);
 #endif
 }
 
@@ -180,12 +184,19 @@ unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len) {
     ;
   return res;
 #else
-  return memcmp(a, b, len);
+    return memcmp(a, b, len);
 #endif
 }
 
 /**
  * Returns zero if the strings are equal, otherwise non-zero.
+ *
+ * This function behaves slightly differently than strcmp() in that it only
+ * checks the strings for equality and doesn't compare them lexicographically.
+ *
+ * We are better off always using a constant time string compare function since
+ * this can be useful for non-cryptographic modules too and this way we aren't
+ * forced to use the 'safe' versions of the other memory functions.
  *
  * Note: To avoid leaking the length of a secret string, use x
  * as the private string and str as the provided string.
@@ -219,7 +230,7 @@ void *zt_memdup(const void *m, size_t n) {
     return NULL;
 
   void *p = zt_malloc(n);
-  if (!p)
+  if (unlikely(!p))
     return NULL;
   return (void *)zt_memcpy(p, (void *)m, n);
 }

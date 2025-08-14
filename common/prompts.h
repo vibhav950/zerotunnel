@@ -19,11 +19,11 @@ const char *g_CLIPrompts[] = {
         "Handshake failed... either the password bundle is out-of-sync/has "
         "been tampered with, or this is a possible Man-In-The-Middle attack.\n",
         "Do you want to retry? [Y/n] "),
-    [OnPossibleIncorrectPasswdAttempt] =
-        CAUTIONPROMPT("Handshake failed... either you or your correspondent "
-                      "entered incorrect credentials, or this is a possible "
-                      "Man-In-The-Middle attack.\n",
-                      "Do you want to retry? [Y/n] "),
+    [OnPossibleIncorrectPasswdAttempt] = CAUTIONPROMPT(
+        "Handshake failed... either you or your correspondent "
+        "entered incorrect credentials, or this is a possible "
+        "Man-In-The-Middle attack and the attacker guessed wrong.\n",
+        "Do you want to retry? [Y/n] "),
     [OnFileTransferRequest] = "Accept this file transfer? [Y/n] ",
     [OnServerListening] = STATUSPROMPT(
         "Listening for connections... Your correspondent may now send you a "

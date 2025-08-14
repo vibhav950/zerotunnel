@@ -66,6 +66,18 @@
 #define ATTRIBUTE_FORMAT_PRINTF(fmt, args)
 #endif
 
+#if GCC_VERSION_AT_LEAST(3, 3)
+#define ATTRIBUTE_NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
+#else
+#define ATTRIBUTE_NONNULL(...)
+#endif
+
+#if GCC_VERSION_AT_LEAST(2, 96)
+#define ATTRIBUTE_PURE __attribute__((pure))
+#else
+#define ATTRIBUTE_PURE
+#endif
+
 #else /* defined(__GNUC__) && !defined(__clang__) */
 
 #define ATTRIBUTE_ALWAYS_INLINE
@@ -77,6 +89,8 @@
 #define likely(expr) (expr)
 #define ATTRIBUTE_NOTHROW
 #define ATTRIBUTE_FORMAT_PRINTF(fmt, args)
+#define ATTRIBUTE_NONNULL(...)
+#define ATTRIBUTE_PURE
 
 #endif
 

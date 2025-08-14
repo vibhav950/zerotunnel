@@ -42,7 +42,7 @@ unsigned int zt_cpu_get_processor_count(void) {
 #if defined(_PLATFORM_WIN32)
   /**
    * This method should also work systems with greater than 64 processors where
-   * a processor may be scheduled to processors from multiple processor groups.
+   * a process may be scheduled to processors from multiple "processor groups".
    * For more info, see
    * https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups
    */
