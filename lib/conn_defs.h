@@ -18,23 +18,25 @@
  * Default port numbers
  */
 
-#define ZT_DEFAULT_LISTEN_PORT          "9595"   /* Default service port */
+#define ZT_DEFAULT_LISTEN_PORT          "9500"   /* Default service port */
 
 /**
  * Timeouts waiting periods
  */
 
-#define ZT_CLIENT_TIMEOUT_RESOLVE       10000U  /* Host resolution timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_CONNECT       10000U  /* Client connect timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_SEND          5000U   /* Client send() timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_RECV          5000U   /* Client recv() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT       10000U  /* Client connect timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT          5000U   /* Client send() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT          5000U   /* Client recv() timeout (msec) */
 
-#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT  5000U   /* Server send() timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT  5000U   /* Server recv() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_IDLE_DEFAULT          60000U  /* Server idle timeout (msec) */
+#define ZT_SERVER_TIMEOUT_SEND_DEFAULT          5000U   /* Server send() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_RECV_DEFAULT          5000U   /* Server recv() timeout (msec) */
 
-#define CLIENT_RESOLVE_RETRIES          5       /* Max host resolution retries */
+#define CLIENT_RESOLVE_RETRIES                  8       /* Max host resolution retries */
 
-#define MAX_AUTH_RETRY_COUNT            3       /* Max authentication retries */
+#define MAX_AUTH_RETRY_COUNT                    3       /* Max authentication retries */
+
+#define ZT_DEFAULT_CIPHER_SUITE_ID              0x01    /* Default ciphersuite */
 
 enum {
   MSG_HANDSHAKE   = (1 << 0), /* Crypto handshake message */
@@ -90,7 +92,7 @@ typedef struct _zt_msg_st {
     /* Raw data (`type` || `len` || `data[]` || <suffix>) */
     uint8_t raw[ZT_MSG_MAX_RAW_SIZE];
   };
-  uint8_t _xbuf[ZT_MSG_XBUF_SIZE];
+  uint8_t *_xbuf;
 } zt_msg_t;
 
 /** `msg.data[]` pointer */
