@@ -21,8 +21,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
-
 // clang-format off
 static const char clientstate_names[][20] = {
     [CLIENT_NONE]           = "CLIENT_NONE",
@@ -35,6 +33,10 @@ static const char clientstate_names[][20] = {
 };
 // clang-format on
 
+#define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
+
+extern struct config g_config;
+
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
 
@@ -46,17 +48,20 @@ static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
   if (likely(state >= CLIENT_NONE && state <= CLIENT_DONE))
     return clientstate_names[state];
   else
-    return "UNKNOWN";
+    return "Unknown";
 }
 
 static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
                                          struct zt_addrinfo **ai_list,
                                          timediff_t timeout_msec) {
   err_t ret = ERR_SUCCESS;
-  struct zt_addrinfo *ai_head = NULL, *ai_tail = NULL, *ai_cur;
-  struct addrinfo hints, *res = NULL, *p;
+  int status, af, preferred_family = -1;
+  struct zt_addrinfo *preferred = NULL, *preferred_tail = NULL;
+  struct zt_addrinfo *unpreferred = NULL, *unpreferred_tail = NULL;
+  struct zt_addrinfo *ai_cur;
+  struct addrinfo hints, *res = NULL, *cur;
   size_t saddr_len;
-  int status;
+  bool use_ipv6 = false;
   char ipstr[INET6_ADDRSTRLEN];
 
 #if 1 // USE_SIGACT_TIMEOUT
@@ -70,11 +75,6 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   ASSERT(conn->state == CLIENT_CONN_INIT);
   ASSERT(timeout_msec > 0);
 
-  if (!conn->hostname) {
-    log_error(NULL, "empty hostname string");
-    return ERR_NULL_PTR;
-  }
-
 #if 1 // USE_SIGACT_TIMEOUT
   if (atomic_flag_test_and_set(&jmpenv_lock))
     return ERR_ALREADY;
@@ -83,7 +83,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     /* This is coming from a siglongjmp() after an alarm signal */
     log_error(NULL, "host resolution timed out");
     ret = ERR_TIMEOUT;
-    goto cleanup;
+    goto out;
   } else {
     sigaction(SIGALRM, NULL, &sigact);
     sigact_old = sigact;    /* store the old action */
@@ -104,23 +104,34 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 #endif
 
 #ifdef USE_IPV6
-  /* Check if the system has IPv6 enabled */
-  if (conn->fl_ipv6) {
+  /* Check if the system has IPv6 enabled and the config allows it */
+  if (!g_config.flag_ipv4_only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
-    if (s != -1)
+    if (s != -1) {
+      use_ipv6 = true;
       close(s);
-    else
-      conn->fl_ipv6 = false;
+    }
   }
 #endif
 
+  af = zt_choose_ip_family(!g_config.flag_ipv6_only, use_ipv6);
+  if (af < 0) {
+    log_error(NULL, "could not choose a suitable address family");
+    ret = ERR_BAD_ARGS;
+    goto out;
+  }
+
+  if (af == AF_UNSPEC)
+    preferred_family = g_config.preferred_family == '4' ? AF_INET : AF_INET6;
+
   zt_memset(&hints, 0, sizeof(hints));
-  hints.ai_family = conn->fl_ipv6 ? AF_UNSPEC : AF_INET;
+  hints.ai_family = af;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP;
+  hints.ai_flags = AI_NUMERICSERV;
 
   for (int ntries = 0; ntries < CLIENT_RESOLVE_RETRIES; ntries++) {
-    status = getaddrinfo(conn->hostname, NULL, &hints, &res);
+    status = getaddrinfo(conn->hostname, conn->port, &hints, &res);
 
     if (status == 0 || status != EAI_AGAIN)
       break;
@@ -133,77 +144,89 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     const char *errstr = (status == EAI_SYSTEM) ? (const char *)strerror(errno)
                                                 : gai_strerror(status);
     log_error(NULL, "getaddrinfo: failed for %s (%s)", conn->hostname, errstr);
-    return ERR_NORESOLVE;
+    ret = ERR_NORESOLVE;
+    goto out;
   }
 
-  for (p = res; p != NULL; p = p->ai_next) {
-    size_t cname_len = p->ai_canonname ? strlen(p->ai_canonname) + 1 : 0;
+  /* Build the list of zt_addrinfo while respecting the preferred_family if the
+   * address family is AF_UNSPEC  */
+  *ai_list = NULL;
+  for (cur = res; cur != NULL; cur = cur->ai_next) {
+    size_t cname_len = cur->ai_canonname ? strlen(cur->ai_canonname) + 1 : 0;
 
-    if (p->ai_family == AF_INET) {
+    if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
 #ifdef USE_IPV6
-    else if (conn->fl_ipv6 && (p->ai_family == AF_INET6)) {
+    else if (cur->ai_family == AF_INET6) {
       saddr_len = sizeof(struct sockaddr_in6);
     }
 #endif
     else {
-      continue;
+      continue; /* ignore unsupported address families */
     }
 
     /* Ignore elements without required address info */
-    if (!p->ai_addr || !(p->ai_addrlen > 0))
+    if (!cur->ai_addr || !(cur->ai_addrlen > 0))
       continue;
 
     /* Ignore elements with bad address length */
-    if ((size_t)p->ai_addrlen < saddr_len)
+    if ((size_t)cur->ai_addrlen < saddr_len)
       continue;
 
     /* Allocate a single block for all members of zt_addrinfo */
     ai_cur = zt_malloc(sizeof(struct zt_addrinfo) + cname_len + saddr_len);
     if (!ai_cur) {
       ret = ERR_MEM_FAIL;
-      goto cleanup;
+      goto out;
     }
 
     /* Copy each member */
-    ai_cur->ai_flags = p->ai_flags;
-    ai_cur->ai_family = p->ai_family;
-    ai_cur->ai_socktype = p->ai_socktype;
-    ai_cur->ai_protocol = p->ai_protocol;
-    ai_cur->ai_addrlen = p->ai_addrlen;
+    ai_cur->ai_flags = cur->ai_flags;
+    ai_cur->ai_family = cur->ai_family;
+    ai_cur->ai_socktype = cur->ai_socktype;
+    ai_cur->ai_protocol = cur->ai_protocol;
+    ai_cur->ai_addrlen = cur->ai_addrlen;
     ai_cur->ai_canonname = NULL;
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
     ai_cur->total_size = sizeof(struct zt_addrinfo) + cname_len + saddr_len;
 
     ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
-    zt_memcpy(ai_cur->ai_addr, p->ai_addr, saddr_len);
+    zt_memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
 
     if (cname_len) {
       ai_cur->ai_canonname = (void *)((char *)ai_cur->ai_addr + saddr_len);
-      zt_memcpy(ai_cur->ai_canonname, p->ai_canonname, cname_len);
+      zt_memcpy(ai_cur->ai_canonname, cur->ai_canonname, cname_len);
     }
 
-    /* If the list is empty, set this node as the head */
-    if (!ai_head)
-      ai_head = ai_cur;
-
-    /* Add this node to the tail of the list */
-    if (ai_tail)
-      ai_tail->ai_next = ai_cur;
-    ai_tail = ai_cur;
+    if (cur->ai_family == preferred_family) {
+      if (preferred_tail)
+        preferred_tail->ai_next = ai_cur;
+      else
+        preferred = ai_cur;
+      preferred_tail = ai_cur;
+    } else {
+      if (unpreferred_tail)
+        unpreferred_tail->ai_next = ai_cur;
+      else
+        unpreferred = ai_cur;
+      unpreferred_tail = ai_cur;
+    }
 
     log_debug(NULL, "Resolved %s to %s", conn->hostname,
-              inet_ntop(p->ai_family, p->ai_addr, ipstr, sizeof(ipstr)));
+              inet_ntop(cur->ai_family, cur->ai_addr, ipstr, sizeof(ipstr)));
   }
 
-  if (!ret)
-    *ai_list = ai_head;
-  else
-    *ai_list = NULL;
+  /* Merge the lists based on the preferred family (if any) */
+  if (preferred) {
+    preferred_tail->ai_next = unpreferred;
+    *ai_list = preferred;
+  } else {
+    *ai_list = unpreferred;
+  }
 
-cleanup:
+out:
 #if 1 // USE_SIGACT_TIMEOUT
   /* Deactivate a possibly active timeout before uninstalling the handler */
   if (!prev_alarm)
@@ -243,8 +266,10 @@ cleanup:
 #endif
 
   /* If there was an error, free the zt_addrinfo list */
-  if (ret)
-    zt_addrinfo_free(ai_head);
+  if (ret) {
+    zt_addrinfo_free(*ai_list);
+    *ai_list = NULL;
+  }
   freeaddrinfo(res);
   return ret;
 }
@@ -260,8 +285,6 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
   ASSERT(ai_list);
 
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
-    int fail = 0;
-
     if ((sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
                          ai_cur->ai_protocol))) {
       log_error(NULL, "socket: failed (%s)", strerror(errno));
@@ -313,54 +336,34 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
 #endif
     }
 
-    /* We must have TCP keepalive enabled for live reads */
+    /* Try to enable TCP_KEEPALIVE for live reads */
     if (conn->fl_live_read) {
-      int fail = 0;
-
       on = 1;
       if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
                      sizeof(on)) == -1) {
         log_error(NULL, "setsockopt: failed to set SO_KEEPALIVE (%s)",
                   strerror(errno));
-        fail = 1;
-      }
-
-      if (getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
-                     sizeof(on)) == -1) {
-        log_error(NULL, "getsockopt: failed to get SO_KEEPALIVE (%s)",
-                  strerror(errno));
-        fail = 1;
-      }
-
-      if (fail || !on) {
-        log_error(NULL, "could not prepare socket for live read");
-        close(sockfd);
-        continue;
       }
     }
 
-    if (conn->send_timeout > 0) {
-      struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
-                             .tv_usec = (conn->send_timeout % 1000) * 1000};
-      if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
-                     sizeof(tval)) == -1) {
-        log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
-                  strerror(errno));
-        close(sockfd);
-        continue;
-      }
+    struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
+                           .tv_usec = (conn->send_timeout % 1000) * 1000};
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
+                   sizeof(tval)) == -1) {
+      log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
+                strerror(errno));
+      close(sockfd);
+      continue;
     }
 
-    if (conn->recv_timeout > 0) {
-      struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
-                             .tv_usec = (conn->recv_timeout % 1000) * 1000};
-      if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
-                     sizeof(tval)) == -1) {
-        log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
-                  strerror(errno));
-        close(sockfd);
-        continue;
-      }
+    struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
+                           .tv_usec = (conn->recv_timeout % 1000) * 1000};
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
+                   sizeof(tval)) == -1) {
+      log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
+                strerror(errno));
+      close(sockfd);
+      continue;
     }
 
     /* If nothing failed we have found a valid candidate */
@@ -493,17 +496,17 @@ static err_t client_send(zt_client_connection_t *conn) {
   p[len++] = MSG_END_BYTE; /* end of data */
 
   if (conn->state == CLIENT_TRANSFER) {
-    if (config.config_length_obfuscation) {
+    if (g_config.flag_length_obfuscation) {
       size_t padding;
 
       taglen = vcry_get_aead_tag_len();
 
-      padding = (len - 1) & (config.padding_factor - 1);
+      padding = (len - 1) & (g_config.padding_factor - 1);
       zt_memset(p + len, 0x00, padding); // FIX: possible side-channel?
       len += padding;
 
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_PADDING);
-    } else if (config.config_lz4_compression) {
+    } else if (g_config.flag_lz4_compression) {
       const char *rptr = (const char *)p;
       char *wptr = (char *)(MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE);
 
@@ -645,6 +648,37 @@ out:
   return ret;
 }
 
+err_t zt_client_conn_alloc(zt_client_connection_t **conn) {
+  size_t alloc_size;
+
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  alloc_size = sizeof(zt_client_connection_t) + sizeof(zt_msg_t);
+  if (g_config.flag_lz4_compression)
+    alloc_size += ZT_MSG_XBUF_SIZE;
+
+  if (!(*conn = zt_calloc(1, alloc_size)))
+    return ERR_MEM_FAIL;
+
+  (*conn)->msgbuf =
+      (zt_msg_t *)((char *)(*conn) + sizeof(zt_client_connection_t));
+  (*conn)->msgbuf->_xbuf =
+      (uint8_t *)((char *)(*conn) + sizeof(zt_client_connection_t) +
+                  sizeof(zt_msg_t));
+
+  (*conn)->sockfd = -1;
+
+  return ERR_SUCCESS;
+}
+
+void zt_client_conn_dealloc(zt_client_connection_t *conn) {
+  if (!conn)
+    return;
+
+  zt_free(conn);
+}
+
 err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                     bool *done) {
   err_t ret = ERR_SUCCESS;
@@ -653,42 +687,54 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   ciphersuite_t ciphersuite;
   zt_fio_t fileptr;
   zt_fileinfo_t fileinfo;
+  char port[6];
 
   if (!conn || !done)
     return ERR_NULL_PTR;
-
-  zt_memzero(conn, sizeof(zt_client_connection_t));
 
   if (zt_get_hostid(&conn->authid_mine) != 0)
     return ERR_INTERNAL;
 
   // clang-format off
   if ((ciphersuite = zt_cipher_suite_info_from_repr(
-           config.ciphersuite,
+           g_config.ciphersuite,
            &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
            &vcry_algs[3], &vcry_algs[4], &vcry_algs[5])) == 0) {
     return ERR_INVALID;
   }
   // clang-format on
 
-  /* Allocate memory for the primary client message buffer */
-  if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
-    return ERR_MEM_FAIL;
+  conn->hostname = g_config.hostname;
+
+  if (conn->fl_explicit_port) {
+    snprintf(port, sizeof(port), "%u", g_config.port);
+    conn->port = port;
+  } else {
+    conn->port = ZT_DEFAULT_LISTEN_PORT;
+  }
+
+  conn->connect_timeout = g_config.connect_timeout > 0
+                              ? g_config.connect_timeout
+                              : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
+  conn->recv_timeout = g_config.recv_timeout > 0
+                           ? g_config.recv_timeout
+                           : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
+  conn->send_timeout = g_config.send_timeout > 0
+                           ? g_config.send_timeout
+                           : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
+
+  conn->state = CLIENT_CONN_INIT;
 
   while (1) {
     switch (conn->state) {
     case CLIENT_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
 
-      /* Do not allow negative timeouts; we do not want an
-       * indefinite wait for host resolution */
-      timediff_t timeout_msec = conn->connect_timeout > 0
-                                    ? conn->connect_timeout
-                                    : ZT_CLIENT_TIMEOUT_CONNECT;
-
-      ret = client_resolve_host_timeout(conn, &ai_list, timeout_msec);
+      /* The timeout is guaranteed to be positive so we don't infinitely wait on
+       * a DNS resolution */
+      ret = client_resolve_host_timeout(conn, &ai_list, conn->connect_timeout);
       if (ret != ERR_SUCCESS)
-        goto cleanup0;
+        return ret;
 
       if ((ret = client_tcp_conn0(conn, ai_list)) != ERR_SUCCESS)
         goto cleanup1;
@@ -716,16 +762,17 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
         passwd_id =
-            zt_auth_passwd_load(config.passwddb_file, config.peer_id,
+            zt_auth_passwd_load(g_config.passwddb_file, g_config.hostname,
                                 conn->renegotiation_passwd, &master_pass);
       } else {
-        passwd_id = zt_auth_passwd_new(config.passwddb_file, config.auth_type,
-                                       config.peer_id, &master_pass);
+        passwd_id =
+            zt_auth_passwd_new(g_config.passwddb_file, g_config.auth_type,
+                               conn->hostname, &master_pass);
       }
       if (passwd_id < 0) {
         ret = ERR_INTERNAL;
-        log_error(NULL, "could not load master password for peer_id=%s",
-                  config.peer_id);
+        log_error(NULL, "could not load master password for hostname '%s'",
+                  conn->hostname);
         goto cleanup2;
       }
 
@@ -815,7 +862,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          * 2. Check if this password Id is available in the passwddb, and offer
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
-        if (config.auth_type != KAPPA_AUTHTYPE_1) {
+        if (g_config.auth_type != KAPPA_AUTHTYPE_1) {
           log_error(NULL, "peer sent MSG_AUTH_RETRY but auth_type!=KAPPA1");
           ret = ERR_BAD_CONTROL_FLOW;
           goto cleanup2;
@@ -928,7 +975,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
        */
-      if ((ret = zt_fio_open(&fileptr, config.filename, FIO_RDONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, g_config.filename, FIO_RDONLY)) !=
           ERR_SUCCESS) {
         goto cleanup2;
       }
@@ -960,7 +1007,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (zt_progressbar_init() != 0)
         log_error(NULL, "failed to create progress bar");
 
-      zt_progressbar_begin(config.peer_id, fileinfo.name, fileinfo.size);
+      zt_progressbar_begin(g_config.hostname, fileinfo.name, fileinfo.size);
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {
@@ -1018,15 +1065,56 @@ cleanup2:
 
   shutdown(conn->sockfd, SHUT_RDWR);
   close(conn->sockfd);
-  conn->sockfd = -1;
 
 cleanup1:
   zt_addrinfo_free(conn->ai_estab);
-  conn->ai_estab = NULL;
-
-cleanup0:
-  zt_free(conn->msgbuf);
-  conn->msgbuf = NULL;
 
   return ret;
+}
+
+err_t zt_client_enable_tcp_fastopen(zt_client_connection_t *conn, bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != CLIENT_NONE)
+    return ERR_INVALID;
+
+  conn->fl_tcp_fastopen = enable;
+}
+
+err_t zt_client_enable_explicit_port(zt_client_connection_t *conn,
+                                     bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != CLIENT_NONE)
+    return ERR_INVALID;
+
+  conn->fl_explicit_port = enable;
+
+  return ERR_SUCCESS;
+}
+
+err_t zt_client_enable_tcp_nodelay(zt_client_connection_t *conn, bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != CLIENT_NONE)
+    return ERR_INVALID;
+
+  conn->fl_tcp_nodelay = enable;
+
+  return ERR_SUCCESS;
+}
+
+err_t zt_client_enable_live_read(zt_client_connection_t *conn, bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != CLIENT_NONE)
+    return ERR_INVALID;
+
+  conn->fl_live_read = enable;
+
+  return ERR_SUCCESS;
 }
