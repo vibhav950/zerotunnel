@@ -8,6 +8,7 @@
 #include "common/progressbar.h"
 #include "common/prompts.h"
 #include "common/tty_io.h"
+#include "ip.h"
 #include "vcry.h"
 #include "ztlib.h"
 
@@ -16,6 +17,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -23,8 +25,6 @@
 #define SOCK_CLOEXEC 0
 #define accept4(a, b, c, d) accept(a, b, c);
 #endif
-
-#define SERVERSTATE_CHANGE(cur, next) (void)(cur = next)
 
 // clang-format off
 static const char serverstate_names[][20] = {
@@ -39,78 +39,96 @@ static const char serverstate_names[][20] = {
 };
 // clang-format on
 
+#define SERVERSTATE_CHANGE(cur, next) (void)(cur = next)
+
+extern struct config g_config;
+
 static inline const char *get_serverstate_name(ZT_SERVER_STATE state) {
   if (likely(state >= SERVER_NONE && state <= SERVER_DONE))
     return serverstate_names[state];
   else
-    return "UNKNOWN";
+    return "Unknown";
 }
 
-static inline bool isIPv6(const char *addr) {
-  if (!addr)
-    return false; /* NULL defaults to 0.0.0.0 */
-  char buf[sizeof(struct in6_addr)];
-  if (inet_pton(AF_INET6, addr, buf) == 0)
-    return false;
-  return true;
+static inline ATTRIBUTE_NONNULL(1, 2) const
+    char *get_ip_str(const struct sockaddr *sa, char *buf, size_t buflen) {
+  switch (sa->sa_family) {
+#ifdef USE_IPV6
+  case AF_INET6:
+    return inet_ntop(AF_INET6, &((struct sockaddr_in6 *)sa)->sin6_addr, buf,
+                     buflen);
+#endif
+  case AF_INET:
+    return inet_ntop(AF_INET, &((struct sockaddr_in *)sa)->sin_addr, buf,
+                     buflen);
+  default:
+    return NULL; /* unsupported address family */
+  }
 }
 
 static err_t server_setup_host(zt_server_connection_t *conn,
                                struct zt_addrinfo **ai_list) {
   err_t ret = ERR_SUCCESS;
-  int status;
-  struct zt_addrinfo *ai_head = NULL, *ai_tail = NULL, *ai_cur;
-  struct addrinfo hints, *res = NULL, *p;
+  int status, af, preferred_family = -1;
+  struct zt_addrinfo *preferred = NULL, *preferred_tail = NULL;
+  struct zt_addrinfo *unpreferred = NULL, *unpreferred_tail = NULL;
+  struct zt_addrinfo *ai_cur;
+  struct addrinfo hints, *res = NULL, *cur;
   size_t saddr_len;
+  bool use_ipv6 = false;
   char ipstr[INET6_ADDRSTRLEN];
 
   ASSERT(conn);
   ASSERT(conn->state == SERVER_CONN_INIT);
 
-  /* check for IPv6 support */
-  if (isIPv6(conn->hostname)) {
 #ifdef USE_IPV6
-    /* check if the system has IPv6 enabled */
+  /* Check for IPv6 availability */
+  if (!g_config.flag_ipv4_only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
-    if (s < 0) {
-      log_error(NULL,
-                "An IPv6 address was specified, but the system does not "
-                "support or has disabled IPv6 (%s)",
-                strerror(errno));
-      return ERR_NOT_SUPPORTED;
+    if (s != -1) {
+      use_ipv6 = true;
+      close(s);
     }
-#else
-    log_error(NULL,
-              "An IPv6 address was specified, but zerotunnel was compiled "
-              "without `USE_IPV6`");
-    return ERR_NOT_SUPPORTED;
+  }
 #endif
+
+  af = zt_choose_ip_family(!g_config.flag_ipv6_only, use_ipv6);
+  if (af < 0) {
+    log_error(NULL, "could not choose a suitable address family");
+    ret = ERR_BAD_ARGS;
+    goto out;
   }
 
+  if (af == AF_UNSPEC)
+    preferred_family = g_config.preferred_family == '4' ? AF_INET : AF_INET6;
+
   zt_memset(&hints, 0, sizeof(hints));
-  hints.ai_canonname = NULL;
-  hints.ai_family = (conn->hostname == NULL) ? AF_INET : AF_UNSPEC;
+  hints.ai_family = af;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP;
   hints.ai_flags = AI_PASSIVE | AI_NUMERICSERV;
 
-  if ((status = getaddrinfo(conn->hostname ? conn->hostname : "0.0.0.0",
-                            conn->port ? conn->port : ZT_DEFAULT_LISTEN_PORT,
-                            &hints, &res)) != 0) {
-    const char *errstr = (status == EAI_SYSTEM) ? (const char *)strerror(errno)
-                                                : gai_strerror(status);
+  if (status = getaddrinfo(conn->hostname, conn->listen_port, &hints, &res)) {
+    const char *errstr =
+        (status == EAI_SYSTEM) ? strerror(errno) : gai_strerror(status);
 
-    log_error(NULL, "getaddrinfo: error getting local address and port (%s)",
-              conn->hostname, errstr);
-    return ERR_INTERNAL;
+    log_error(NULL, "getaddrinfo: error resolving local address '%s:%s' (%s)",
+              conn->hostname, conn->listen_port, errstr);
+    ret = ERR_INTERNAL;
+    goto out;
   }
 
-  for (p = res; p != NULL; p = p->ai_next) {
-    if (p->ai_family == AF_INET) {
+  /**
+   * Build the list of zt_addrinfo while respecting the preferred_family if the
+   * address family is AF_UNSPEC
+   */
+  *ai_list = NULL;
+  for (cur = res; cur != NULL; cur = cur->ai_next) {
+    if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
 #ifdef USE_IPV6
-    else if (p->ai_family == AF_INET6) {
+    else if (cur->ai_family == AF_INET6) {
       saddr_len = sizeof(struct sockaddr_in6);
     }
 #endif
@@ -119,50 +137,65 @@ static err_t server_setup_host(zt_server_connection_t *conn,
     }
 
     /* Ignore elements without required address info */
-    if (!p->ai_addr || !(p->ai_addrlen > 0))
+    if (!cur->ai_addr || !(cur->ai_addrlen > 0))
       continue;
 
     /* Ignore elements with bad address length */
-    if ((size_t)p->ai_addrlen < saddr_len)
+    if ((size_t)cur->ai_addrlen < saddr_len)
       continue;
 
     ai_cur =
         (struct zt_addrinfo *)zt_malloc(sizeof(struct zt_addrinfo) + saddr_len);
     if (!ai_cur) {
       ret = ERR_MEM_FAIL;
-      goto cleanup;
+      goto out;
     }
 
     /* copy each member */
-    ai_cur->ai_flags = p->ai_flags;
-    ai_cur->ai_family = p->ai_family;
-    ai_cur->ai_socktype = p->ai_socktype;
-    ai_cur->ai_protocol = p->ai_protocol;
-    ai_cur->ai_addrlen = p->ai_addrlen;
+    ai_cur->ai_flags = cur->ai_flags;
+    ai_cur->ai_family = cur->ai_family;
+    ai_cur->ai_socktype = cur->ai_socktype;
+    ai_cur->ai_protocol = cur->ai_protocol;
+    ai_cur->ai_addrlen = cur->ai_addrlen;
     ai_cur->ai_canonname = NULL;
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
 
     ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
-    zt_memcpy(ai_cur->ai_addr, p->ai_addr, saddr_len);
+    zt_memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
 
-    if (!ai_head)
-      ai_head = ai_cur;
+    if (cur->ai_family == preferred_family) {
+      if (preferred_tail)
+        preferred_tail->ai_next = ai_cur;
+      else
+        preferred = ai_cur;
+      preferred_tail = ai_cur;
+    } else {
+      if (unpreferred_tail)
+        unpreferred_tail->ai_next = ai_cur;
+      else
+        unpreferred = ai_cur;
+      unpreferred_tail = ai_cur;
+    }
 
-    if (ai_tail)
-      ai_tail->ai_next = ai_cur;
-    ai_tail = ai_cur;
+    log_debug("Resolved %s to %s", conn->hostname,
+              inet_ntop(cur->ai_family, cur->ai_addr, ipstr, sizeof(ipstr)));
   }
 
-  if (!ret)
-    *ai_list = ai_head;
-  else
-    *ai_list = NULL;
+  /* Merge the two lists based on preference (if any applies) */
+  if (preferred) {
+    preferred_tail->ai_next = unpreferred;
+    *ai_list = preferred;
+  } else {
+    *ai_list = unpreferred;
+  }
 
-cleanup:
+out:
   /* If there was an error, free the zt_addrinfo list before exiting */
-  if (res)
-    zt_addrinfo_free(ai_head);
+  if (ret) {
+    zt_addrinfo_free(*ai_list);
+    *ai_list = NULL;
+  }
   freeaddrinfo(res);
   return ret;
 }
@@ -198,30 +231,11 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
     (void)setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&optval,
                      sizeof(optval));
 
-    /* Prepare for a live read if required */
-    if (conn->fl_live_read) {
-      int fail = 0;
-
-      optval = 1;
-      if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,
-                     sizeof(optval)) == -1) {
-        log_error(NULL, "setsockopt: failed to set SO_KEEPALIVE (%s)",
-                  strerror(errno));
-        fail = 1;
-      }
-
-      if (getsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,
-                     sizeof(optval)) == -1) {
-        log_error(NULL, "getsockopt: failed to get SO_KEEPALIVE (%s)",
-                  strerror(errno));
-        fail = 1;
-      }
-
-      if (fail || !optval) {
-        log_error(NULL, "could not prepare socket for live read");
-        close(sockfd);
-        continue;
-      }
+    optval = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&optval,
+                   sizeof(optval)) == -1) {
+      log_error(NULL, "setsockopt: failed to set SO_KEEPALIVE (%s)",
+                strerror(errno));
     }
 
     if (bind(sockfd, ai_cur->ai_addr, ai_cur->ai_addrlen) == 0)
@@ -251,21 +265,21 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
   if (!ai_cur) {
     log_error(NULL, "could not bind to any suitable local address");
     ret = ERR_BAD_ARGS;
-    goto exit;
+    goto out;
   }
 
   ai_estab = zt_malloc(ai_cur->total_size);
   if (!ai_estab) {
     ret = ERR_MEM_FAIL;
-    goto exit;
+    goto out;
   }
   zt_memcpy(ai_estab, ai_cur, ai_cur->total_size);
   ai_estab->ai_next = NULL;
 
-  getnameinfo(ai_cur->ai_addr, ai_cur->ai_addrlen, conn->self.address,
+  getnameinfo(ai_cur->ai_addr, ai_cur->ai_addrlen, conn->self.ip,
               INET6_ADDRSTRLEN, conn->self.port, sizeof(conn->self.port),
               NI_NUMERICHOST | NI_NUMERICSERV);
-  log_debug(NULL, "bound to %s:%s", conn->self.address, conn->self.port);
+  log_debug(NULL, "bound to %s:%s", conn->self.ip, conn->self.port);
 
   /* make this socket nonblocking */
   conn->sockfd_flags = fcntl(sockfd, F_GETFL, 0);
@@ -276,7 +290,7 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
   conn->ai_estab = ai_estab;
   conn->sockfd = sockfd;
 
-exit:
+out:
   zt_addrinfo_free(ai_list);
   return ret;
 }
@@ -288,8 +302,8 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
   ASSERT(conn->state == SERVER_CONN_INIT);
   ASSERT(conn->sockfd >= 0);
 
-  clientfd = accept4(conn->sockfd, conn->ai_estab->ai_addr,
-                     conn->ai_estab->ai_addrlen, SOCK_CLOEXEC);
+  clientfd = accept4(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
+                     &conn->peer.addrlen, SOCK_CLOEXEC);
   if (clientfd < 0) {
     log_error(NULL, "accept4: failed to accept incoming connection (%s)",
               strerror(errno));
@@ -299,8 +313,8 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
        * Thanks to https://github.com/python/cpython/issues/54324
        */
       log_debug(NULL, "accept4() not supported, falling back to accept()");
-      clientfd = accept(conn->sockfd, conn->ai_estab->ai_addr,
-                        &conn->ai_estab->ai_addrlen);
+      clientfd = accept(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
+                        &conn->peer.addrlen);
       if (clientfd < 0) {
         log_error(NULL, "accept: failed to accept incoming connection (%s)",
                   strerror(errno));
@@ -309,30 +323,26 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
       }
     }
   }
-  conn->clientfd = clientfd;
+  conn->peer.fd = clientfd;
 
-  if (conn->send_timeout > 0) {
-    struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
-                           .tv_usec = (conn->send_timeout % 1000) * 1000};
-    if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
-                   sizeof(tval)) == -1) {
-      log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
-                strerror(errno));
-      close(clientfd);
-      return ERR_TCP_ACCEPT; // TODO: better error code?
-    }
+  struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
+                         .tv_usec = (conn->send_timeout % 1000) * 1000};
+  if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
+                 sizeof(tval)) == -1) {
+    log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
+              strerror(errno));
+    close(clientfd);
+    return ERR_TCP_ACCEPT; // TODO: better error code?
   }
 
-  if (conn->recv_timeout > 0) {
-    struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
-                           .tv_usec = (conn->recv_timeout % 1000) * 1000};
-    if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
-                   sizeof(tval)) == -1) {
-      log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
-                strerror(errno));
-      close(clientfd);
-      return ERR_TCP_ACCEPT; // TODO: better error code?
-    }
+  struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
+                         .tv_usec = (conn->recv_timeout % 1000) * 1000};
+  if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
+                 sizeof(tval)) == -1) {
+    log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
+              strerror(errno));
+    close(clientfd);
+    return ERR_TCP_ACCEPT; // TODO: better error code?
   }
 
   /* Keep this if block separate since the compiler can optimize it away */
@@ -348,12 +358,16 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
   }
 
   /* make this socket non-blocking */
-  conn->clientfd_flags = flags = fcntl(clientfd, F_GETFL, 0);
+  conn->peer.fd_flags = flags = fcntl(clientfd, F_GETFL, 0);
   fcntl(clientfd, F_SETFL, flags | O_NONBLOCK);
 
   close(conn->sockfd); /* close the listening socket */
-  conn->sockfd = -1;
-  log_debug(NULL, "new connection accepted on fd=%d", clientfd);
+
+  getnameinfo((const struct sockaddr *)&conn->peer.addr, conn->peer.addrlen,
+              conn->peer.ip, sizeof(conn->peer.ip), conn->peer.port,
+              sizeof(conn->peer.port), NI_NUMERICHOST | NI_NUMERICSERV);
+  log_debug(NULL, "new connection accepted on fd=%d (from %s:%s)", clientfd,
+            conn->peer.ip, conn->peer.port);
 
   return ERR_SUCCESS;
 }
@@ -571,23 +585,69 @@ static inline const char *filesize_unit_str(uint64_t size) {
     return "bytes"; /* in bytes */
 }
 
+err_t zt_server_conn_alloc(zt_server_connection_t **conn) {
+  size_t alloc_size;
+
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  alloc_size =
+      sizeof(zt_server_connection_t) + sizeof(zt_msg_t) + ZT_MSG_XBUF_SIZE;
+  if (!(*conn = zt_calloc(1, alloc_size)))
+    return ERR_MEM_FAIL;
+
+  (*conn)->msgbuf =
+      (zt_msg_t *)((char *)(*conn) + sizeof(zt_server_connection_t));
+  (*conn)->msgbuf->_xbuf =
+      (uint8_t *)((char *)(*conn) + sizeof(zt_server_connection_t) +
+                  sizeof(zt_msg_t));
+
+  (*conn)->sockfd = -1;
+  (*conn)->peer.fd = -1;
+
+  return ERR_SUCCESS;
+}
+
+void zt_server_conn_dealloc(zt_server_connection_t *conn) {
+  if (!conn)
+    return;
+
+  zt_free(conn);
+}
+
 err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                     bool *done) {
   err_t ret = ERR_SUCCESS;
   struct passwd *master_pass;
   zt_fio_t *fileptr;
+  char port[6];
 
   if (!conn || !done)
     return ERR_NULL_PTR;
 
-  zt_memzero(conn, sizeof(zt_server_connection_t));
-
-  if (zt_get_hostid(&conn->authid_self) != 0)
+  if (zt_get_hostid(&conn->self.authid) != 0)
     return ERR_INTERNAL;
 
-  /* Allocate memory for the primary server message buffer */
-  if (!(conn->msgbuf = zt_malloc(sizeof(zt_msg_t))))
-    return ERR_MEM_FAIL;
+  conn->hostname = g_config.hostname ? conn->hostname : "0.0.0.0";
+
+  if (conn->fl_explicit_port) {
+    snprintf(port, sizeof(port), "%u", g_config.port);
+    conn->listen_port = port;
+  } else {
+    conn->listen_port = ZT_DEFAULT_LISTEN_PORT;
+  }
+
+  conn->idle_timeout = g_config.idle_timeout > 0
+                           ? g_config.idle_timeout
+                           : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
+  conn->recv_timeout = g_config.recv_timeout > 0
+                           ? g_config.recv_timeout
+                           : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
+  conn->send_timeout = g_config.send_timeout > 0
+                           ? g_config.send_timeout
+                           : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
+
+  conn->state = SERVER_CONN_INIT;
 
   /* main message loop */
   while (1) {
@@ -595,14 +655,14 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     case SERVER_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
       if ((ret = server_setup_host(conn, &ai_list)) != ERR_SUCCESS)
-        goto cleanup0;
+        return ret;
 
       if ((ret = server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
-        goto cleanup0;
+        return ret;
 
       tty_printf("%s\n(address=%s, port=%s, Id=%x)\n",
                  g_CLIPrompts[OnServerListening], conn->self.address,
-                 conn->self.port, conn->authid_self.bytes);
+                 conn->self.port, conn->peer.authid.bytes);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_CONN_LISTEN);
       ATTRIBUTE_FALLTHROUGH;
@@ -610,12 +670,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
     case SERVER_CONN_LISTEN: {
       while (1) {
-        int rv;
-        timediff_t timeout_msec = conn->idle_timeout > 0
-                                      ? conn->idle_timeout
-                                      : -1; /* wait indefinitely */
-
-        rv = zt_tcp_io_waitfor(conn->sockfd, timeout_msec, ZT_NETIO_READABLE);
+        int rv = zt_tcp_io_waitfor(conn->sockfd, conn->idle_timeout,
+                                   ZT_NETIO_READABLE);
         if (rv < 0) {
           log_error(NULL,
                     "an error occurred while waiting for incoming connections "
@@ -664,7 +720,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      zt_memcpy(conn->authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
+      zt_memcpy(conn->peer.authid.bytes, rcvbuf, AUTHID_BYTES_LEN);
       rcvbuf += AUTHID_BYTES_LEN;
 
       zt_memcpy(PTRV(&passwd_id), rcvbuf, sizeof(passwd_id_t));
@@ -676,8 +732,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
       /* Load the master password */
-      passwd_id = zt_auth_passwd_get(config.passwddb_file, config.auth_type,
-                                     config.peer_id, passwd_id, &master_pass);
+      passwd_id = zt_auth_passwd_get(g_config.passwddb_file, g_config.auth_type,
+                                     conn->hostname, passwd_id, &master_pass);
 
       if (conn->expected_passwd.expect &&
           (conn->expected_passwd.id != passwd_id)) {
@@ -688,13 +744,14 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "could not negotiate a usable password -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
-      } else if (passwd_id < 0 && config.auth_type == KAPPA_AUTHTYPE_1) {
+      } else if (passwd_id < 0 && g_config.auth_type == KAPPA_AUTHTYPE_1) {
         /**
          * KAPPA1 authentication failure -- this can happen due to the passwddb
          * files becoming out-of-sync so we ask the user if we may renegotiate a
          * new password
          */
-        log_error(NULL, "authentication failed for peer_id=%s", config.peer_id);
+        log_error(NULL, "authentication failed for hostname '%s'",
+                  conn->hostname);
 
         if (!tty_get_answer_is_yes(g_CLIPrompts[OnBadPasswdIdentifier])) {
           ret = ERR_HSHAKE_ABORTED;
@@ -703,10 +760,10 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_debug(NULL, "now trying to re-negotiate with a new password...");
 
         passwd_id_t pwid = zt_auth_passwd_load(
-            config.passwddb_file, config.peer_id, -1, &master_pass);
+            g_config.passwddb_file, conn->hostname, -1, &master_pass);
         if (pwid < 0) {
-          log_error(NULL, "failed to load a new password for peer_id=%s",
-                    config.peer_id);
+          log_error(NULL, "failed to load a new password for hostname '%s'",
+                    conn->hostname);
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
@@ -784,8 +841,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       if ((ret = vcry_responder_verify_initiate(
-               &sndbuf[1], &sndlen[1], conn->authid_self.bytes,
-               conn->authid_peer.bytes)) != ERR_SUCCESS) {
+               &sndbuf[1], &sndlen[1], conn->self.authid.bytes,
+               conn->peer.authid.bytes)) != ERR_SUCCESS) {
         log_error(NULL, "vcry_responder_verify_initiate() : %s",
                   zt_strerror(ret));
         zt_free(sndbuf[0]);
@@ -794,7 +851,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       /** Make the handshake response message */
       uint8_t *p = MSG_DATA_PTR(conn->msgbuf);
-      zt_memcpy(p, conn->authid_self.bytes, AUTHID_BYTES_LEN);
+      zt_memcpy(p, conn->self.authid.bytes, AUTHID_BYTES_LEN);
       p += AUTHID_BYTES_LEN;
       zt_memcpy(p, sndbuf[0], sndlen[0]);
       p += sndlen[0];
@@ -828,8 +885,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      ret = vcry_responder_verify_complete(rcvbuf, conn->authid_self.bytes,
-                                           conn->authid_peer.bytes);
+      ret = vcry_responder_verify_complete(rcvbuf, conn->self.authid.bytes,
+                                           conn->peer.authid.bytes);
       switch (ret) {
       case ERR_SUCCESS:
         break; /* successful */
@@ -846,13 +903,12 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
     retryhandshake:
       /**
-       * [CAUTION!]
-       * Failed to verify the established session key -- this could be due to an
-       * incorrect password attempt or a possible Man-In-The-Middle and the
-       * attacker guessed wrong!
-       * Alert the user of this and ask whether to retry the handshake -- which
-       * would give the user and his correspondent another password attempt and
-       * a would-be attacker another chance to guess the password!
+       * @warning Failed to verify the established session key -- this could be
+       * due to an incorrect password attempt or a possible Man-In-The-Middle
+       * and the attacker guessed wrong! Alert the user of this and ask whether
+       * to retry the handshake -- which would give the user and his
+       * correspondent another password attempt and a would-be attacker another
+       * chance to guess the password!
        */
 
       if (!tty_get_answer_is_yes(g_CLIPrompts[OnBadPasswdIdentifier])) {
@@ -916,7 +972,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "failed to create progress bar");
 
       remaining = conn->fileinfo.size;
-      zt_progressbar_begin(config.peer_id, conn->fileinfo.name, remaining);
+      zt_progressbar_begin(conn->peer.ip, conn->fileinfo.name, remaining);
 
       while (remaining > 0) {
         off_t writelen;
@@ -989,17 +1045,46 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 cleanup2:
   vcry_module_release();
 
-  shutdown(conn->clientfd, SHUT_RDWR);
-  close(conn->clientfd);
-  conn->clientfd = -1;
+  shutdown(conn->peer.fd, SHUT_RDWR);
+  close(conn->peer.fd);
 
 cleanup1:
   zt_addrinfo_free(conn->ai_estab);
-  conn->ai_estab = NULL;
-
-cleanup0:
-  zt_free(conn->msgbuf);
-  conn->msgbuf = NULL;
 
   return ret;
+}
+
+err_t zt_server_enable_tcp_fastopen(zt_server_connection_t *conn, bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != SERVER_NONE)
+    return ERR_INVALID;
+
+  conn->fl_tcp_fastopen = enable;
+}
+
+err_t zt_server_enable_explicit_port(zt_server_connection_t *conn,
+                                     bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != SERVER_NONE)
+    return ERR_INVALID;
+
+  conn->fl_explicit_port = enable;
+
+  return ERR_SUCCESS;
+}
+
+err_t zt_server_enable_tcp_nodelay(zt_server_connection_t *conn, bool enable) {
+  if (!conn)
+    return ERR_NULL_PTR;
+
+  if (conn->state != SERVER_NONE)
+    return ERR_INVALID;
+
+  conn->fl_tcp_nodelay = enable;
+
+  return ERR_SUCCESS;
 }
