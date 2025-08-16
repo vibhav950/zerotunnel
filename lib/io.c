@@ -257,6 +257,10 @@ off_t zt_file_getsize(int fd) {
  * Open a file in the specified mode. The caller must call `zt_fio_close()`
  * on this @p fio after use.
  *
+ * If @p filepath is "-", then @p fio will be initialized to use the standard
+ * input/output depending on @p mode. In this case, the only supported modes
+ * are FIO_RDONLY, FIO_WRONLY, and FIO_APPEND.
+ *
  * This function will put an exclusive lock on the file if @p mode is one
  * of the writable modes - FIO_RDWR, FIO_WRONLY, FIO_APPEND, FIO_RDAPPEND.
  * If the file is opened in read-only mode (FIO_RDONLY), a shared lock is
@@ -268,8 +272,27 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   off_t size;
   struct flock fl;
 
-  if (unlikely(!fio || !filepath))
+  if (!fio || !filepath)
     return ERR_NULL_PTR;
+
+  if (!strcmp(filepath, "-")) {
+    switch (mode) {
+    case FIO_RDONLY:
+      fd = STDIN_FILENO;
+      flags = FIO_FL_READ;
+      break;
+    case FIO_WRONLY:
+    case FIO_APPEND:
+      fd = STDOUT_FILENO;
+      flags = FIO_FL_WRITE;
+      break;
+    default:
+      return ERR_BAD_ARGS;
+    }
+    fio->fd = fd;
+    FIO_FL_SET(fio, FIO_FL_OPEN | flags);
+    return ERR_SUCCESS;
+  }
 
   switch (mode) {
   case FIO_RDONLY:
@@ -353,13 +376,15 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
 void zt_fio_close(zt_fio_t *fio) {
   struct flock fl;
 
-  if (likely((fio != NULL) && FIO_FL_TST(fio, FIO_FL_OPEN))) {
+  if (fio && FIO_FL_TST(fio, FIO_FL_OPEN)) {
     // if (fio->_prev)
     // munmap(fio->_prev, fio->_prevsize);
-    fl.l_type = F_UNLCK;
-    (void)fcntl(fio->fd, F_SETLK, &fl);
-    close(fio->fd);
-    zt_free(fio->path);
+    if (fio->fd >= 3) {
+      fl.l_type = F_UNLCK;
+      (void)fcntl(fio->fd, F_SETLK, &fl);
+      close(fio->fd);
+      zt_free(fio->path);
+    }
     zt_memzero(fio, sizeof(zt_fio_t));
     fio->fd = -1;
   }
@@ -380,6 +405,9 @@ err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
 
   if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN)))
     return ERR_BAD_ARGS;
+
+  if (unlikely(fio->fd < 3))
+    return ERR_INVALID;
 
   p = basename(fio->path);
   /** Sanity check; this should never happen with an open fio */
@@ -484,7 +512,7 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
     return ERR_INVALID;
 
 #if 1 // def USE_POSIX_FADVISE
-  posix_fadvise(fio->fd, fio->offset, bufsize, POSIX_FADV_SEQUENTIAL);
+  (void)posix_fadvise(fio->fd, fio->offset, bufsize, POSIX_FADV_SEQUENTIAL);
 #endif
 
   rc = read(fio->fd, buf, bufsize);
@@ -518,14 +546,17 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
 err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
   int rv;
 
-  if (unlikely(!fio))
+  if (!fio)
     return ERR_NULL_PTR;
 
-  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE)))
+  if (FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE))
     return ERR_INVALID;
 
-  if (unlikely(total_size <= 0))
+  if (total_size <= 0)
     return ERR_BAD_ARGS;
+
+  if (fio->fd < 3)
+    return ERR_SUCCESS;
 
 #if 1 // def USE_POSIX_FALLOCATE
   if ((rv = posix_fallocate(fio->fd, 0, total_size)) != 0) {
@@ -566,7 +597,7 @@ err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
     return ERR_INVALID;
 
   rc = write(fio->fd, buf, bufsize);
-  if (rc != bufsize) {
+  if (unlikely(rc != bufsize)) {
     log_error(NULL, "failed to write(2) to file %s (%s)", fio->path,
               strerror(errno));
     return ERR_FIO_WRITE;
