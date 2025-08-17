@@ -2,6 +2,7 @@
 #include "common/log.h"
 #include "io.h"
 #include "server.h"
+#include "timeout.h"
 
 #include <errno.h>
 #include <error.h>
@@ -120,7 +121,7 @@ bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec) {
  * This function will treat a partial write as an error and return -1.
  *
  * TCP Fast Open will be used if it is enabled and available. It can be enabled
- * using `zt_client_set_tcp_fastopen()`.
+ * using `zt_client_enable_tcp_fastopen()`.
  *
  * Note: On builds with Linux < 4.11, this function may try to perform a
  * previously deferred connect() call - so heads up for a connect failure!

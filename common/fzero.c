@@ -1,5 +1,3 @@
-#include "defines.h"
-
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>

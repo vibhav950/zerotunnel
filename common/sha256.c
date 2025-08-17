@@ -3,11 +3,6 @@
  * Functions for the SHA-256 digest.
  */
 
-// DO NOT REMOVE/MOVE THIS
-#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
-#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
-#endif
-
 #include "sha256.h"
 #include "defines.h"
 #include "endianness.h"
@@ -47,7 +42,7 @@ static inline void sha256_process(uint32_t state[8], const uint8_t data[],
 
 /** Initiate the SHA-256 state */
 int sha256_init(sha256_ctx_t *ctx) {
-  if (!ctx)
+  if (unlikely(!ctx))
     return -1;
 
   ctx->len = ctx->rem_len = 0;
@@ -65,10 +60,7 @@ int sha256_init(sha256_ctx_t *ctx) {
 
 /** Update SHA-256 state with message blocks  */
 int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
-  if (!ctx)
-    return -1;
-
-  if (len && !data)
+  if (unlikely(!ctx))
     return -1;
 
   // Accumulate overall input size
@@ -76,7 +68,7 @@ int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
 
   // Buffer data that is less than a block
   if ((ctx->rem_len != 0) && (ctx->rem_len + len < SHA256_BLOCK_LEN)) {
-    zt_memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, len);
+    memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, len);
     ctx->rem_len += len;
     return 0;
   }
@@ -85,7 +77,7 @@ int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
   if (ctx->rem_len != 0) {
     const size_t clen = SHA256_BLOCK_LEN - ctx->rem_len;
 
-    zt_memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, clen);
+    memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, clen);
     sha256_process(ctx->state, ctx->rem_data, SHA256_BLOCK_LEN);
 
     data += clen;
@@ -107,14 +99,14 @@ int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
   }
 
   // Store the remaining data
-  zt_memcpy(ctx->rem_data, (void *)data, len);
+  memcpy(ctx->rem_data, (void *)data, len);
   ctx->rem_len = len;
   return 0;
 }
 
 /** Finalize the SHA-256 hash and reset the context */
 int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
-  if (!ctx || !hash)
+  if (unlikely(!ctx || !hash))
     return -1;
 
   // Sanity check
@@ -142,7 +134,7 @@ int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
   }
 
   // Append the length as a 64-bit BE integer
-  zt_memcpy(&ctx->rem_data[SHA256_BLOCK_LEN - 8], PTR8(&len_bits), 8);
+  memcpy(&ctx->rem_data[SHA256_BLOCK_LEN - 8], PTR8(&len_bits), 8);
 
   // Process the final block
   sha256_process(ctx->state, ctx->rem_data, SHA256_BLOCK_LEN);
@@ -159,7 +151,7 @@ int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
   ctx->state[7] = bswap32(ctx->state[7]);
 #endif
 
-  zt_memcpy(hash, ctx->state, SHA256_DIGEST_LEN);
+  memcpy(hash, ctx->state, SHA256_DIGEST_LEN);
   memzero(ctx, sizeof(sha256_ctx_t));
   return 0;
 }

@@ -1,4 +1,6 @@
+#include "timeout.h"
 #include "defines.h"
+#include "time_utils.h"
 
 /**
  * @param[in] timeout The timeout.

@@ -117,6 +117,13 @@ static const char *PGP_WORDLIST_ODD[N_WORDS_PER_LIST] = {
     "Yucatan",
 };
 
+/**
+ * Generate a phonetic password with the given parameters.
+ *
+ * \p count The number of words to include in the password.
+ * \p sep The separator to use between words.
+ * \p have_digits Whether to include digits in the password.
+ */
 char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
   bool valid = false;
   char *pass;
@@ -173,7 +180,7 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
     memzero(buf, j);
     return NULL;
   }
-  zt_memcpy(pass, buf, j);
+  memcpy(pass, buf, j);
   memzero(buf, j);
   return pass;
 }

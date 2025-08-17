@@ -1,8 +1,6 @@
-#include "common/defines.h"
-
 #include <string.h>
 
-#if defined(_WIN32) && defined(_MSC_VER)
+#if defined(_WIN32)
 #include <windows.h>
 #endif
 
@@ -22,5 +20,5 @@ void memzero(void *ptr, size_t len) {
    * https://www.usenix.org/system/files/conference/usenixsecurity17/sec17-yang.pdf
    */
   __asm__ __volatile__("" : : "r"(ptr) : "memory");
-#endif // defined(_WIN32) && defined(_MSC_VER)
+#endif // defined(_WIN32)
 }

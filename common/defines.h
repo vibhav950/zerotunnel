@@ -1,5 +1,6 @@
 /**
- *
+ * @file defines.h
+ * @brief Common macros and definitions.
  */
 
 #ifndef __DEFINES_H__
@@ -99,8 +100,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
-
-// #include <errno.h>
 
 #include "endianness.h"
 
@@ -210,24 +209,26 @@ extern void zt_log_fatal(const char *fmt, ...)
 #if defined(DEBUG)
 #define ASSERT(cond)                                                           \
   do {                                                                         \
-    ((cond) ? (void)0 : zt_log_fatal("Assertion failed `" #cond "`"));         \
+    ((cond) ? (void)0                                                          \
+            : zt_log_fatal("%s:%d: assertion failed `" #cond "`", __FILE__,    \
+                           __LINE__));                                         \
   } while (0)
 #else
 #define ASSERT(cond) (cond)
 #endif
 
 #if defined(_MSC_VER)
-#include <intrin.h> // __fastfail
+#include <intrin.h> /* __fastfail */
 #pragma intrinsic(__fastfail)
 #endif
 
 ATTRIBUTE_NORETURN static inline void __FKILL(void) {
 #if defined(__has_builtin)
 #if defined(__GNUC__) && __has_builtin(__builtin_trap)
-  // GCC / LLVM (Clang)
+  /* GCC / LLVM (Clang) */
   __builtin_trap();
 #elif _MSC_VER >= 1610
-  // Visual Studio
+  /* Visual Studio */
   __fastfail(0);
 #else
   exit(EXIT_FAILURE);
@@ -235,109 +236,68 @@ ATTRIBUTE_NORETURN static inline void __FKILL(void) {
 #if __has_builtin(__builtin_unreachable)
   __builtin_unreachable();
 #endif
-#else // __has_builtin
+#else /* __has_builtin */
   exit(EXIT_FAILURE)
 #endif
 }
 
-/**
- * Secure zero functions
- */
+/**************************************************************
+ *                      Secure zero functions                 *
+ **************************************************************/
 
-void memzero(void *ptr, size_t len);
+extern void memzero(void *ptr, size_t len);
 
-void fzero(int fd);
+extern void fzero(int fd);
 
-/**
- * System information helpers
- */
+/**************************************************************
+ *                    System information helpers              *
+ **************************************************************/
 
-/**
- * Get the number of logical processors available to the current process
- */
+/* Get the number of logical processors available to the current process */
 unsigned int zt_cpu_get_processor_count(void);
 
-/**
- * Memory/string routines
- */
+/**************************************************************
+ *                     Memory/string routines                 *
+ **************************************************************/
+
+#include <string.h>
+
+typedef void *(malloc_func)(size_t);
+typedef void *(calloc_func)(size_t, size_t);
+typedef void *(realloc_func)(void *, size_t);
+typedef void(free_func)(void *);
+
+void *zt_malloc(size_t size);
+void *zt_calloc(size_t nmemb, size_t size);
+void zt_free(void *ptr);
+void *zt_realloc(void *ptr, size_t size);
+
+err_t zt_secure_mem_init(size_t n);
+void *zt_secure_mem_alloc(size_t n);
+void zt_secure_mem_free(void *p);
 
 /**
- * Allocates a block of memory of the given size.
+ * Initialize global memory function pointers. These pointers can be set
+ * to custom functions, or to NULL to use the default memory functions.
  *
- * @param size The size of the memory block to allocate.
- * @return A pointer to the allocated memory block, or NULL if the allocation
- * fails.
- */
-void *zt_mem_malloc(size_t size);
-
-/**
- * Allocates a block of memory for an array of elements, each of the given size.
- * The memory is initialized to zero.
+ * @example zt_mem_init(NULL, NULL, NULL, NULL)
  *
- * @param nmemb The number of elements in the array.
- * @param size The size of each element.
- * @return A pointer to the allocated memory block, or NULL if the allocation
- * fails.
+ * This initializer must be called at the program startup before any of the zt_*
+ * memory/string functions can be used.
  */
-void *zt_mem_calloc(size_t nmemb, size_t size);
-
-/**
- * Frees a previously allocated block of memory.
- *
- * @param ptr A pointer to the memory block to free.
- */
-void zt_mem_free(void *ptr);
-
-/**
- * Changes the size of the memory block pointed to by ptr to the given size.
- *
- * @param ptr A pointer to the memory block to reallocate.
- * @param size The new size of the memory block.
- * @return A pointer to the reallocated memory block, or NULL if the
- * reallocation fails.
- */
-void *zt_mem_realloc(void *ptr, size_t size);
+void zt_mem_init(malloc_func *malloc_fn, calloc_func *calloc_fn,
+                 realloc_func *realloc_fn, free_func *free_fn);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to the
- * specified value.
+ * specified value (interpreted as an unsigned char).
  *
- * @param mem A pointer to the memory area.
+ * @param mem Pointer to the memory area to be set.
  * @param ch The value to set.
  * @param len The number of bytes to set.
- * @return A pointer to the memory area.
+ * @return Void.
  */
-void *zt_mem_memset(void *mem, int ch, size_t len);
-
-/**
- * Sets the first len bytes of the memory area pointed to by mem to zero.
- *
- * @param mem A pointer to the memory area.
- * @param len The number of bytes to set.
- * @return A pointer to the memory area.
- */
-void *zt_mem_memzero(void *mem, size_t len);
-
-/**
- * Copies len bytes from the memory area src to the memory area dst.
- *
- * @param dst A pointer to the destination memory area.
- * @param src A pointer to the source memory area.
- * @param len The number of bytes to copy.
- * @return A pointer to the destination memory area.
- */
-void *zt_mem_memcpy(void *dst, void *src, size_t len);
-
-/**
- * Copies len bytes from the memory area src to the memory area dst, even if the
- * memory areas overlap.
- *
- * @param dst A pointer to the destination memory area.
- * @param src A pointer to the source memory area.
- * @param len The number of bytes to copy.
- * @return A pointer to the destination memory area.
- */
-void *zt_mem_memmove(void *dst, void *src, size_t len);
+void zt_memset(void *mem, int ch, size_t len);
 
 /**
  * Compares the first len bytes of the memory areas a and b.
@@ -347,7 +307,7 @@ void *zt_mem_memmove(void *dst, void *src, size_t len);
  * @param len The number of bytes to compare.
  * @return Zero if the memory areas are equal, non-zero otherwise.
  */
-unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len);
+int zt_memcmp(const void *a, const void *b, size_t len);
 
 /**
  * Compares two strings without leaking timing info about the private string.
@@ -356,7 +316,7 @@ unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len);
  * @param x The second (secret/private) string.
  * @return Zero if the strings are equal, non-zero otherwise.
  */
-unsigned int zt_strcmp(const char *str, const char *x);
+int zt_strcmp(const char *str, const char *x);
 
 /**
  * Duplicates a memory block.
@@ -403,36 +363,9 @@ char *zt_vstrdup(const char *fmt, ...);
  */
 char *zt_strmemdup(const void *m, size_t n);
 
-#include <stdlib.h>
-#include <string.h>
-
-#if defined(USE_SAFE_MEM)
-#define zt_malloc(size) zt_mem_malloc(size)
-#define zt_calloc(nmemb, size) zt_mem_calloc(nmemb, size)
-#define zt_realloc(ptr, size) zt_mem_realloc(ptr, size)
-#define zt_free(ptr) zt_mem_free(ptr)
-#define zt_memset(mem, ch, len) zt_mem_memset(mem, ch, len)
-#define zt_memzero(mem, len) zt_mem_memzero(mem, len)
-#define zt_memcpy(dst, src, len) zt_mem_memcpy(dst, src, len)
-#define zt_memmove(dst, src, len) zt_mem_memmove(dst, src, len)
-#define zt_memcmp(a, b, len) zt_mem_memcmp(a, b, len)
-#else /* defined(USE_SAFE_MEM) */
-#define zt_malloc(size) malloc(size)
-#define zt_calloc(nmemb, size) calloc(nmemb, size)
-#define zt_realloc(ptr, size) realloc(ptr, size)
-#define zt_free(ptr) free(ptr)
-#define zt_memset(mem, ch, len) memset(mem, ch, len)
-#define zt_memzero(mem, len) memset(mem, 0, len)
-#define zt_memcpy(dst, src, len) memcpy(dst, src, len)
-#define zt_memmove(dst, src, len) memmove(dst, src, len)
-#define zt_memcmp(a, b, len) memcmp(a, b, len)
-#endif /* !defined(USE_SAFE_MEM) */
-
-#include "timeout.h" // transitive #include "time_utils.h"
-
-/**
- * Type conversions
- */
+/**************************************************************
+ *                        Miscellaneous                       *
+ **************************************************************/
 
 unsigned short zt_ultous(unsigned long val);
 unsigned char zt_ultouc(unsigned long val);

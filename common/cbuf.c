@@ -320,12 +320,12 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
   /* Two-phase copy; write up to the end of the buffer */
   len = (ssize_t)(cbuf->buf + capacity - writep);
   len = MIN(len, nwrite);
-  zt_memcpy(writep, buf, len);
+  memcpy(writep, buf, len);
 
   rem = nwrite - len;
   /* If necessary, wrap around and write from the beginning */
   if (rem) {
-    zt_memcpy(cbuf->buf, buf + len, rem);
+    memcpy(cbuf->buf, buf + len, rem);
     writep = cbuf->buf + rem;
   } else {
     writep += len;
@@ -405,12 +405,12 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
   /* Read up to the end of the buffer */
   len = (ssize_t)(cbuf->buf + capacity - readp);
   len = MIN(len, nread);
-  zt_memcpy(buf, readp, len);
+  memcpy(buf, readp, len);
 
   rem = nread - len;
   /* If necessary, wrap around and read from the beginning of the buffer */
   if (rem) {
-    zt_memcpy(buf + len, cbuf->buf, rem);
+    memcpy(buf + len, cbuf->buf, rem);
     readp = cbuf->buf + rem;
   } else {
     readp += len;
@@ -447,11 +447,11 @@ ssize_t cbuf_peek(cbuf_t *cbuf, uint8_t *buf, size_t nbytes) {
 
   len = (ssize_t)(cbuf->buf + capacity - readp);
   len = MIN(len, nread);
-  zt_memcpy(buf, readp, len);
+  memcpy(buf, readp, len);
 
   rem = nread - len;
   if (rem)
-    zt_memcpy(buf + len, cbuf->buf, rem);
+    memcpy(buf + len, cbuf->buf, rem);
 
   return nread;
 }

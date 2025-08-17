@@ -3,189 +3,190 @@
  * Wrapper for LIBC memory functions.
  */
 
-#include "common/log.h"
 #include "defines.h"
+#include "log.h"
 
 #include <errno.h>
+#include <gcrypt.h>
 #include <malloc.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
-#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
-#define __LARGE_ALLOC_SIZE (1UL << 14)                  /* ~4 pages */
-#define __LARGE_ALLOC_ALIGN_SIZE sysconf(_SC_PAGE_SIZE) /* 4 KiB */
-#endif
+/* Forward declarations */
+static void *zt_mem_malloc(size_t);
+static void *zt_mem_calloc(size_t, size_t);
+static void zt_mem_free(void *);
+static void *zt_mem_realloc(void *, size_t);
 
-void *zt_mem_malloc(size_t size) {
-  void *ptr;
+static malloc_func *zt_malloc_func = zt_mem_malloc;
+static calloc_func *zt_calloc_func = zt_mem_calloc;
+static realloc_func *zt_realloc_func = zt_mem_realloc;
+static free_func *zt_free_func = zt_mem_free;
 
-  ASSERT(size > 0);
-
-#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
-  if (size >= __LARGE_ALLOC_SIZE) {
-    size = (size & ~(__LARGE_ALLOC_ALIGN_SIZE - 1)) + __LARGE_ALLOC_ALIGN_SIZE;
-    if (!(ptr = aligned_alloc(__LARGE_ALLOC_ALIGN_SIZE, size))) {
-      log_error(NULL, "aligned_alloc() failed (%s)", strerror(errno));
-      return NULL;
-    }
-    if (mlock(ptr, malloc_usable_size(ptr))) {
-      log_error(NULL, "mlock() failed (%s)", strerror(errno));
-      return NULL;
-    }
-#else
-  if (0) {
-#endif
-  } else {
-    if (unlikely(!(ptr = malloc(size))))
-      log_error(NULL, "malloc(%zu) failed (%s)", size, strerror(errno));
-  }
-  return ptr;
+static inline ATTRIBUTE_ALWAYS_INLINE void out_of_memory(void) {
+  log_error(NULL, "could not allocate enough memory: %s", strerror(errno));
 }
 
-void *zt_mem_calloc(size_t nmemb, size_t size) {
-  void *ptr;
+/**************************************************************
+ *                  Standard memory functions                 *
+ **************************************************************/
 
-  ASSERT(nmemb > 0);
-  ASSERT(size > 0);
+static void *zt_mem_malloc(size_t n) {
+  void *p;
 
-#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
-  /* check for an overflow */
-  if (size * nmemb < size && size && nmemb) {
-    log_error(NULL, "not enough memory");
+  ASSERT(n > 0);
+
+  if (unlikely(!(p = malloc(n))))
+    out_of_memory();
+  return p;
+}
+
+static void *zt_mem_calloc(size_t n, size_t m) {
+  size_t bytes;
+  void *p;
+
+  ASSERT(n > 0);
+  ASSERT(m > 0);
+
+  bytes = n * m;
+  if (m && bytes / m != n)
     return NULL;
-  }
-  if (size * nmemb >= __LARGE_ALLOC_SIZE) {
-    ptr = zt_malloc(size * nmemb);
-    if (ptr)
-      memzero(ptr, malloc_usable_size(ptr));
-#else
-  if (0) {
-#endif
-  } else if (unlikely(!(ptr = calloc(nmemb, size)))) {
-    log_error(NULL, "calloc(%zu, %zu) failed (%s)", nmemb, size,
-              strerror(errno));
-  }
-  return ptr;
+
+  if (unlikely(!(p = calloc(1, bytes))))
+    out_of_memory();
+  return p;
 }
 
-void zt_mem_free(void *ptr) {
-  if (unlikely(!ptr))
-    return;
-
-  ASSERT(malloc_usable_size(ptr) > 0);
-
-#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
-  size_t size = malloc_usable_size(ptr);
-  if (malloc_usable_size(ptr) >= __LARGE_ALLOC_SIZE) {
-    if (munlock(ptr, size)) {
-      /**
-       * NOTE: This failure will only occur if pages corresponding to ptr[.size]
-       * have not been successfully locked with mlock(). Forcing an exit here
-       * means we are exiting without first sweeping process memory with secrets
-       * in it. Even more the reason to only call zt_free() with valid
-       * arguments!
-       * Forcing an exit here is like blowing up the entire car with a Bazooka
-       * because someone put water in the fuel tank, but I don't know what the
-       * fuck else to do :-)
-       */
-      log_error(NULL, "munlock(ptr, %zu) failed (%s)", size, strerror(errno));
-      memzero(ptr, size);
-      __FKILL();
-    }
-  }
-#endif
-  free(ptr);
+static void zt_mem_free(void *p) {
+  if (likely(p))
+    free(p);
 }
 
-void *zt_mem_realloc(void *ptr, size_t size) {
-  ASSERT(size > 0);
+static void *zt_mem_realloc(void *p, size_t n) {
+  ASSERT(n > 0);
 
-  memzero(ptr, size);
-#ifdef __ZTLIB_ENVIRON_MLOCK_LARGE_ALLOC
-  zt_free(ptr);
-  ptr = zt_malloc(size);
-#else
-  if (unlikely(!(ptr = realloc(ptr, size)))) {
-    log_error(NULL, "realloc(ptr, %zu) failed (%s)", size, strerror(errno));
-#endif
-  return ptr;
+  if (unlikely(!(p = realloc(p, n))))
+    out_of_memory();
+  return p;
 }
 
-void *zt_mem_memset(void *mem, int ch, size_t len) {
-#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
-  volatile char *p;
-
-  for (p = (volatile char *)mem; len; p[--len] = ch)
-    ;
-  return mem;
-#else
-    return memset(mem, ch, len);
-#endif
+void zt_mem_set_functions(malloc_func *malloc_fn, calloc_func *calloc_fn,
+                          realloc_func *realloc_fn, free_func *free_fn) {
+  zt_malloc_func = malloc_fn ? malloc_fn : zt_mem_malloc;
+  zt_calloc_func = calloc_fn ? calloc_fn : zt_mem_calloc;
+  zt_realloc_func = realloc_fn ? realloc_fn : zt_mem_realloc;
+  zt_free_func = free_fn ? free_fn : zt_mem_free;
 }
 
-void *zt_mem_memzero(void *mem, size_t len) {
-#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
-  volatile char *p;
+void *zt_malloc(size_t n) { return zt_malloc_func(n); }
 
-  for (p = (volatile char *)mem; len; p[--len] = 0x00)
-    ;
-  return mem;
-#else
-    return memset(mem, 0x00, len);
-#endif
+void *zt_calloc(size_t n, size_t m) { return zt_calloc_func(n, m); }
+
+void zt_free(void *p) { zt_free_func(p); }
+
+void *zt_realloc(void *p, size_t n) { return zt_realloc_func(p, n); }
+
+/**************************************************************
+ *                   Secure heap allocation                   *
+ **************************************************************/
+
+#define SECURE_MEMORY_MIN_SIZE 16384
+
+/**
+ * Initialize a secure memory pool at least of size @p n bytes. This memory
+ * region is protected from being swapped out to disk and zeroed out after use.
+ * Since this memory is scarce, it should only be used to store protected data
+ * like encryption keys and passwords.
+ *
+ * On Linux, this function uses Libgcrypt's secure memory functions.
+ *
+ * FIXME: what should we do when Libgcrypt is not available or fails to provide
+ * secure memory? Fallback to some sort of malloc + mlock approach? Also it may
+ * be helpful to explore other API's like OpenSSL's secure_malloc().
+ */
+err_t zt_secure_mem_init(size_t n) {
+#if defined(HAVE_LIBGCRYPT)
+  gcry_error_t e;
+
+  if (!gcry_check_version(GCRYPT_VERSION))
+    goto err;
+
+  /* libgcrypt can't do smaller than this size */
+  n = n < SECURE_MEMORY_MIN_SIZE ? SECURE_MEMORY_MIN_SIZE : n;
+
+  if ((e = gcry_control(GCRYCTL_INIT_SECMEM, n, 0)))
+    goto err;
+
+  if ((e = gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0)))
+    goto err;
+
+  return ERR_SUCCESS;
+
+err:
+  log_error(NULL, "could not init secure memory: %s", gcry_strerror(e));
+  return ERR_INTERNAL;
+#endif /* HAVE_LIBGCRYPT */
+
+  /* Let the caller handle this */
+  log_error(NULL, "no secure memory provider");
+  return ERR_NOT_SUPPORTED;
 }
 
-void *zt_mem_memcpy(void *dst, void *src, size_t len) {
-#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
-  volatile char *cdst, *csrc;
+void *zt_secure_mem_alloc(size_t n) {
+#if defined(HAVE_LIBGCRYPT)
+  void *p;
 
-  cdst = (volatile char *)dst;
-  csrc = (volatile char *)src;
-  while (len--)
-    cdst[len] = csrc[len];
-  return dst;
-#else
-    return memcpy(dst, src, len);
-#endif
+  if (unlikely(!(p = gcry_xcalloc_secure(1, n))))
+    out_of_memory();
+  return p;
+#endif /* HAVE_LIBGCRYPT */
+  log_fatal("no secure memory provider");
+  return NULL; /* make the compiler happy, the log_fatal will exit out */
 }
 
-void *zt_mem_memmove(void *dst, void *src, size_t len) {
-#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
-  size_t i;
-  volatile char *cdst, *csrc;
-
-  cdst = (volatile char *)dst;
-  csrc = (volatile char *)src;
-  if (csrc > cdst && csrc < cdst + len)
-    for (i = 0; i < len; i++)
-      cdst[i] = csrc[i];
-  else
-    while (len--)
-      cdst[len] = csrc[len];
-  return dst;
-#else
-    return memmove(dst, src, len);
-#endif
+void zt_secure_mem_free(void *p) {
+#if defined(HAVE_LIBGCRYPT)
+  if (likely(p))
+    gcry_free(p);
+#endif /* HAVE_LIBGCRYPT */
+  log_fatal("no secure memory provider");
 }
+
+/**
+ * Cleanup the secure memory.
+ * May be called from atexit() hooks and/or signal handlers.
+ */
+void zt_secure_mem_cleanup(void) {
+#if defined(HAVE_LIBGCRYPT)
+  gcry_control(GCRYCTL_TERM_SECMEM, 0, 0);
+#endif /* HAVE_LIBGCRYPT */
+}
+
+/**************************************************************
+ *              Miscellaneous string functions                *
+ **************************************************************/
+
+typedef void *(*memset_t)(void *, int, size_t);
+
+/* Make this pointer to memset volatile so that the compiler must always
+ * dereference it and can't optimize away the call to memset, in case it is
+ * being used to wipe secrets */
+static volatile memset_t memset_func = memset;
+
+void zt_memset(void *mem, int ch, size_t len) { memset_func(mem, ch, len); }
 
 /* Returns zero if a[0:len-1] == b[0:len-1], otherwise non-zero. */
-unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len) {
-#if defined(__ZTLIB_ENVIRON_SAFE_MEM) && (__ZTLIB_ENVIRON_SAFE_MEM)
-  unsigned int res = 0;
-  const char *pa, *pb;
+int zt_memcmp(const void *a, const void *b, size_t len) {
+  unsigned char res = 0;
+  const volatile unsigned char *ca = (const volatile unsigned char *)a;
+  const volatile unsigned char *cb = (const volatile unsigned char *)b;
 
-  pa = (const char *)a;
-  pb = (const char *)b;
-  for (; len; --len, res |= pa[len] ^ pb[len])
+  for (; len; --len, res |= ca[len] ^ cb[len])
     ;
   return res;
-#else
-    return memcmp(a, b, len);
-#endif
 }
 
 /**
@@ -194,17 +195,13 @@ unsigned int zt_mem_memcmp(const void *a, const void *b, size_t len) {
  * This function behaves slightly differently than strcmp() in that it only
  * checks the strings for equality and doesn't compare them lexicographically.
  *
- * We are better off always using a constant time string compare function since
- * this can be useful for non-cryptographic modules too and this way we aren't
- * forced to use the 'safe' versions of the other memory functions.
- *
  * Note: To avoid leaking the length of a secret string, use x
  * as the private string and str as the provided string.
  *
  * Thanks to John's blog:
  * https://nachtimwald.com/2017/04/02/constant-time-string-comparison-in-c/
  */
-unsigned int zt_strcmp(const char *str, const char *x) {
+int zt_strcmp(const char *str, const char *x) {
   unsigned int res = 0;
   volatile size_t i, j, k;
 
@@ -232,7 +229,7 @@ void *zt_memdup(const void *m, size_t n) {
   void *p = zt_malloc(n);
   if (unlikely(!p))
     return NULL;
-  return (void *)zt_memcpy(p, (void *)m, n);
+  return (void *)memcpy(p, (void *)m, n);
 }
 
 char *zt_strdup(const char *s) {
@@ -271,7 +268,7 @@ char *zt_strmemdup(const void *m, size_t n) {
   void *p1 = zt_malloc(n + 1);
   if (unlikely(!p1))
     return NULL;
-  char *p2 = (char *)zt_memcpy(p1, (void *)m, n);
+  char *p2 = (char *)memcpy(p1, (void *)m, n);
   p2[n] = 0;
   return p2;
 }

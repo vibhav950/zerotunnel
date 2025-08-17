@@ -1,6 +1,6 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS -D__ZTLIB_ENVIRON_SAFE_MEM
-LIBS := -lcrypto -lssl -loqs -lm -pthread
+CFLAGS := -Wno-pedantic -std=gnu17 -fsanitize=address -fsanitize=leak -ggdb -I./ -DDEBUG -DOPENSSL -DLIBOQS
+LIBS := -lcrypto -loqs -lm -pthread
 
 all: bin/vcry_handshake_ipc_test
 

@@ -6,11 +6,6 @@
  * vibhav950 on GitHub
  */
 
-// DO NOT REMOVE/MOVE THIS
-#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
-#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
-#endif
-
 #include "common/defines.h"
 #include "common/log.h"
 #include "hmac.h"
@@ -110,14 +105,12 @@ static void ossl_hmac_dealloc(hmac_t *h) {
 
     if (hmac) {
       EVP_MD_CTX_free(hmac->md_ctx);
-      /* Prevent state leaks */
       memzero(hmac, sizeof(hmac_ossl_ctx));
       zt_free(hmac);
     }
   }
   memzero(h, sizeof(hmac_t));
   zt_free(h);
-  h = NULL;
 }
 
 /**

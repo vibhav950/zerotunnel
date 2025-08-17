@@ -3,11 +3,6 @@
  * Key exchange using Elliptic Curve Cryptography (ECC) with OpenSSL
  */
 
-// DO NOT REMOVE/MOVE THIS
-#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
-#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
-#endif
-
 #include "common/defines.h"
 #include "common/log.h"
 #include "kex.h"
@@ -119,14 +114,12 @@ static void ossl_kex_ecc_dealloc(kex_t *kex) {
     if (ctx) {
       EVP_PKEY_free(ctx->ec_key);
       EVP_PKEY_free(ctx->ec_params);
-      /* Prevent state leaks */
       memzero(ctx, sizeof(kex_ossl_ctx));
       zt_free(ctx);
     }
   }
   memzero(kex, sizeof(kex_t));
   zt_free(kex);
-  kex = NULL;
 }
 
 /**
@@ -191,7 +184,7 @@ static err_t ossl_kex_ecc_get_peer_data(kex_t *kex,
     OSSL_CHECK(
         EVP_PKEY_get_raw_public_key(ossl_ctx->ec_key, NULL, &pubkey_len));
 
-    if (!(pubkey = zt_calloc(1, pubkey_len))) {
+    if (!(pubkey = zt_malloc(pubkey_len))) {
       ret = ERR_MEM_FAIL;
       goto cleanup;
     }
@@ -254,15 +247,35 @@ static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
                                         size_t ec_pub_len,
                                         const uint8_t *ec_curvename,
                                         size_t ec_curvename_len) {
-  log_debug(NULL, "");
+  void *ec_pub_mem, *ec_curvename_mem;
+
+  log_debug(NULL, "ec_pub_len=%zu, ec_curvename_len=%zu", ec_pub_len,
+            ec_curvename_len);
 
   if (!peer_data)
     return ERR_NULL_PTR;
 
-  peer_data->ec_pub = zt_memdup(ec_pub, ec_pub_len);
+  ec_pub_mem = zt_malloc(ec_pub_len);
+  if (!ec_pub_mem)
+    return ERR_MEM_FAIL;
+  memcpy(ec_pub_mem, ec_pub, ec_pub_len);
+
+  peer_data->ec_pub = ec_pub_mem;
   peer_data->ec_pub_len = ec_pub_len;
-  peer_data->ec_curvename = zt_memdup(ec_curvename, ec_curvename_len);
-  peer_data->ec_curvename_len = ec_curvename_len;
+
+  if (ec_curvename_len) {
+    ec_curvename_mem = zt_malloc(ec_curvename_len);
+    if (!ec_curvename_mem) {
+      zt_free(ec_pub_mem);
+      return ERR_MEM_FAIL;
+    }
+    memcpy(ec_curvename_mem, ec_curvename, ec_curvename_len);
+    peer_data->ec_curvename = ec_curvename_mem;
+    peer_data->ec_curvename_len = ec_curvename_len;
+  } else {
+    peer_data->ec_curvename = NULL;
+    peer_data->ec_curvename_len = 0;
+  }
 
   return ERR_SUCCESS;
 }
@@ -273,8 +286,6 @@ static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
   if (!peer_data)
     return;
 
-  memzero(peer_data->ec_pub, peer_data->ec_pub_len);
-  memzero(peer_data->ec_curvename, peer_data->ec_curvename_len);
   zt_free(peer_data->ec_pub);
   zt_free(peer_data->ec_curvename);
 }
@@ -393,7 +404,7 @@ static err_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
         ossl_ctx->ec_key, OSSL_PKEY_PARAM_PUB_KEY, NULL, 0, &required));
   }
 
-  if (!(*pubkey = zt_malloc(required)))
+  if (!(*pubkey = zt_calloc(1, required)))
     return ERR_MEM_FAIL;
   *pubkey_len = required;
 

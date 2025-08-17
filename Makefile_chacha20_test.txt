@@ -1,6 +1,6 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
-LIBS := -lcrypto -lssl
+CFLAGS := -Wno-pedantic -std=gnu17 -ggdb -I./ -DDEBUG -DOPENSSL
+LIBS := -lcrypto
 
 all: bin/chacha20_test
 

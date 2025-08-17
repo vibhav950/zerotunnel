@@ -6,11 +6,6 @@
  * @author vibhav950 on GitHub
  */
 
-// DO NOT REMOVE/MOVE THIS
-#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
-#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
-#endif
-
 #include "common/defines.h"
 #include "common/log.h"
 #include "kdf.h"
@@ -107,7 +102,6 @@ static void ossl_kdf_dealloc(kdf_t *kdf) {
     if (kdf_ctx) {
       EVP_KDF_CTX_free(kdf_ctx->kctx);
       EVP_KDF_free(kdf_ctx->kdf);
-      /* Prevent state leaks */
       memzero(kdf_ctx, sizeof(kdf_ossl_ctx));
       zt_free(kdf_ctx);
     }
@@ -339,9 +333,9 @@ static err_t ossl_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   if (!(buf = zt_malloc(buf_len)))
     return ERR_MEM_FAIL;
 
-  zt_memcpy(buf, kdf->salt, kdf->saltlen);
+  memcpy(buf, kdf->salt, kdf->saltlen);
   if (additional_data_len)
-    zt_memcpy(buf + kdf->saltlen, additional_data, additional_data_len);
+    memcpy(buf + kdf->saltlen, additional_data, additional_data_len);
 
   switch (alg) {
   case KDF_ALG_scrypt:

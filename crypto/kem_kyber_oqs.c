@@ -2,11 +2,6 @@
  * ML-KEM (Kyber) using liboqs.
  */
 
-// DO NOT REMOVE/MOVE THIS
-#if !defined(__ZTLIB_ENVIRON_SAFE_MEM) || !__ZTLIB_ENVIRON_SAFE_MEM
-#error "__ZTLIB_ENVIRON_SAFE_MEM must be defined and set to 1"
-#endif
-
 #include "common/defines.h"
 #include "common/log.h"
 #include "kem.h"
@@ -86,7 +81,6 @@ static void liboqs_kem_dealloc(kem_t *kem) {
 
     if (oqs_ctx) {
       OQS_KEM_free(oqs_ctx->kem);
-      /* Prevent state leaks */
       memzero(oqs_ctx, sizeof(kem_oqs_ctx));
       zt_free(oqs_ctx);
     }
@@ -97,7 +91,6 @@ static void liboqs_kem_dealloc(kem_t *kem) {
 
   memzero(kem, sizeof(kem_t));
   zt_free(kem);
-  kem = NULL;
 }
 
 /**

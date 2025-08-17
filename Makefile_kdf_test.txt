@@ -1,6 +1,6 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -Wunused -std=gnu17 -fsanitize=leak -I./ -DDEBUG -DOPENSSL -D__ZTLIB_ENVIRON_SAFE_MEM=1
-LIBS := -lssl -lcrypto
+CFLAGS := -Wno-pedantic -Wunused -std=gnu17 -fsanitize=leak -I./ -DDEBUG -DOPENSSL
+LIBS := -lcrypto
 
 all: bin/kdf_test
 

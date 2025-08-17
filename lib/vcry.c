@@ -282,7 +282,7 @@ static const uint8_t *vcry_encr_nonce(void) {
   static uint8_t iv[16];
   uint64_t sn;
 
-  zt_memcpy(iv, _vcry_encr_iv(), VCRY_IV_ENCR_LEN);
+  memcpy(iv, _vcry_encr_iv(), VCRY_IV_ENCR_LEN);
 
 #ifdef __LITTLE_ENDIAN__
   sn = BSWAP64(_vcry_seqno_self());
@@ -301,7 +301,7 @@ static const uint8_t *vcry_decr_nonce(void) {
   static uint8_t iv[16];
   uint64_t sn;
 
-  zt_memcpy(iv, _vcry_decr_iv(), VCRY_IV_ENCR_LEN);
+  memcpy(iv, _vcry_decr_iv(), VCRY_IV_ENCR_LEN);
 
 #ifdef __LITTLE_ENDIAN__
   sn = BSWAP64(_vcry_seqno_peer());
@@ -776,7 +776,7 @@ err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
                              &tmp_len),
               ERR_SUCCESS, clean0);
 
-  zt_memcpy(pqkenc, pqk, rho_offs);
+  memcpy(pqkenc, pqk, rho_offs);
 
   plen = keyshare_mine.ec_pub_len + keyshare_mine.ec_curvename_len +
          pqkenc_len + VCRY_HSHAKE_SALT_LEN;
@@ -796,13 +796,13 @@ err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len) {
 
   /** Serialize the data by copying individual members */
   p = *peerdata + (3 * sizeof(uint64_t));
-  zt_memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
+  memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
   p += keyshare_mine.ec_pub_len;
-  zt_memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
+  memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
   p += keyshare_mine.ec_curvename_len;
-  zt_memcpy(p, pqkenc, pqkenc_len);
+  memcpy(p, pqkenc, pqkenc_len);
   p += pqkenc_len;
-  zt_memcpy(p, vctx->salt, VCRY_HSHAKE_SALT_LEN);
+  memcpy(p, vctx->salt, VCRY_HSHAKE_SALT_LEN);
 
   /** This memory is freed in vcry_module_release() */
   vctx->pqk = pqk;
@@ -892,7 +892,7 @@ err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
 
   /** Set the session salt */
   p += peer_pqkenc_len;
-  zt_memcpy(vctx->salt, p, VCRY_HSHAKE_SALT_LEN);
+  memcpy(vctx->salt, p, VCRY_HSHAKE_SALT_LEN);
 
   /** Compute K_pass */
   if ((ret = kdf_init(vctx->kdf, vctx->authpass, vctx->authkey_len, vctx->salt,
@@ -934,7 +934,7 @@ err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
                              &tmp_len),
               ERR_SUCCESS, clean1);
 
-  zt_memcpy(peer_pqk, peer_pqkenc, rho_offs);
+  memcpy(peer_pqk, peer_pqkenc, rho_offs);
 
   /**
    * Encapsulate the shared secret with the peer's public key; this will
@@ -974,11 +974,11 @@ err_t vcry_handshake_respond(const uint8_t *peerdata_theirs,
   p64[2] = hton64((uint64_t)ct_len);
 
   p = *peerdata_mine + (3 * sizeof(uint64_t));
-  zt_memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
+  memcpy(p, keyshare_mine.ec_pub, keyshare_mine.ec_pub_len);
   p += keyshare_mine.ec_pub_len;
-  zt_memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
+  memcpy(p, keyshare_mine.ec_curvename, keyshare_mine.ec_curvename_len);
   p += keyshare_mine.ec_curvename_len;
-  zt_memcpy(p, ct, ct_len);
+  memcpy(p, ct, ct_len);
 
   /** This memory is freed in vcry_module_release() */
   vctx->peer_pqk = peer_pqk;
@@ -1134,15 +1134,15 @@ err_t vcry_derive_session_key(void) {
   }
 
   p = buf;
-  zt_memcpy(p, vctx->ss, vctx->ss_len);
+  memcpy(p, vctx->ss, vctx->ss_len);
   p += vctx->ss_len;
-  zt_memcpy(p, shared_secret, shared_secret_len);
+  memcpy(p, shared_secret, shared_secret_len);
   p += shared_secret_len;
-  zt_memcpy(p, pqpub, vctx->pqk_len);
+  memcpy(p, pqpub, vctx->pqk_len);
   p += vctx->pqk_len;
-  zt_memcpy(p, dhek_a, dhek_a_len);
+  memcpy(p, dhek_a, dhek_a_len);
   p += dhek_a_len;
-  zt_memcpy(p, dhek_b, dhek_b_len);
+  memcpy(p, dhek_b, dhek_b_len);
 
   VCRY_EXPECT(
       kdf_init(vctx->kdf, buf, buf_len,
