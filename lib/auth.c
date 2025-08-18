@@ -3,8 +3,8 @@
 #include "common/defines.h"
 #include "common/hex.h"
 #include "common/log.h"
+#include "common/sha256.h"
 #include "common/ztver.h"
-#include "crypto/sha256.h"
 #include "lib/client.h"
 #include "ztlib.h"
 
@@ -115,30 +115,30 @@ static ssize_t auth_sha256_idhash_hex(const char *peer_id, uint8_t **idhash) {
   return len ? (ssize_t)len : -1;
 }
 
-passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
-                                passwd_id_t pwid, char **passwd) {
+passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *peer_id,
+                                passwd_id_t pwid, struct passwd **passwd) {
   int fd;
   FILE *fp;
   struct flock fl;
-  char *buf = NULL, *linep;
+  char *buf = NULL, *linep, *pw;
   uint8_t *idhash;
   uint8_t bufx1[400] = {0};
   size_t bufsize = 0;
   ssize_t nread, pwlen, enc_len;
-  passwd_id_t pwid_cmp;
+  passwd_id_t pwid_cmp = -1;
   bool found = false;
 
-  if (passwddb_file == NULL || peer_id == NULL || pwid == 0)
+  if (passwdfile == NULL || peer_id == NULL || pwid == 0)
     return -1;
 
-  if ((fd = open(passwddb_file, O_RDWR)) < 0) {
-    log_error(NULL, "open: could not open %s (%s)", passwddb_file,
+  if ((fd = open(passwdfile, O_RDWR)) < 0) {
+    log_error(NULL, "open: could not open %s (%s)", passwdfile,
               strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    log_error(NULL, "fdopen: could not open %s (%s)", passwddb_file,
+    log_error(NULL, "fdopen: could not open %s (%s)", passwdfile,
               strerror(errno));
     close(fd);
     return -1;
@@ -150,7 +150,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
+    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwdfile,
               strerror(errno));
     fclose(fp);
     close(fd);
@@ -160,7 +160,10 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
   if (auth_sha256_idhash_hex(peer_id, &idhash) < 0)
     goto cleanup;
 
-  *passwd = NULL;
+  *passwd = zt_malloc(sizeof(struct passwd));
+  if (!*passwd)
+    goto cleanup;
+
   while ((nread = getline(&buf, &bufsize, fp)) != -1) {
     // enforce a max length on the line size
     // so that we don't read outside the buf
@@ -211,13 +214,15 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
         continue;
       }
 
-      *passwd = zt_strmemdup(bufx2, pwlen);
-      if (!*passwd)
-        pwid_cmp = -1;
+      pw = zt_strmemdup(bufx2, pwlen);
+
       memzero(bufx2, pwlen);
       zt_free(bufx2);
-      if (!*passwd)
+
+      if (!pw) {
+        pwid_cmp = -1;
         break;
+      }
 
       // mark password used
       *marker = 'x';
@@ -234,9 +239,8 @@ passwd_id_t zt_auth_passwd_load(const char *passwddb_file, const char *peer_id,
         pwid_cmp = -1;
 
       if (pwid_cmp == -1) {
-        memzero(*passwd, strlen(*passwd));
-        zt_free(*passwd);
-        *passwd = NULL;
+        memzero(pw, strlen(pw));
+        zt_free(pw);
       }
 
       break; // match found
@@ -248,14 +252,21 @@ cleanup:
   fl.l_type = F_UNLCK;
   fcntl(fd, F_SETLK, &fl);
 
+  if (pwid_cmp == -1 && *passwd) {
+    zt_free(*passwd);
+    *passwd = NULL;
+  }
+
   zt_free(idhash);
   free(buf);
+
   fclose(fp);
   close(fd);
-  return (*passwd) ? pwid_cmp : -1;
+
+  return pwid_cmp;
 }
 
-int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
+int zt_auth_passwd_delete(const char *passwdfile, const char *peer_id,
                           passwd_id_t pwid) {
   int ret = -1;
   int fd;
@@ -269,17 +280,17 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   passwd_id_t pwid_cmp;
   bool found = false;
 
-  if (passwddb_file == NULL || peer_id == NULL || pwid == 0)
+  if (passwdfile == NULL || peer_id == NULL || pwid == 0)
     return -1;
 
-  if ((fd = open(passwddb_file, O_RDWR)) < 0) {
-    log_error(NULL, "open: could not open %s (%s)", passwddb_file,
+  if ((fd = open(passwdfile, O_RDWR)) < 0) {
+    log_error(NULL, "open: could not open %s (%s)", passwdfile,
               strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    log_error(NULL, "fdopen: could not open %s (%s)", passwddb_file,
+    log_error(NULL, "fdopen: could not open %s (%s)", passwdfile,
               strerror(errno));
     close(fd);
     return -1;
@@ -291,7 +302,7 @@ int zt_auth_passwd_delete(const char *passwddb_file, const char *peer_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwddb_file,
+    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwdfile,
               strerror(errno));
     fclose(fp);
     close(fd);
@@ -375,41 +386,64 @@ cleanup:
   return ret;
 }
 
-passwd_id_t zt_auth_passwd_new(const char *passwddb_file, auth_type_t auth_type,
+struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic) {
+  char *pw;
+  struct passwd *passwd;
+
+  if (phonetic && (count < 3 || count > 20))
+    return NULL;
+  else if (count < 12 || count > 256)
+    return NULL;
+
+  passwd = zt_malloc(sizeof(struct passwd));
+  if (!passwd)
+    return NULL;
+
+  if (phonetic)
+    pw = auth_passwd_generate_phonetic(count, 0, 1);
+  else if (auth_passwd_generate(pw, count) < 0)
+    return NULL;
+
+  passwd->id = 0;
+  passwd->pw = pw;
+  passwd->pwlen = count;
+
+  return passwd;
+}
+
+passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
                                const char *peer_id, struct passwd **passwd) {
   int rv;
   char *pw;
   passwd_id_t id = 0;
-  struct passwd *passwd_ret;
+  struct passwd *passwd_ret = NULL;
 
-  if ((passwddb_file == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
+  if ((passwdfile == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     return -1;
 
   if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     peer_id = ZT_NULL_PEERID_STR;
 
-  if (!(passwd_ret = zt_malloc(sizeof(struct passwd)))) {
-    log_error(NULL, "out of memory");
+  if (!(passwd_ret = zt_malloc(sizeof(struct passwd))))
     return -1;
-  }
 
   switch (auth_type) {
   case KAPPA_AUTHTYPE_0:
-    if (!(pw = auth_passwd_prompt("Enter password: ", 0)))
+    if (!(pw = auth_passwd_prompt("\nEnter password: ", 0)))
       goto err;
     break;
   case KAPPA_AUTHTYPE_1:
-    if ((id = zt_auth_passwd_load(passwddb_file, peer_id, -1, &pw)) < 0) {
-      log_error(NULL,
-                "found no matching password entries (peer_id=%s, pwid=%d)",
+    if ((id = zt_auth_passwd_load(passwdfile, peer_id, -1, &passwd_ret)) < 0) {
+      log_error(NULL, "found no matching password entries (peerId=%s, pwId=%d)",
                 peer_id, id);
       goto err;
     }
-    break;
+    return id;
   case KAPPA_AUTHTYPE_2:
-    // TODO: this must be set by config
-    if (!(pw = auth_passwd_generate_phonetic(6, 0, 1)))
+    if (!(pw = auth_passwd_generate_phonetic(GlobalConfig.password_words, 0,
+                                             1))) {
       goto err;
+    }
     break;
   default:
     log_error(NULL, "unknown auth type %d", auth_type);
@@ -426,104 +460,96 @@ err:
   return -1;
 }
 
-passwd_id_t zt_auth_passwd_get(const char *passwddb_file, auth_type_t auth_type,
+passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
                                const char *peer_id, passwd_id_t pwid,
                                struct passwd **passwd) {
-  char *pw;
-  struct passwd *passwd_ret;
+  struct passwd *passwd_ret = NULL;
 
-  if ((passwddb_file == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
+  if ((passwdfile == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     return -1;
 
   if ((peer_id == NULL) && (auth_type == KAPPA_AUTHTYPE_1))
     peer_id = ZT_NULL_PEERID_STR;
 
-  if (!(passwd = zt_malloc(sizeof(struct passwd)))) {
-    log_error(NULL, "out of memory");
+  *passwd = NULL;
+  if (auth_type == KAPPA_AUTHTYPE_0 || auth_type == KAPPA_AUTHTYPE_2) {
+    char *pw;
+
+    if (pwid != 0) {
+      log_error(NULL, "pwid must be 0 for KAPPA0 and KAPPA2");
+      return -1;
+    }
+
+    if (!(passwd_ret = zt_malloc(sizeof(struct passwd))))
+      return -1;
+
+    if (!(pw = auth_passwd_prompt("\nEnter password: ", 0))) {
+      zt_free(passwd_ret);
+      return -1;
+    }
+
+    passwd_ret->id = 0;
+    passwd_ret->pw = pw;
+    passwd_ret->pwlen = strlen(pw);
+  } else if (auth_type == KAPPA_AUTHTYPE_1) {
+    if (zt_auth_passwd_load(passwdfile, peer_id, pwid, &passwd_ret) < 0) {
+      log_error(NULL, "found no matching entries (peerId=%s, pwId=%d)", peer_id,
+                pwid);
+      return -1;
+    }
+  } else {
+    log_error(NULL, "unknown auth type %d", auth_type);
     return -1;
   }
 
-  switch (auth_type) {
-  case KAPPA_AUTHTYPE_0:
-  case KAPPA_AUTHTYPE_2:
-    if (pwid != 0) {
-      log_error(NULL,
-                "pwid must be 0 for KAPPA_AUTHTYPE_0 and KAPPA_AUTHTYPE_2");
-      goto err;
-    }
-    if (!(pw = auth_passwd_prompt("Enter password: ", 0)))
-      goto err;
-    break;
-  case KAPPA_AUTHTYPE_1:
-    if (zt_auth_passwd_load(passwddb_file, peer_id, pwid, &pw) < 0) {
-      log_error(NULL, "found no matching entries (peer_id=%s, pwid=%d)",
-                peer_id, pwid);
-      goto err;
-    }
-    break;
-  default:
-    log_error(NULL, "unknown auth type %d", auth_type);
-    goto err;
-  }
-  passwd_ret->id = pwid;
-  passwd_ret->pw = pw;
-  passwd_ret->pwlen = strlen(pw);
   *passwd = passwd_ret;
   return pwid;
-
-err:
-  zt_free(passwd_ret);
-  return -1;
 }
 
-int zt_auth_passwddb_new(const char *passwddb_file, const char *peer_id,
-                         int n_passwords) {
+int zt_auth_passwd_db_new(int fd, const char *peer_id,
+                          unsigned short password_len,
+                          unsigned short n_passwords) {
   int ret = 0;
   FILE *fp;
-  char buf[32 + 1],
-      *passwd_b64 = NULL; // TODO: some kind of macro/config for the length
+  char buf[MAX_PASSWD_LEN + 1];
+  char *passwd_b64 = NULL;
   uint8_t idhash[SHA256_DIGEST_LEN], *idhash_hex = NULL;
   size_t idhash_hex_len;
   int passwd_b64_len;
 
-  if (passwddb_file == NULL || peer_id == NULL)
+  if (fd < 3 || peer_id == NULL)
     return -1;
 
-  if (!n_passwords || n_passwords > 256) {
-    log_error(NULL, "requested password bundle of invalid size", n_passwords);
+  if (password_len > MAX_PASSWD_LEN || n_passwords > MAX_BUNDLE_SIZE)
     return -1;
-  }
 
-  if ((fp = fopen(passwddb_file, "w")) == NULL) {
-    log_error(NULL, "fopen: could not open %s (%s)", passwddb_file,
-              strerror(errno));
+  if ((fp = fdopen(fd, "w")) == NULL) {
+    log_error(NULL, "fdopen: could not open fd=%d (%s)", fd, strerror(errno));
     return -1;
   }
 
   (void)SHA256(peer_id, strlen(peer_id), idhash);
 
-  if ((idhash_hex_len =
-           zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex)) == 0) {
-    log_error(NULL, "out of memory");
+  idhash_hex_len = zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex);
+  if (idhash_hex_len == 0) {
     ret = -1;
     goto cleanup;
   }
 
   fprintf(fp, "# zerotunnel v%s\r\n", ZT_VERSION_STRING);
-  fprintf(fp, "# Auto-generated password bundle\r\n", peer_id);
+  fprintf(fp, "# Auto-generated password bundle\r\n");
   fprintf(fp, "::%s%c\r\n", idhash_hex, '\0');
 
   memzero(idhash_hex, idhash_hex_len);
   zt_free(idhash_hex);
 
   for (int pwidx = 1; pwidx <= n_passwords; ++pwidx) {
-    if (auth_passwd_generate(buf, 33) == -1) { // TODO: hardcoded length
+    if (auth_passwd_generate(buf, password_len) == -1) {
       ret = -1;
       goto cleanup;
     }
 
-    if (zt_b64_encode(buf, 32, &passwd_b64, &passwd_b64_len) == -1) {
-      log_error(NULL, "out of memory");
+    if (zt_b64_encode(buf, password_len, &passwd_b64, &passwd_b64_len) == -1) {
       ret = -1;
       goto cleanup;
     }
@@ -539,7 +565,7 @@ cleanup:
   memzero(idhash, SHA256_DIGEST_LEN);
   fclose(fp);
   if (ret < 0)
-    remove(passwddb_file);
+    fzero(fd);
   return ret;
 }
 
@@ -572,11 +598,11 @@ void zt_auth_passwd_free(struct passwd *pass, ...) {
  * garbage value is not used as the authid.
  *
  * - This authenticator can be securely sent over an untrusted network in
- * plaintext; and MUST BE sent as part of the first message to a peer (i.e., in
- * the first TCP message from the initiator or the first TCP response from the
- * responder).
- * - For KAPPA verification, this the initiator and responder authid are used to
- * derive the `VERIFICATION_MSG`.
+ *   plaintext; and MUST BE sent as part of the first message to a peer (i.e.,
+ *   in the first TCP message from the initiator or the first TCP response from
+ *   the responder).
+ * - For KAPPA verification, this the initiator and responder authid are used
+ *   to derive the `VERIFICATION_MSG`.
  */
 int zt_get_hostid(struct authid *authid) {
   sd_id128_t base, ret;
@@ -591,32 +617,6 @@ int zt_get_hostid(struct authid *authid) {
     return -1;
   }
 
-  zt_memcpy((void *)&authid->bytes[0], (void *)&ret.bytes[0], AUTHID_BYTES_LEN);
-  return 0;
-}
-
-// cd lib
-// gcc -I../ -lbsd -lsystemd auth.c passgen.c ../random/systemrand.c\
-// ../random/rdrand.c ../common/memzero.c ../common/mem.c ../common/x86_cpuid.c\
-// ../common/log.c ../common/hex.c ../common/b64.c ../crypto/sha256_alg.c\
-// ../crypto/sha256.c ../crypto/sha256_x86.c -D__ZTLIB_ENVIRON_SAFE_MEM=1\
-
-#include <stdio.h>
-
-int main() {
-  const char *passwddb_file = "passwddb.txt";
-  const char *peer_id = "peer1";
-  char *pw;
-
-  // ASSERT(zt_auth_passwddb_new(passwddb_file, peer_id, 10) == 0);
-
-  for (int i = 1; i <= 10; ++i) {
-    ASSERT(zt_auth_passwd_load(passwddb_file, peer_id, i, &pw) > 0);
-    printf("Password: %s\n", pw);
-    zt_free(pw);
-  }
-
-  // ASSERT(zt_auth_passwd_delete(passwddb_file, peer_id, -1) == 0);
-
+  memcpy((void *)&authid->bytes[0], (void *)&ret.bytes[0], AUTHID_BYTES_LEN);
   return 0;
 }

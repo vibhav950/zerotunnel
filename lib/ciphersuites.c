@@ -150,7 +150,7 @@ static const zt_cipher_suite_entry_st cs_entries[] = {
 
 // clang-format off
 
-const char *zt_cipher_suite_info(ciphertsuite_t csid,
+const char *zt_cipher_suite_info(ciphersuite_t csid,
                                  int *cipher_algorithm,
                                  int *aead_algorithm,
                                  int *hmac_algorithm,

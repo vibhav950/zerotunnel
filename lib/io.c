@@ -44,7 +44,6 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
     log_error(NULL, "poll(2) failed (%s)", strerror(errno));
     return -1;
   }
-
   return rc;
 }
 
@@ -339,7 +338,7 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
 
   size = zt_file_getsize(fd);
 
-  zt_memzero(fio, sizeof(zt_fio_t));
+  zt_memset(fio, 0, sizeof(zt_fio_t));
   fio->fd = fd;
   fio->size = size;
   fio->path = zt_strdup(filepath);
@@ -385,7 +384,7 @@ void zt_fio_close(zt_fio_t *fio) {
       close(fio->fd);
       zt_free(fio->path);
     }
-    zt_memzero(fio, sizeof(zt_fio_t));
+    zt_memset(fio, 0, sizeof(zt_fio_t));
     fio->fd = -1;
   }
 }
@@ -549,7 +548,7 @@ err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
   if (!fio)
     return ERR_NULL_PTR;
 
-  if (FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE))
+  if (!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE))
     return ERR_INVALID;
 
   if (total_size <= 0)

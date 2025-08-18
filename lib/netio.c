@@ -1,8 +1,8 @@
 #include "client.h"
 #include "common/log.h"
+#include "common/timeout.h"
 #include "io.h"
 #include "server.h"
-#include "timeout.h"
 
 #include <errno.h>
 #include <error.h>
@@ -143,7 +143,7 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
   while (nbytes) {
     ssize_t n;
 
-#ifdef defined(MSG_FASTOPEN) && !defined(TCP_FASTOPEN_CONNECT)
+#if defined(MSG_FASTOPEN) && !defined(TCP_FASTOPEN_CONNECT)
     if (conn->fl_tcp_fastopen && conn->first_send) {
       n = sendto(conn->sockfd, buf, nbytes, MSG_FASTOPEN,
                  conn->ai_estab->ai_addr, conn->ai_estab->ai_addrlen);
@@ -285,7 +285,7 @@ int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
     return -1;
 
   while (nbytes) {
-    ssize_t n = send(conn->sockfd, buf, nbytes, 0);
+    ssize_t n = send(conn->peer.fd, buf, nbytes, 0);
 
     if (likely(n > 0)) {
       nwritten += n;
@@ -296,7 +296,7 @@ int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
       nbytes -= n;
       buf += n;
     } else if (conn->send_timeout && (errno == EAGAIN)) {
-      if (!zt_tcp_io_waitfor_write(conn->sockfd, conn->send_timeout))
+      if (!zt_tcp_io_waitfor_write(conn->peer.fd, conn->send_timeout))
         return -1;
     } else {
       return -1;
@@ -337,7 +337,7 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
 
   nread = 0;
   while ((size_t)nread < nbytes) {
-    ssize_t n = recv(conn->sockfd, buf + nread, nbytes - nread, 0);
+    ssize_t n = recv(conn->peer.fd, buf + nread, nbytes - nread, 0);
 
     if (n == 0) {
       log_error(NULL, "Unexpected socket shutdown by peer");
@@ -347,7 +347,7 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
     if (likely(n > 0)) {
       nread += n;
     } else if (conn->recv_timeout && (errno == EAGAIN)) {
-      if (!zt_tcp_io_waitfor_read(conn->sockfd, conn->recv_timeout))
+      if (!zt_tcp_io_waitfor_read(conn->peer.fd, conn->recv_timeout))
         return nread;
     } else {
       return -1;
@@ -355,7 +355,7 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
   }
 
   if (pending) {
-    if (zt_tcp_io_waitfor_read(conn->sockfd, 0))
+    if (zt_tcp_io_waitfor_read(conn->peer.fd, 0))
       *pending = true;
     else
       *pending = false;

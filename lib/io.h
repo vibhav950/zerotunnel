@@ -2,6 +2,7 @@
 #define __IO_H__
 
 #include "common/defines.h"
+#include "common/time_utils.h"
 
 #include <limits.h>
 

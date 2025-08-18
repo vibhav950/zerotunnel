@@ -5,6 +5,7 @@
 #include "common/progressbar.h"
 #include "common/prompts.h"
 #include "common/tty_io.h"
+#include "ip.h"
 #include "vcry.h"
 #include "ztlib.h"
 
@@ -22,7 +23,7 @@
 #include <unistd.h>
 
 // clang-format off
-static const char clientstate_names[][20] = {
+static const char clientstate_names[][22] = {
     [CLIENT_NONE]           = "CLIENT_NONE",
     [CLIENT_CONN_INIT]      = "CLIENT_CONN_INIT",
     [CLIENT_AUTH_INIT]      = "CLIENT_AUTH_INIT",
@@ -34,8 +35,6 @@ static const char clientstate_names[][20] = {
 // clang-format on
 
 #define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
-
-extern struct config g_config;
 
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
@@ -62,6 +61,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   struct addrinfo hints, *res = NULL, *cur;
   size_t saddr_len;
   bool use_ipv6 = false;
+  void *addr_ptr;
   char ipstr[INET6_ADDRSTRLEN];
 
 #if 1 // USE_SIGACT_TIMEOUT
@@ -105,7 +105,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
 #ifdef USE_IPV6
   /* Check if the system has IPv6 enabled and the config allows it */
-  if (!g_config.flag_ipv4_only) {
+  if (!GlobalConfig.flag_ipv4_only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -114,15 +114,17 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!g_config.flag_ipv6_only, use_ipv6);
+  af = zt_choose_ip_family(!GlobalConfig.flag_ipv6_only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "could not choose a suitable address family");
     ret = ERR_BAD_ARGS;
     goto out;
   }
 
-  if (af == AF_UNSPEC)
-    preferred_family = g_config.preferred_family == '4' ? AF_INET : AF_INET6;
+  if (af == AF_UNSPEC) {
+    preferred_family =
+        GlobalConfig.preferred_family == '4' ? AF_INET : AF_INET6;
+  }
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -153,6 +155,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   *ai_list = NULL;
   for (cur = res; cur != NULL; cur = cur->ai_next) {
     size_t cname_len = cur->ai_canonname ? strlen(cur->ai_canonname) + 1 : 0;
+    size_t total_len;
 
     if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
@@ -175,7 +178,8 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
       continue;
 
     /* Allocate a single block for all members of zt_addrinfo */
-    ai_cur = zt_malloc(sizeof(struct zt_addrinfo) + cname_len + saddr_len);
+    total_len = sizeof(struct zt_addrinfo) + cname_len + saddr_len;
+    ai_cur = zt_malloc(total_len);
     if (!ai_cur) {
       ret = ERR_MEM_FAIL;
       goto out;
@@ -190,14 +194,14 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     ai_cur->ai_canonname = NULL;
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
-    ai_cur->total_size = sizeof(struct zt_addrinfo) + cname_len + saddr_len;
+    ai_cur->total_size = total_len;
 
     ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
-    zt_memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
+    memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
 
     if (cname_len) {
       ai_cur->ai_canonname = (void *)((char *)ai_cur->ai_addr + saddr_len);
-      zt_memcpy(ai_cur->ai_canonname, cur->ai_canonname, cname_len);
+      memcpy(ai_cur->ai_canonname, cur->ai_canonname, cname_len);
     }
 
     if (cur->ai_family == preferred_family) {
@@ -214,8 +218,18 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
       unpreferred_tail = ai_cur;
     }
 
-    log_debug(NULL, "Resolved %s to %s", conn->hostname,
-              inet_ntop(cur->ai_family, cur->ai_addr, ipstr, sizeof(ipstr)));
+    if (cur->ai_family == AF_INET)
+      addr_ptr = &((struct sockaddr_in *)cur->ai_addr)->sin_addr;
+#ifdef USE_IPV6
+    else if (cur->ai_family == AF_INET6) {
+      addr_ptr = &((struct sockaddr_in6 *)cur->ai_addr)->sin6_addr;
+    }
+#endif
+
+    if (addr_ptr) {
+      log_debug(NULL, "Resolved %s to %s", conn->hostname,
+                inet_ntop(cur->ai_family, addr_ptr, ipstr, sizeof(ipstr)));
+    }
   }
 
   /* Merge the lists based on the preferred family (if any) */
@@ -279,6 +293,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
   err_t ret = ERR_SUCCESS;
   struct zt_addrinfo *ai_cur, *ai_estab = NULL;
   int sockfd, on;
+  struct timeval tval;
 
   ASSERT(conn);
   ASSERT(conn->state == CLIENT_CONN_INIT);
@@ -286,7 +301,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
 
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
     if ((sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
-                         ai_cur->ai_protocol))) {
+                         ai_cur->ai_protocol)) < 0) {
       log_error(NULL, "socket: failed (%s)", strerror(errno));
       continue;
     }
@@ -346,8 +361,8 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
       }
     }
 
-    struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
-                           .tv_usec = (conn->send_timeout % 1000) * 1000};
+    tval.tv_sec = conn->send_timeout / 1000;
+    tval.tv_usec = (conn->send_timeout % 1000) * 1000;
     if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
                    sizeof(tval)) == -1) {
       log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
@@ -356,8 +371,8 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
       continue;
     }
 
-    struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
-                           .tv_usec = (conn->recv_timeout % 1000) * 1000};
+    tval.tv_sec = conn->recv_timeout / 1000;
+    tval.tv_usec = (conn->recv_timeout % 1000) * 1000;
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
                    sizeof(tval)) == -1) {
       log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
@@ -374,7 +389,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
     ai_estab = zt_malloc(ai_cur->total_size);
     if (!ai_estab)
       ret = ERR_MEM_FAIL;
-    zt_memcpy(ai_estab, ai_cur, ai_cur->total_size);
+    memcpy(ai_estab, ai_cur, ai_cur->total_size);
     ai_estab->ai_next = NULL;
     conn->sockfd = sockfd;
     conn->ai_estab = ai_estab;
@@ -449,7 +464,7 @@ static err_t client_tcp_conn1(zt_client_connection_t *conn) {
   getnameinfo(ai_estab->ai_addr, ai_estab->ai_addrlen, address,
               INET6_ADDRSTRLEN, &address[INET6_ADDRSTRLEN], 6,
               NI_NUMERICHOST | NI_NUMERICSERV);
-  log_debug(NULL, "connected to %s:%d", address, &address[INET6_ADDRSTRLEN]);
+  log_debug(NULL, "connected to %s:%s", address, &address[INET6_ADDRSTRLEN]);
 #endif
 
   /**
@@ -480,7 +495,7 @@ static err_t client_send(zt_client_connection_t *conn) {
   bool is_encrypted;
 
   ASSERT(conn);
-  ASSERT(conn->state > CLIENT_CONN_INIT && conn->state < CLIENT_DONE);
+  ASSERT(conn->state > CLIENT_CONN_INIT && conn->state <= CLIENT_DONE);
   ASSERT(conn->msgbuf);
 
   if (MSG_DATA_LEN(conn->msgbuf) > ZT_MSG_MAX_RW_SIZE) {
@@ -496,42 +511,42 @@ static err_t client_send(zt_client_connection_t *conn) {
   p[len++] = MSG_END_BYTE; /* end of data */
 
   if (conn->state == CLIENT_TRANSFER) {
-    if (g_config.flag_length_obfuscation) {
+    if (GlobalConfig.flag_length_obfuscation) {
       size_t padding;
 
       taglen = vcry_get_aead_tag_len();
 
-      padding = (len - 1) & (g_config.padding_factor - 1);
+      padding = (len - 1) & (GlobalConfig.padding_factor - 1);
       zt_memset(p + len, 0x00, padding); // FIX: possible side-channel?
       len += padding;
 
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_PADDING);
-    } else if (g_config.flag_lz4_compression) {
+    } else if (GlobalConfig.flag_lz4_compression) {
       const char *rptr = (const char *)p;
       char *wptr = (char *)(MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE);
 
       len = LZ4_compress_default(rptr, wptr, len, ZT_MSG_XBUF_SIZE);
       if (len == 0) {
-        log_error(NULL, "LZ4_compress_default(): failed to compress %zu bytes",
+        log_error(NULL, "LZ4_compress_default: failed to compress %zu bytes",
                   len);
         return ERR_INTERNAL;
       }
 
       MSG_SET_LEN(conn->msgbuf, len); /*update length in header before copying*/
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_COMPRESSION);
-      zt_memcpy(MSG_XBUF_PTR(conn->msgbuf), MSG_RAW_PTR(conn->msgbuf),
-                ZT_MSG_HEADER_SIZE);
+      memcpy(MSG_XBUF_PTR(conn->msgbuf), MSG_RAW_PTR(conn->msgbuf),
+             ZT_MSG_HEADER_SIZE);
     }
   }
   MSG_SET_LEN(conn->msgbuf, len); /* update length in header */
 
-  p = MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? MSG_RAW_PTR(conn->msgbuf)
-                                                   : MSG_XBUF_PTR(conn->msgbuf);
+  p = MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? MSG_XBUF_PTR(conn->msgbuf)
+                                                   : MSG_RAW_PTR(conn->msgbuf);
   datap = p + ZT_MSG_HEADER_SIZE;
   if (is_encrypted) {
     if ((ret = vcry_aead_encrypt(datap, len, p, ZT_MSG_HEADER_SIZE, datap,
                                  &tosend)) != ERR_SUCCESS) {
-      log_error(NULL, "encryption failed");
+      log_error(NULL, "encryption failed (%s)", zt_error_str(ret));
       return ret;
     }
   } else {
@@ -551,7 +566,7 @@ static err_t client_send(zt_client_connection_t *conn) {
 }
 
 #define msg_type_is_expected(msgtype, mask)                                    \
-  (msgtype == MSG_ANY || (msgtype & mask))
+  (msgtype == MSG_ANY || (msgtype & mask) != 0)
 
 /**
  * @param[in] conn The client connection context.
@@ -634,7 +649,7 @@ static err_t client_recv(zt_client_connection_t *conn,
   if (is_encrypted) {
     if ((ret = vcry_aead_decrypt(dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
                                  dataptr, &nread)) != ERR_SUCCESS) {
-      log_error(NULL, "decryption failed");
+      log_error(NULL, "decryption failed (%s)", zt_error_str(ret));
       goto out;
     }
   }
@@ -655,7 +670,7 @@ err_t zt_client_conn_alloc(zt_client_connection_t **conn) {
     return ERR_NULL_PTR;
 
   alloc_size = sizeof(zt_client_connection_t) + sizeof(zt_msg_t);
-  if (g_config.flag_lz4_compression)
+  if (GlobalConfig.flag_lz4_compression)
     alloc_size += ZT_MSG_XBUF_SIZE;
 
   if (!(*conn = zt_calloc(1, alloc_size)))
@@ -697,30 +712,30 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
   // clang-format off
   if ((ciphersuite = zt_cipher_suite_info_from_repr(
-           g_config.ciphersuite,
+           GlobalConfig.ciphersuite,
            &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
            &vcry_algs[3], &vcry_algs[4], &vcry_algs[5])) == 0) {
     return ERR_INVALID;
   }
   // clang-format on
 
-  conn->hostname = g_config.hostname;
+  conn->hostname = GlobalConfig.hostname;
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", g_config.port);
+    snprintf(port, sizeof(port), "%u", GlobalConfig.service_port);
     conn->port = port;
   } else {
     conn->port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->connect_timeout = g_config.connect_timeout > 0
-                              ? g_config.connect_timeout
+  conn->connect_timeout = GlobalConfig.connect_timeout > 0
+                              ? GlobalConfig.connect_timeout
                               : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
-  conn->recv_timeout = g_config.recv_timeout > 0
-                           ? g_config.recv_timeout
+  conn->recv_timeout = GlobalConfig.recv_timeout > 0
+                           ? GlobalConfig.recv_timeout
                            : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = g_config.send_timeout > 0
-                           ? g_config.send_timeout
+  conn->send_timeout = GlobalConfig.send_timeout > 0
+                           ? GlobalConfig.send_timeout
                            : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
 
   conn->state = CLIENT_CONN_INIT;
@@ -762,13 +777,17 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
         passwd_id =
-            zt_auth_passwd_load(g_config.passwddb_file, g_config.hostname,
+            zt_auth_passwd_load(GlobalConfig.passwdfile, GlobalConfig.hostname,
                                 conn->renegotiation_passwd, &master_pass);
       } else {
         passwd_id =
-            zt_auth_passwd_new(g_config.passwddb_file, g_config.auth_type,
+            zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.auth_type,
                                conn->hostname, &master_pass);
+
+        if (passwd_id > 0)
+          tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
       }
+
       if (passwd_id < 0) {
         ret = ERR_INTERNAL;
         log_error(NULL, "could not load master password for hostname '%s'",
@@ -785,7 +804,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
           ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_authpass() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_set_authpass : %s", zt_error_str(ret));
         zt_auth_passwd_free(master_pass, NULL);
         goto cleanup2;
       }
@@ -795,13 +814,13 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = vcry_set_crypto_params(
                vcry_algs[0], vcry_algs[1], vcry_algs[2],
                vcry_algs[3], vcry_algs[4], vcry_algs[5])) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_crypto_params() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_set_crypto_params : %s", zt_error_str(ret));
         goto cleanup2;
       }
       // clang-format on
 
       if ((ret = vcry_handshake_initiate(&sndbuf, &sndlen)) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_handshake_initiate() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_handshake_initiate : %s", zt_error_str(ret));
         goto cleanup2;
       }
 
@@ -812,26 +831,27 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      zt_memcpy(MSG_DATA_PTR(conn->msgbuf), conn->authid_mine.bytes,
-                AUTHID_BYTES_LEN);
+      memcpy(MSG_DATA_PTR(conn->msgbuf), conn->authid_mine.bytes,
+             AUTHID_BYTES_LEN);
       len = AUTHID_BYTES_LEN;
 
-      zt_memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&passwd_id),
-                sizeof(passwd_id_t));
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&passwd_id),
+             sizeof(passwd_id_t));
       len += sizeof(passwd_id_t);
 
       // TODO: we don't need to send this again with renegotiation messages
-      zt_memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&ciphersuite),
-                sizeof(ciphersuite_t));
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&ciphersuite),
+             sizeof(ciphersuite_t));
       len += sizeof(ciphersuite_t);
 
-      zt_memcpy(MSG_DATA_PTR(conn->msgbuf) + len, sndbuf, sndlen);
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, sndbuf, sndlen);
       len += sndlen;
 
       zt_free(sndbuf);
 
       MSG_SET_LEN(conn->msgbuf, len);
       MSG_SET_TYPE(conn->msgbuf, MSG_HANDSHAKE);
+      MSG_SET_FLAGS(conn->msgbuf, 0);
 
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
@@ -862,13 +882,13 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          * 2. Check if this password Id is available in the passwddb, and offer
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
-        if (g_config.auth_type != KAPPA_AUTHTYPE_1) {
+        if (GlobalConfig.auth_type != KAPPA_AUTHTYPE_1) {
           log_error(NULL, "peer sent MSG_AUTH_RETRY but auth_type!=KAPPA1");
           ret = ERR_BAD_CONTROL_FLOW;
           goto cleanup2;
         }
 
-        if (!tty_get_answer_is_yes(g_CLIPrompts[OnBadPasswdIdentifier])) {
+        if (!tty_get_answer_is_yes(get_cli_prompt(OnBadPasswdIdentifier))) {
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
@@ -896,7 +916,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         }
 
         /* copy peer AuthId */
-        zt_memcpy(conn->authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
+        memcpy(conn->authid_peer.bytes, rcvbuf, AUTHID_BYTES_LEN);
 
         rcvbuf += AUTHID_BYTES_LEN;
         rcvlen -= AUTHID_BYTES_LEN;
@@ -904,7 +924,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         /* process handshake response */
         if ((ret = vcry_handshake_complete(
                  rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
-          log_error(NULL, "vcry_handshake_complete() : %s", zt_strerror(ret));
+          log_error(NULL, "vcry_handshake_complete : %s", zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -914,9 +934,10 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         /* create our verify-initiation message */
         if ((ret = vcry_initiator_verify_initiate(
                  &sndbuf, &sndlen, conn->authid_mine.bytes,
-                 conn->authid_peer.bytes)) != ERR_SUCCESS) {
-          log_error(NULL, "vcry_initiator_verify_initiate() : %s",
-                    zt_strerror(ret));
+                 conn->authid_peer.bytes, AUTHID_BYTES_LEN,
+                 AUTHID_BYTES_LEN)) != ERR_SUCCESS) {
+          log_error(NULL, "vcry_initiator_verify_initiate : %s",
+                    zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -925,16 +946,17 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* Process the responder's verify-initiation message */
         ret = vcry_initiator_verify_complete(
-            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
-            conn->authid_mine.bytes, conn->authid_peer.bytes);
+            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN - 1),
+            conn->authid_mine.bytes, conn->authid_peer.bytes, AUTHID_BYTES_LEN,
+            AUTHID_BYTES_LEN);
         switch (ret) {
         case ERR_SUCCESS:
           break; /* successful */
         case ERR_AUTH_FAIL:
           goto retryhandshake;
         default:
-          log_error(NULL, "vcry_initiator_verify_complete() : %s",
-                    zt_strerror(ret));
+          log_error(NULL, "vcry_initiator_verify_complete : %s",
+                    zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -958,7 +980,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        */
 
       if (!tty_get_answer_is_yes(
-              g_CLIPrompts[OnPossibleIncorrectPasswdAttempt])) {
+              get_cli_prompt(OnPossibleIncorrectPasswdAttempt))) {
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -975,7 +997,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
        */
-      if ((ret = zt_fio_open(&fileptr, g_config.filename, FIO_RDONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filename, FIO_RDONLY)) !=
           ERR_SUCCESS) {
         goto cleanup2;
       }
@@ -1007,7 +1029,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (zt_progressbar_init() != 0)
         log_error(NULL, "failed to create progress bar");
 
-      zt_progressbar_begin(g_config.hostname, fileinfo.name, fileinfo.size);
+      zt_progressbar_begin(GlobalConfig.hostname, fileinfo.name, fileinfo.size);
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {

@@ -24,13 +24,13 @@
  * Timeouts waiting periods
  */
 
-#define ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT       10000U  /* Client connect timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT          5000U   /* Client send() timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT          5000U   /* Client recv() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT       15000U  /* Client connect timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT          15000U   /* Client send() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT          15000U   /* Client recv() timeout (msec) */
 
 #define ZT_SERVER_TIMEOUT_IDLE_DEFAULT          60000U  /* Server idle timeout (msec) */
-#define ZT_SERVER_TIMEOUT_SEND_DEFAULT          5000U   /* Server send() timeout (msec) */
-#define ZT_SERVER_TIMEOUT_RECV_DEFAULT          5000U   /* Server recv() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_SEND_DEFAULT          15000U   /* Server send() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_RECV_DEFAULT          15000U   /* Server recv() timeout (msec) */
 
 #define CLIENT_RESOLVE_RETRIES                  8       /* Max host resolution retries */
 
@@ -81,6 +81,7 @@ typedef uint16_t zt_msg_flags_t;
   (ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE +                                   \
    LZ4_COMPRESSBOUND(ZT_MSG_MAX_RW_SIZE + 1))
 
+#pragma pack(push, 1)
 typedef struct _zt_msg_st {
   union {
     struct {
@@ -94,6 +95,7 @@ typedef struct _zt_msg_st {
   };
   uint8_t *_xbuf;
 } zt_msg_t;
+#pragma pack(pop)
 
 /** `msg.data[]` pointer */
 #define MSG_DATA_PTR(msgptr)                    ((msgptr)->data)
@@ -111,21 +113,21 @@ typedef struct _zt_msg_st {
 #define MSG_TYPE(msgptr)                        ((msgptr)->type)
 
 /** Get `msg.flags` */
-#define MSG_FLAGS(msgptr)                       ((msgptr)->flags)
+#define MSG_FLAGS(msgptr)                       (ntoh16((msgptr)->flags))
 
 /** Set `msg.len` */
-#define MSG_SET_LEN(msgptr, len_val)            (void)(msgptr->len = hton32(len_val))
+#define MSG_SET_LEN(msgptr, len_val)            (void)((msgptr)->len = hton32(len_val))
 
 /** Set `msg.type` */
-#define MSG_SET_TYPE(msgptr, type_val)          (void)(msgptr->type = (type_val))
+#define MSG_SET_TYPE(msgptr, type_val)          (void)((msgptr)->type = (type_val))
 
 /** Set `msg.flags` */
-#define MSG_SET_FLAGS(msgptr, setflags)         (void)(msgptr->flags = (setflags))
+#define MSG_SET_FLAGS(msgptr, setflags)         (void)((msgptr)->flags = hton16(setflags))
 
 /** Populate message `msgptr` */
 #define MSG_MAKE(msgptr, type, data, len, setflags)                            \
   do {                                                                         \
-    zt_memcpy(MSG_DATA_PTR(msgptr), data, len);                                \
+    memcpy(MSG_DATA_PTR(msgptr), data, len);                                   \
     MSG_SET_TYPE(msgptr, type);                                                \
     MSG_SET_LEN(msgptr, len);                                                  \
     MSG_SET_FLAGS(msgptr, setflags);                                           \

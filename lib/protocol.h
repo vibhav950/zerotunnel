@@ -1,3 +1,5 @@
+// [CAUTION] sample protocol.h for testing until the build system is in place
+
 #pragma once
 
 // clang-format off
@@ -15,7 +17,7 @@ typedef enum {
   KAPPA_UNKNOWN           = 0xff,
 } handshake_protocol_t;
 
-#cmakedefine HANDSHAKE_PROTOCOL_VERSION @HANDSHAKE_PROTOCOL_VERSION@
+#define HANDSHAKE_PROTOCOL_VERSION KAPPAv1_unstable
 
 handshake_protocol_t get_handshake_protocol_version(void) {
   return (handshake_protocol_t)HANDSHAKE_PROTOCOL_VERSION;

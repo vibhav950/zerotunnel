@@ -9,32 +9,37 @@
 // clang-format off
 struct config {
   char
-    *hostname,
-    *passwddb_file,
-    *ciphersuite,
-    *filename;
+    *hostname,                  /* peer hostname -- can be a FQDN or IP address */
+    *passwdfile,                /* location of the password database file */
+    *ciphersuite,               /* ciphersuite cannonical name or alias */
+    *filename;                  /* complete target file path */
   uint32_t
-    padding_factor;     /* padding factor of the form: 2^n; 1<=n<=16 */
+    padding_factor;             /* padding factor of the form: 2^n; 1<=n<=16 */
   uint16_t
-    port;               /* explicit service port number */
+    service_port;               /* explicit service port number */
   char
-    preferred_family;   /* preferred address family: '4' for IPv4, '6' for IPv6 */
-  short
-    password_size;      /* number of chars or words in password */
+    preferred_family;           /* preferred address family: '4' for IPv4, '6' for IPv6 */
   int
-    connect_timeout,    /* positive timeout for connection */
-    idle_timeout,       /* positive timeout for server being idle */
-    recv_timeout,       /* positive timeout for receiving data */
-    send_timeout;       /* positive timeout for sending data */
+    password_bundle_size,       /* number of passwords in a bundle */
+    password_chars,             /* number of UTF-8 chars in a password */
+    password_words;             /* number of words in a phonetic password */
+  int
+    connect_timeout,            /* timeout for connection phase (>0 ms) */
+    idle_timeout,               /* timeout for server being idle (>0 ms) */
+    recv_timeout,               /* timeout for receiving data (>0 ms) */
+    send_timeout;               /* timeout for sending data (>0 ms) */
   auth_type_t
-    auth_type;
+    auth_type;                  /* KAPPA authentication type */
   char
-    flag_explicit_port,
-    flag_ipv4_only,
-    flag_ipv6_only,
-    flag_length_obfuscation,
-    flag_live_read,
-    flag_lz4_compression,
-    flag_tcp_nodelay,
-    flag_tcp_fastopen;
+    flag_explicit_port,         /* use an explicit service port */
+    flag_ipv4_only,             /* use IPv4 only */
+    flag_ipv6_only,             /* use IPv6 only */
+    flag_length_obfuscation,    /* enable length obfuscation */
+    flag_live_read,             /* enable live read */
+    flag_lz4_compression,       /* enable LZ4 compression */
+    flag_tcp_fastopen,          /* enable TCP_FASTOPEN */
+    flag_tcp_nodelay;           /* enable TCP_NODELAY */
 };
+
+/** Global configuration options for use within the library */
+extern struct config GlobalConfig;

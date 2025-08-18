@@ -1,6 +1,8 @@
 #ifndef __CIPHERSUITES_H__
 #define __CIPHERSUITES_H__
 
+#include <stdint.h>
+
 #define CS_INTERNAL(_) (_cs_##_)
 
 typedef uint8_t ciphersuite_t;

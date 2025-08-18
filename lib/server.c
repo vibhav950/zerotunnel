@@ -41,8 +41,6 @@ static const char serverstate_names[][20] = {
 
 #define SERVERSTATE_CHANGE(cur, next) (void)(cur = next)
 
-extern struct config g_config;
-
 static inline const char *get_serverstate_name(ZT_SERVER_STATE state) {
   if (likely(state >= SERVER_NONE && state <= SERVER_DONE))
     return serverstate_names[state];
@@ -76,6 +74,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   struct addrinfo hints, *res = NULL, *cur;
   size_t saddr_len;
   bool use_ipv6 = false;
+  void *addr_ptr;
   char ipstr[INET6_ADDRSTRLEN];
 
   ASSERT(conn);
@@ -83,7 +82,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
 
 #ifdef USE_IPV6
   /* Check for IPv6 availability */
-  if (!g_config.flag_ipv4_only) {
+  if (!GlobalConfig.flag_ipv4_only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -92,15 +91,17 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!g_config.flag_ipv6_only, use_ipv6);
+  af = zt_choose_ip_family(!GlobalConfig.flag_ipv6_only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "could not choose a suitable address family");
     ret = ERR_BAD_ARGS;
     goto out;
   }
 
-  if (af == AF_UNSPEC)
-    preferred_family = g_config.preferred_family == '4' ? AF_INET : AF_INET6;
+  if (af == AF_UNSPEC) {
+    preferred_family =
+        GlobalConfig.preferred_family == '4' ? AF_INET : AF_INET6;
+  }
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -124,6 +125,8 @@ static err_t server_setup_host(zt_server_connection_t *conn,
    */
   *ai_list = NULL;
   for (cur = res; cur != NULL; cur = cur->ai_next) {
+    size_t total_size;
+
     if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
@@ -144,8 +147,8 @@ static err_t server_setup_host(zt_server_connection_t *conn,
     if ((size_t)cur->ai_addrlen < saddr_len)
       continue;
 
-    ai_cur =
-        (struct zt_addrinfo *)zt_malloc(sizeof(struct zt_addrinfo) + saddr_len);
+    total_size = sizeof(struct zt_addrinfo) + saddr_len;
+    ai_cur = (struct zt_addrinfo *)zt_malloc(total_size);
     if (!ai_cur) {
       ret = ERR_MEM_FAIL;
       goto out;
@@ -160,9 +163,10 @@ static err_t server_setup_host(zt_server_connection_t *conn,
     ai_cur->ai_canonname = NULL;
     ai_cur->ai_addr = NULL;
     ai_cur->ai_next = NULL;
+    ai_cur->total_size = total_size;
 
     ai_cur->ai_addr = (void *)((char *)ai_cur + sizeof(struct zt_addrinfo));
-    zt_memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
+    memcpy(ai_cur->ai_addr, cur->ai_addr, saddr_len);
 
     if (cur->ai_family == preferred_family) {
       if (preferred_tail)
@@ -178,8 +182,18 @@ static err_t server_setup_host(zt_server_connection_t *conn,
       unpreferred_tail = ai_cur;
     }
 
-    log_debug("Resolved %s to %s", conn->hostname,
-              inet_ntop(cur->ai_family, cur->ai_addr, ipstr, sizeof(ipstr)));
+    if (cur->ai_family == AF_INET)
+      addr_ptr = &((struct sockaddr_in *)cur->ai_addr)->sin_addr;
+#ifdef USE_IPV6
+    else if (cur->ai_family == AF_INET6) {
+      addr_ptr = &((struct sockaddr_in6 *)cur->ai_addr)->sin6_addr;
+    }
+#endif
+
+    if (addr_ptr) {
+      log_debug(NULL, "Resolved %s to %s", conn->hostname,
+                inet_ntop(cur->ai_family, addr_ptr, ipstr, sizeof(ipstr)));
+    }
   }
 
   /* Merge the two lists based on preference (if any applies) */
@@ -273,7 +287,7 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
     ret = ERR_MEM_FAIL;
     goto out;
   }
-  zt_memcpy(ai_estab, ai_cur, ai_cur->total_size);
+  memcpy(ai_estab, ai_cur, ai_cur->total_size);
   ai_estab->ai_next = NULL;
 
   getnameinfo(ai_cur->ai_addr, ai_cur->ai_addrlen, conn->self.ip,
@@ -297,9 +311,10 @@ out:
 
 static err_t server_tcp_accept(zt_server_connection_t *conn) {
   int clientfd, flags;
+  struct timeval tval;
 
   ASSERT(conn);
-  ASSERT(conn->state == SERVER_CONN_INIT);
+  ASSERT(conn->state == SERVER_CONN_LISTEN);
   ASSERT(conn->sockfd >= 0);
 
   clientfd = accept4(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
@@ -312,7 +327,7 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
        * On Linux <= 2.6.28 accept4() fails with `ENOSYS`; fallback to accept()
        * Thanks to https://github.com/python/cpython/issues/54324
        */
-      log_debug(NULL, "accept4() not supported, falling back to accept()");
+      log_debug(NULL, "accept4 not supported, falling back to accept()");
       clientfd = accept(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
                         &conn->peer.addrlen);
       if (clientfd < 0) {
@@ -325,8 +340,8 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
   }
   conn->peer.fd = clientfd;
 
-  struct timeval tval = {.tv_sec = conn->send_timeout / 1000,
-                         .tv_usec = (conn->send_timeout % 1000) * 1000};
+  tval.tv_sec = conn->send_timeout / 1000;
+  tval.tv_usec = (conn->send_timeout % 1000) * 1000;
   if (setsockopt(clientfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
                  sizeof(tval)) == -1) {
     log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
@@ -335,8 +350,8 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
     return ERR_TCP_ACCEPT; // TODO: better error code?
   }
 
-  struct timeval tval = {.tv_sec = conn->recv_timeout / 1000,
-                         .tv_usec = (conn->recv_timeout % 1000) * 1000};
+  tval.tv_sec = conn->recv_timeout / 1000;
+  tval.tv_usec = (conn->recv_timeout % 1000) * 1000;
   if (setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
                  sizeof(tval)) == -1) {
     log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
@@ -411,10 +426,12 @@ static err_t server_send(zt_server_connection_t *conn) {
 
   MSG_SET_LEN(conn->msgbuf, len); /* update length in header */
 
+  rawptr = MSG_RAW_PTR(conn->msgbuf);
+
   if (is_encrypted) {
     if ((ret = vcry_aead_encrypt(dataptr, len, rawptr, ZT_MSG_HEADER_SIZE,
                                  dataptr, &tosend)) != ERR_SUCCESS) {
-      log_error(NULL, "encryption failed");
+      log_error(NULL, "encryption failed (%s)", zt_error_str(ret));
       return ret;
     }
   } else {
@@ -434,7 +451,7 @@ static err_t server_send(zt_server_connection_t *conn) {
 }
 
 #define msg_type_is_expected(msgtype, mask)                                    \
-  (msgtype == MSG_ANY || (msgtype & mask))
+  (msgtype == MSG_ANY || (msgtype & mask) != 0)
 
 /**
  * @param[in] conn The server connection context.
@@ -521,7 +538,7 @@ static err_t server_recv(zt_server_connection_t *conn,
   if (is_encrypted) {
     if ((ret = vcry_aead_decrypt(datap, datalen, p, ZT_MSG_HEADER_SIZE, datap,
                                  &nread)) != ERR_SUCCESS) {
-      log_error(NULL, "decryption failed");
+      log_error(NULL, "decryption failed (%s)", zt_error_str(ret));
       goto out;
     }
   }
@@ -542,7 +559,7 @@ static err_t server_recv(zt_server_connection_t *conn,
 
     nread = LZ4_decompress_safe(rptr, wptr, nread, ZT_MSG_MAX_RW_SIZE + 1);
     if (nread <= 0) {
-      log_error(NULL, "LZ4_decompress_safe() failed (returned %d)", nread);
+      log_error(NULL, "LZ4_decompress_safe failed (returned %d)", nread);
       ret = ERR_INVALID_DATUM;
       goto out;
     }
@@ -618,7 +635,6 @@ void zt_server_conn_dealloc(zt_server_connection_t *conn) {
 err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                     bool *done) {
   err_t ret = ERR_SUCCESS;
-  struct passwd *master_pass;
   zt_fio_t *fileptr;
   char port[6];
 
@@ -628,23 +644,23 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   if (zt_get_hostid(&conn->self.authid) != 0)
     return ERR_INTERNAL;
 
-  conn->hostname = g_config.hostname ? conn->hostname : "0.0.0.0";
+  conn->hostname = GlobalConfig.hostname ? GlobalConfig.hostname : "0.0.0.0";
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", g_config.port);
+    snprintf(port, sizeof(port), "%u", GlobalConfig.service_port);
     conn->listen_port = port;
   } else {
     conn->listen_port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->idle_timeout = g_config.idle_timeout > 0
-                           ? g_config.idle_timeout
+  conn->idle_timeout = GlobalConfig.idle_timeout > 0
+                           ? GlobalConfig.idle_timeout
                            : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
-  conn->recv_timeout = g_config.recv_timeout > 0
-                           ? g_config.recv_timeout
+  conn->recv_timeout = GlobalConfig.recv_timeout > 0
+                           ? GlobalConfig.recv_timeout
                            : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = g_config.send_timeout > 0
-                           ? g_config.send_timeout
+  conn->send_timeout = GlobalConfig.send_timeout > 0
+                           ? GlobalConfig.send_timeout
                            : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
 
   conn->state = SERVER_CONN_INIT;
@@ -660,8 +676,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
         return ret;
 
-      tty_printf("%s\n(address=%s, port=%s, Id=%x)\n",
-                 g_CLIPrompts[OnServerListening], conn->self.address,
+      tty_printf(get_cli_prompt(OnServerListening), conn->self.ip,
                  conn->self.port, conn->peer.authid.bytes);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_CONN_LISTEN);
@@ -669,24 +684,19 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
 
     case SERVER_CONN_LISTEN: {
-      while (1) {
-        int rv = zt_tcp_io_waitfor(conn->sockfd, conn->idle_timeout,
-                                   ZT_NETIO_READABLE);
-        if (rv < 0) {
-          log_error(NULL,
-                    "an error occurred while waiting for incoming connections "
-                    "on the listening socket (%s)",
-                    strerror(errno));
-          ret = ERR_TCP_ACCEPT;
-          goto cleanup1;
-        }
+      bool ok = zt_tcp_io_waitfor_read(conn->sockfd, conn->idle_timeout);
 
-        if (rv > 0) {
-          if ((ret = server_tcp_accept(conn)) != ERR_SUCCESS)
-            goto cleanup1;
-          break; /* client connection accepted  */
-        }
+      if (!ok) {
+        log_error(NULL,
+                  "an error occurred while waiting for incoming connections "
+                  "on the listening socket (%s)",
+                  strerror(errno));
+        ret = ERR_TCP_ACCEPT;
+        goto cleanup1;
       }
+
+      if ((ret = server_tcp_accept(conn)) != ERR_SUCCESS)
+        goto cleanup1;
 
       SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
       ATTRIBUTE_FALLTHROUGH;
@@ -696,6 +706,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       uint8_t *sndbuf[2], *rcvbuf;
       size_t sndlen[2], rcvlen;
       passwd_id_t passwd_id;
+      static struct passwd *master_pass = NULL;
 
       static int retrycount = 1;
       if (retrycount > MAX_AUTH_RETRY_COUNT) {
@@ -720,20 +731,23 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      zt_memcpy(conn->peer.authid.bytes, rcvbuf, AUTHID_BYTES_LEN);
+      memcpy(conn->peer.authid.bytes, rcvbuf, AUTHID_BYTES_LEN);
       rcvbuf += AUTHID_BYTES_LEN;
 
-      zt_memcpy(PTRV(&passwd_id), rcvbuf, sizeof(passwd_id_t));
+      memcpy(PTRV(&passwd_id), rcvbuf, sizeof(passwd_id_t));
       rcvbuf += sizeof(passwd_id_t);
 
-      zt_memcpy(PTRV(&conn->ciphersuite), rcvbuf, sizeof(ciphersuite_t));
+      memcpy(PTRV(&conn->ciphersuite), rcvbuf, sizeof(ciphersuite_t));
       rcvbuf += sizeof(ciphersuite_t);
 
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
       /* Load the master password */
-      passwd_id = zt_auth_passwd_get(g_config.passwddb_file, g_config.auth_type,
-                                     conn->hostname, passwd_id, &master_pass);
+      if (!master_pass) {
+        passwd_id =
+            zt_auth_passwd_get(GlobalConfig.passwdfile, GlobalConfig.auth_type,
+                               conn->hostname, passwd_id, &master_pass);
+      }
 
       if (conn->expected_passwd.expect &&
           (conn->expected_passwd.id != passwd_id)) {
@@ -744,7 +758,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "could not negotiate a usable password -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
-      } else if (passwd_id < 0 && g_config.auth_type == KAPPA_AUTHTYPE_1) {
+      } else if (passwd_id < 0 && GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
         /**
          * KAPPA1 authentication failure -- this can happen due to the passwddb
          * files becoming out-of-sync so we ask the user if we may renegotiate a
@@ -753,14 +767,14 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "authentication failed for hostname '%s'",
                   conn->hostname);
 
-        if (!tty_get_answer_is_yes(g_CLIPrompts[OnBadPasswdIdentifier])) {
+        if (!tty_get_answer_is_yes(get_cli_prompt(OnBadPasswdIdentifier))) {
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
         log_debug(NULL, "now trying to re-negotiate with a new password...");
 
         passwd_id_t pwid = zt_auth_passwd_load(
-            g_config.passwddb_file, conn->hostname, -1, &master_pass);
+            GlobalConfig.passwdfile, conn->hostname, -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "failed to load a new password for hostname '%s'",
                     conn->hostname);
@@ -793,7 +807,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       /* Setup the VCRY module now that we have the required parameters */
       if ((ret = vcry_module_init()) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_module_init() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_module_init : %s", zt_error_str(ret));
         goto cleanup2;
       }
 
@@ -801,12 +815,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
           ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_authpass() : %s", zt_strerror(ret));
-        zt_auth_passwd_free(master_pass);
+        log_error(NULL, "vcry_set_authpass : %s", zt_error_str(ret));
+        zt_auth_passwd_free(master_pass, NULL);
         goto cleanup2;
       }
-      /* We don't need the master passwd anymore -- why keep it in memory? */
-      zt_auth_passwd_free(master_pass);
+
+      /* We don't need the master passwd anymore -- don't keep it in memory */
+      zt_auth_passwd_free(master_pass, NULL);
 
       int vcry_algs[6];
       const char *csname;
@@ -823,39 +838,41 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = vcry_set_crypto_params(
                vcry_algs[0], vcry_algs[1], vcry_algs[2],
                vcry_algs[3], vcry_algs[4], vcry_algs[5])) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_crypto_params() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_set_crypto_params : %s", zt_error_str(ret));
         goto cleanup2;
       }
       // clang-format on
 
       if ((ret = vcry_handshake_respond(rcvbuf, rcvlen, &sndbuf[0],
                                         &sndlen[0])) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_handshake_respond() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_handshake_respond : %s", zt_error_str(ret));
         goto cleanup2;
       }
 
       if ((ret = vcry_derive_session_key()) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_derive_session_key() : %s", zt_strerror(ret));
+        log_error(NULL, "vcry_derive_session_key : %s", zt_error_str(ret));
         zt_free(sndbuf[0]);
         goto cleanup2;
       }
 
       if ((ret = vcry_responder_verify_initiate(
                &sndbuf[1], &sndlen[1], conn->self.authid.bytes,
-               conn->peer.authid.bytes)) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_responder_verify_initiate() : %s",
-                  zt_strerror(ret));
+               conn->peer.authid.bytes, AUTHID_BYTES_LEN, AUTHID_BYTES_LEN)) !=
+          ERR_SUCCESS) {
+        log_error(NULL, "vcry_responder_verify_initiate : %s",
+                  zt_error_str(ret));
         zt_free(sndbuf[0]);
         goto cleanup2;
       }
 
       /** Make the handshake response message */
       uint8_t *p = MSG_DATA_PTR(conn->msgbuf);
-      zt_memcpy(p, conn->self.authid.bytes, AUTHID_BYTES_LEN);
+      memcpy(p, conn->self.authid.bytes, AUTHID_BYTES_LEN);
       p += AUTHID_BYTES_LEN;
-      zt_memcpy(p, sndbuf[0], sndlen[0]);
+      memcpy(p, sndbuf[0], sndlen[0]);
       p += sndlen[0];
-      zt_memcpy(p, sndbuf[1], sndlen[1]);
+      memcpy(p, sndbuf[1], sndlen[1]);
+
       MSG_SET_LEN(conn->msgbuf, AUTHID_BYTES_LEN + sndlen[0] + sndlen[1]);
       MSG_SET_TYPE(conn->msgbuf, MSG_HANDSHAKE);
 
@@ -865,7 +882,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, SERVER_AUTH_COMPLETE);
+      SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_COMPLETE);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -886,15 +903,16 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       ret = vcry_responder_verify_complete(rcvbuf, conn->self.authid.bytes,
-                                           conn->peer.authid.bytes);
+                                           conn->peer.authid.bytes,
+                                           AUTHID_BYTES_LEN, AUTHID_BYTES_LEN);
       switch (ret) {
       case ERR_SUCCESS:
         break; /* successful */
       case ERR_AUTH_FAIL:
         goto retryhandshake;
       default:
-        log_error(NULL, "vcry_responder_verify_complete() : %s",
-                  zt_strerror(ret));
+        log_error(NULL, "vcry_responder_verify_complete : %s",
+                  zt_error_str(ret));
         goto cleanup2;
       }
 
@@ -911,7 +929,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * chance to guess the password!
        */
 
-      if (!tty_get_answer_is_yes(g_CLIPrompts[OnBadPasswdIdentifier])) {
+      if (!tty_get_answer_is_yes(get_cli_prompt(OnBadPasswdIdentifier))) {
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -933,22 +951,23 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      zt_memcpy(PTRV(&conn->fileinfo), MSG_DATA_PTR(conn->msgbuf),
-                sizeof(zt_fileinfo_t));
+      memcpy(PTRV(&conn->fileinfo), MSG_DATA_PTR(conn->msgbuf),
+             sizeof(zt_fileinfo_t));
 
       conn->fileinfo.size = ntoh64(conn->fileinfo.size);
       conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
 
       off_t filesize = filesize_unit_conv(conn->fileinfo.size);
       const char *unit = filesize_unit_str(conn->fileinfo.size);
+
       tty_printf("Incoming file transfer (name = %s, size = %jd %s)\n",
-                 filesize, unit);
-      if (!tty_get_answer_is_yes(g_CLIPrompts[OnFileTransferRequest])) {
+                 conn->fileinfo.name, filesize, unit);
+      if (!tty_get_answer_is_yes(get_cli_prompt(OnFileTransferRequest))) {
         log_info(NULL, "shutting everything down...");
         goto cleanup2;
       }
 
-      CLIENTSTATE_CHANGE(conn->state, SERVER_TRANSFER);
+      SERVERSTATE_CHANGE(conn->state, SERVER_TRANSFER);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -957,13 +976,15 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_fio_t fileptr;
       off_t remaining;
 
-      if ((ret = zt_fio_open(&fileptr, conn->fileinfo.name, FIO_WRONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filename, FIO_WRONLY)) !=
           ERR_SUCCESS) {
+        log_error(NULL, "failed to open file for writing");
         goto cleanup2;
       }
 
       if ((ret = zt_fio_write_allocate(&fileptr, conn->fileinfo.size)) !=
           ERR_SUCCESS) {
+        log_error(NULL, "not enough disk space");
         zt_fio_close(&fileptr);
         goto cleanup2;
       }
@@ -1001,7 +1022,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      CLIENTSTATE_CHANGE(conn->state, SERVER_DONE);
+      SERVERSTATE_CHANGE(conn->state, SERVER_DONE);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -1028,7 +1049,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                   "successfully!");
       }
 
-      CLIENTSTATE_CHANGE(conn->state, SERVER_NONE);
+      SERVERSTATE_CHANGE(conn->state, SERVER_NONE);
       *done = true;
       goto cleanup2;
     }
