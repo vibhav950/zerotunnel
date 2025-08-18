@@ -132,18 +132,20 @@ err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len);
 err_t vcry_derive_session_key(void);
 
 err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
-                                     size_t *verify_msg_len, const char *id_a,
-                                     const char *id_b);
+                                     size_t *verify_msg_len,
+                                     const uint8_t *id_a, const uint8_t *id_b,
+                                     size_t len_a, size_t len_b);
 err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
-                                     size_t *verify_msg_len, const char *id_a,
-                                     const char *id_b);
+                                     size_t *verify_msg_len,
+                                     const uint8_t *id_a, const uint8_t *id_b,
+                                     size_t len_a, size_t len_b);
 
 err_t vcry_initiator_verify_complete(
-    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
-    const char *id_b);
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const uint8_t *id_a,
+    const uint8_t *id_b, size_t len_a, size_t len_b);
 err_t vcry_responder_verify_complete(
-    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
-    const char *id_b);
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const uint8_t *id_a,
+    const uint8_t *id_b, size_t len_a, size_t len_b);
 
 err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad,
                         size_t ad_len, uint8_t *out, size_t *out_len);

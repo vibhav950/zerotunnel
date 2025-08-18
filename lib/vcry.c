@@ -1169,6 +1169,13 @@ clean2:
   return ret;
 }
 
+#define SWAP(a, b)                                                             \
+  do {                                                                         \
+    typeof(a) _tmp = (a);                                                      \
+    (a) = (b);                                                                 \
+    (b) = _tmp;                                                                \
+  } while (0)
+
 /**
  * Compute the initiator's verification message:
  * Proof_A = HMAC(K_mac_ini, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
@@ -1184,10 +1191,10 @@ clean2:
  * Returns an `err_t` status code.
  */
 err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
-                                     size_t *verify_msg_len, const char *id_a,
-                                     const char *id_b) {
+                                     size_t *verify_msg_len,
+                                     const uint8_t *id_a, const uint8_t *id_b,
+                                     size_t len_a, size_t len_b) {
   err_t ret;
-  const char *id1, *id2;
 
   if (!verify_msg || !verify_msg_len)
     return VCRY_ERR_SET(ERR_NULL_PTR);
@@ -1201,13 +1208,10 @@ err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
   if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  /** Rearrange so that id1 <= id2 */
-  if (strcmp(id_a, id_b) <= 0) {
-    id1 = id_a;
-    id2 = id_b;
-  } else {
-    id1 = id_b;
-    id2 = id_a;
+  /** Rearrange so that id_a <= id_b */
+  if (memcmp(id_a, id_b, MIN(len_a, len_b)) > 0) {
+    SWAP(id_a, id_b);
+    SWAP(len_a, len_b);
   }
 
   if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
@@ -1219,8 +1223,8 @@ err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+  if (((ret = hmac_update(vctx->mac, id_a, len_a)) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id_b, len_b)) != ERR_SUCCESS) ||
       ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                           strlen(VCRY_VERIFY_CONST0))) != ERR_SUCCESS)) {
     zt_free(*verify_msg);
@@ -1253,10 +1257,10 @@ err_t vcry_initiator_verify_initiate(uint8_t **verify_msg,
  * Returns an `err_t` status code.
  */
 err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
-                                     size_t *verify_msg_len, const char *id_a,
-                                     const char *id_b) {
+                                     size_t *verify_msg_len,
+                                     const uint8_t *id_a, const uint8_t *id_b,
+                                     size_t len_a, size_t len_b) {
   err_t ret;
-  const char *id1, *id2;
 
   if (!verify_msg || !verify_msg_len)
     return VCRY_ERR_SET(ERR_NULL_PTR);
@@ -1270,13 +1274,10 @@ err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
   if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  /** Rearrange so that id1 >= id2 */
-  if (strcmp(id_a, id_b) >= 0) {
-    id1 = id_a;
-    id2 = id_b;
-  } else {
-    id1 = id_b;
-    id2 = id_a;
+  /** Rearrange so that id_a >= id_b */
+  if (memcmp(id_a, id_b, MIN(len_a, len_b)) < 0) {
+    SWAP(id_a, id_b);
+    SWAP(len_a, len_b);
   }
 
   if ((*verify_msg = zt_malloc(VCRY_VERIFY_MSG_LEN)) == NULL)
@@ -1288,8 +1289,8 @@ err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+  if (((ret = hmac_update(vctx->mac, id_a, len_a)) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id_b, len_b)) != ERR_SUCCESS) ||
       ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                           strlen(VCRY_VERIFY_CONST1))) != ERR_SUCCESS)) {
     zt_free(*verify_msg);
@@ -1317,11 +1318,10 @@ err_t vcry_responder_verify_initiate(uint8_t **verify_msg,
  * Returns an `err_t` status code.
  */
 err_t vcry_initiator_verify_complete(
-    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
-    const char *id_b) {
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const uint8_t *id_a,
+    const uint8_t *id_b, size_t len_a, size_t len_b) {
   err_t ret;
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
-  const char *id1, *id2;
 
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
@@ -1332,13 +1332,10 @@ err_t vcry_initiator_verify_complete(
   if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_initiator)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  /** Rearrange so that id1 >= id2 */
-  if (strcmp(id_a, id_b) >= 0) {
-    id1 = id_a;
-    id2 = id_b;
-  } else {
-    id1 = id_b;
-    id2 = id_a;
+  /** Rearrange so that id_a >= id_b */
+  if (memcmp(id_a, id_b, MIN(len_a, len_b)) < 0) {
+    SWAP(id_a, id_b);
+    SWAP(len_a, len_b);
   }
 
   if ((ret = hmac_init(vctx->mac, vcry_k_mac_res(), VCRY_K_MAC_LEN)) !=
@@ -1346,8 +1343,8 @@ err_t vcry_initiator_verify_complete(
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+  if (((ret = hmac_update(vctx->mac, id_a, len_a)) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id_b, len_b)) != ERR_SUCCESS) ||
       ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST1,
                           strlen(VCRY_VERIFY_CONST1))) != ERR_SUCCESS)) {
     return VCRY_ERR_SET(ret);
@@ -1375,11 +1372,10 @@ err_t vcry_initiator_verify_complete(
  * Returns an `err_t` status code.
  */
 err_t vcry_responder_verify_complete(
-    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const char *id_a,
-    const char *id_b) {
+    const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN], const uint8_t *id_a,
+    const uint8_t *id_b, size_t len_a, size_t len_b) {
   err_t ret;
   uint8_t verify_msg_cmp[VCRY_VERIFY_MSG_LEN];
-  const char *id1, *id2;
 
   if (VCRY_FLAG_GET(vcry_fl_all_set) != vcry_fl_all_set)
     return VCRY_ERR_SET(ERR_NOT_INIT);
@@ -1390,13 +1386,10 @@ err_t vcry_responder_verify_complete(
   if (VCRY_HSHAKE_ROLE() != vcry_hshake_role_responder)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  /** Rearrange so that id1 <= id2 */
-  if (strcmp(id_a, id_b) <= 0) {
-    id1 = id_a;
-    id2 = id_b;
-  } else {
-    id1 = id_b;
-    id2 = id_a;
+  /** Rearrange so that id_a <= id_b */
+  if (memcmp(id_a, id_b, MIN(len_a, len_b)) > 0) {
+    SWAP(id_a, id_b);
+    SWAP(len_a, len_b);
   }
 
   if ((ret = hmac_init(vctx->mac, vcry_k_mac_ini(), VCRY_K_MAC_LEN)) !=
@@ -1404,8 +1397,8 @@ err_t vcry_responder_verify_complete(
     return VCRY_ERR_SET(ret);
   }
 
-  if (((ret = hmac_update(vctx->mac, id1, strlen(id1))) != ERR_SUCCESS) ||
-      ((ret = hmac_update(vctx->mac, id2, strlen(id2))) != ERR_SUCCESS) ||
+  if (((ret = hmac_update(vctx->mac, id_a, len_a)) != ERR_SUCCESS) ||
+      ((ret = hmac_update(vctx->mac, id_b, len_b)) != ERR_SUCCESS) ||
       ((ret = hmac_update(vctx->mac, (const uint8_t *)VCRY_VERIFY_CONST0,
                           strlen(VCRY_VERIFY_CONST0))) != ERR_SUCCESS)) {
     return VCRY_ERR_SET(ret);

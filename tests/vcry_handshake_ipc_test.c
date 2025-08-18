@@ -21,6 +21,9 @@ static const uint8_t AUTHKEY[32] = {
 
 static const uint8_t plaintext[32] = {0};
 
+static const char *id_initiator = "Alice";
+static const char *id_responder = "Bob";
+
 /**
  * Helper function to send data over pipe
  * Format: send length first (4 bytes), then data
@@ -76,7 +79,7 @@ static void initiator_process(int read_fd, int write_fd) {
 
   ASSERT(vcry_set_crypto_params_from_names(
              "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
-             "KEM-KYBER512", "KDF-PBKDF2") == ERR_SUCCESS);
+             "KEM-KYBER512", "KDF-ARGON2") == ERR_SUCCESS);
 
   /* ============ HANDSHAKE INITIATE ============ */
 
@@ -99,8 +102,9 @@ static void initiator_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY INITIATE ============ */
 
-  ASSERT(vcry_initiator_verify_initiate(&write_data, &write_len, "Alice",
-                                        "Bob") == ERR_SUCCESS);
+  ASSERT(vcry_initiator_verify_initiate(&write_data, &write_len, id_initiator,
+                                        id_responder, strlen(id_initiator),
+                                        strlen(id_responder)) == ERR_SUCCESS);
 
   /* Send initiator verify message */
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
@@ -112,8 +116,9 @@ static void initiator_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY COMPLETE ============ */
 
-  ASSERT(vcry_initiator_verify_complete(read_data, "Alice", "Bob") ==
-         ERR_SUCCESS);
+  ASSERT(vcry_initiator_verify_complete(read_data, id_initiator, id_responder,
+                                        strlen(id_initiator),
+                                        strlen(id_responder)) == ERR_SUCCESS);
   zt_free(read_data);
 
   /* ================ SEND DATA ================ */
@@ -165,7 +170,7 @@ static void responder_process(int read_fd, int write_fd) {
 
   ASSERT(vcry_set_crypto_params_from_names(
              "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
-             "KEM-KYBER512", "KDF-PBKDF2") == ERR_SUCCESS);
+             "KEM-KYBER512", "KDF-ARGON2") == ERR_SUCCESS);
 
   /* wait for initiation message */
   read_data = recv_data(read_fd, &read_len);
@@ -185,8 +190,9 @@ static void responder_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY INITIATE ============ */
 
-  ASSERT(vcry_responder_verify_initiate(&write_data, &write_len, "Alice",
-                                        "Bob") == ERR_SUCCESS);
+  ASSERT(vcry_responder_verify_initiate(&write_data, &write_len, id_initiator,
+                                        id_responder, strlen(id_initiator),
+                                        strlen(id_responder)) == ERR_SUCCESS);
 
   /* send responder verify message */
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
@@ -198,8 +204,9 @@ static void responder_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY COMPLETE ============ */
 
-  ASSERT(vcry_responder_verify_complete(read_data, "Alice", "Bob") ==
-         ERR_SUCCESS);
+  ASSERT(vcry_responder_verify_complete(read_data, id_initiator, id_responder,
+                                        strlen(id_initiator),
+                                        strlen(id_responder)) == ERR_SUCCESS);
   zt_free(read_data);
 
   /* ================ SEND DATA ================ */

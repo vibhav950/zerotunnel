@@ -21,6 +21,7 @@
 
 #define CIPHER_FLAG_SET(c, flag) (void)((c)->flags |= flag)
 #define CIPHER_FLAG_GET(c, flag) ((c)->flags & flag)
+#define CIPHER_FLAG_CLR(c, flag) (void)((c)->flags &= ~(flag))
 // clang-format on
 
 /**
@@ -174,6 +175,7 @@ static err_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
   }
 
   CIPHER_FLAG_SET(c, CIPHER_FLAG_INIT);
+  CIPHER_FLAG_CLR(c, CIPHER_FLAG_AAD); /* this may be set from previous use */
   CIPHER_OPERATION_SET(c, oper);
 
   return ERR_SUCCESS;
