@@ -1,3 +1,11 @@
+/**
+ * options.c -- parse command line arguments and initialize the library config.
+ *
+ * The argument parser is a bare-bones version of the one used for wget2,
+ * originally written by Tim Rühsen.
+ * Ref: https://gitlab.com/gnuwget/wget2/-/blob/master/src/options.c.
+ */
+
 #include "options.h"
 #include "common/defines.h"
 #include "common/hex.h"
@@ -6,28 +14,14 @@
 #include "common/ztver.h"
 #include "lib/ztlib.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <wordexp.h>
 
-// clang-format off
-typedef enum {
-  COMMAND_SEND                = (1UL << 0),
-  COMMAND_RECEIVE             = (1UL << 1),
-  COMMAND_PASSGEN             = (1UL << 2),
-  COMMAND_PASSDEL             = (1UL << 3),
-  COMMAND_NONE                = (0UL)
-} command_t;
-
 /** The order MUST match the order of the command_t enum */
-const char *command_names[] = {
-  "send",
-  "receive",
-  "passgen",
-  "passdel"
-};
-// clang-format on
+static const char *command_names[] = {"send", "receive", "passgen", "passdel"};
 
 typedef struct option option_t; // forward declaration
 
@@ -59,7 +53,7 @@ static void print_help(command_t command);
 
 static void print_version(void) {
   static const char version_text[] = "zerotunnel version " ZT_VERSION_STRING;
-  printf("%s\n", version_text);
+  fprintf(stdout, "%s\n", version_text);
 }
 
 static int parse_string(option_t *opt, const char *val,
@@ -165,55 +159,79 @@ static int parse_help_command(option_t *opt ATTRIBUTE_UNUSED, const char *val,
                               bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   if (!strcmp(val, "send")) {
-    print_help(COMMAND_SEND);
+    print_help(cmdSend);
     return 0;
   } else if (!strcmp(val, "receive")) {
-    print_help(COMMAND_RECEIVE);
+    print_help(cmdReceive);
     return 0;
   } else if (!strcmp(val, "passgen")) {
-    print_help(COMMAND_PASSGEN);
+    print_help(cmdPassgen);
     return 0;
   }
   return -1;
 }
 
+static int parse_help(option_t *opt ATTRIBUTE_UNUSED,
+                      const char *val ATTRIBUTE_UNUSED,
+                      bool invert ATTRIBUTE_UNUSED) {
+  /* This will be handled specially in init_config */
+  return 0;
+}
+
 /**
  * Global configuration structure used across the library.
- * We initialize it here with default values, and override them
- * with command line options or configuration files.
+ * Initialize it here with default values, which may be
+ * overridden by command line options or configuration files.
  */
-static struct config g_config = {
+struct config GlobalConfig = {
     .ciphersuite = "K-01",
     .preferred_family = '4',
+    .password_bundle_size = 20,
+    .password_chars = 32,
+    .password_words = 4,
     .flag_lz4_compression = true,
     .flag_tcp_fastopen = true,
 };
 
 // clang-format off
-static const option_t options[] = {
+static option_t options[] = {
     // long name, short name, config variable, config flag, parser function, args, option section, option help
     // Add options in alphabetical order by long name
     {
       "auth-type",
       'a',
-      &g_config.auth_type,
+      &GlobalConfig.auth_type,
       NULL,
       parse_int,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE | COMMAND_PASSGEN,
+      cmdSend | cmdReceive | cmdPassgen,
       {
         "KAPPA mode of authentication.\n",
         "(default: KAPPA0).\n"
       }
     },
     {
+      "bundle-size",
+      0,
+      &GlobalConfig.password_bundle_size,
+      NULL,
+      parse_uint,
+      1,
+      cmdPassgen,
+      {
+        "Maximum number of passwords in a bundle.\n",
+        "Must be in the range [1, 90].\n",
+        "(default: 20).\n"
+      }
+    },
+    {
       "ciphersuite",
       'c',
-      &g_config.ciphersuite,
+      &GlobalConfig.ciphersuite,
       NULL,
       parse_string,
       1,
-      COMMAND_SEND,
+      cmdSend,
       {
         "KAPPA ciphersuite name or alias for this session.\n",
         "(default: K-01).\n"
@@ -223,10 +241,10 @@ static const option_t options[] = {
       "compress",
       'C',
       NULL,
-      &g_config.flag_lz4_compression,
+      &GlobalConfig.flag_lz4_compression,
       parse_boolean,
       -1,
-      COMMAND_SEND,
+      cmdSend,
       {
         "Enable LZ4 message compression.\n",
         "(default: on).\n"
@@ -235,24 +253,36 @@ static const option_t options[] = {
     {
       "connect-timeout",
       0,
-      &g_config.connect_timeout,
+      &GlobalConfig.connect_timeout,
       NULL,
       parse_uint,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Timeout for host name resolution (in milliseconds).\n",
         "(default: 10000).\n"
       }
     },
     {
+      "help",
+      'h',
+      NULL,
+      NULL,
+      parse_help,
+      0,
+      cmdSend | cmdReceive | cmdPassgen | cmdPassdel,
+      {
+        "Show this help message and exit.\n"
+      }
+    },
+    {
       "hostname",
       'H',
-      &g_config.hostname,
+      &GlobalConfig.hostname,
       NULL,
       parse_string,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE | COMMAND_PASSGEN | COMMAND_PASSDEL,
+      cmdSend | cmdReceive | cmdPassgen | cmdPassdel,
       {
         "Host address of the peer.\n",
         "Can be a host name or an IPv4/IPv6 address.\n"
@@ -261,11 +291,11 @@ static const option_t options[] = {
     {
       "idle-timeout",
       0,
-      &g_config.idle_timeout,
+      &GlobalConfig.idle_timeout,
       NULL,
       parse_uint,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Timeout for the server being idle (in milliseconds).\n",
         "(default: 60000).\n"
@@ -275,10 +305,10 @@ static const option_t options[] = {
       "ipv4-only",
       '4',
       NULL,
-      &g_config.flag_ipv4_only,
+      &GlobalConfig.flag_ipv4_only,
       parse_boolean,
       -1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Force the use of IPv4 addresses.\n",
         "(default: off).\n"
@@ -288,10 +318,10 @@ static const option_t options[] = {
       "ipv6-only",
       '6',
       NULL,
-      &g_config.flag_ipv6_only,
+      &GlobalConfig.flag_ipv6_only,
       parse_boolean,
       -1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Force the use of IPv6 addresses.\n",
         "(default: off).\n"
@@ -300,11 +330,11 @@ static const option_t options[] = {
     {
       "keyfile",
       'k',
-      &g_config.passwddb_file,
+      &GlobalConfig.passwdfile,
       NULL,
       parse_filename,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Path to the password bundle file for KAPPA2 authentication.\n",
         "If not specified, try to load a bundle for the provided hostname\n",
@@ -315,11 +345,11 @@ static const option_t options[] = {
     {
       "listen",
       'l',
-      &g_config.hostname,
+      &GlobalConfig.hostname,
       NULL,
       parse_string,
       1,
-      COMMAND_RECEIVE,
+      cmdReceive,
       {
         "Listen on the specified host name or IP address.\n",
         "(default: 0.0.0.0 -- all IPv4 interfaces).\n"
@@ -329,10 +359,10 @@ static const option_t options[] = {
       "live-read",
       'L',
       NULL,
-      &g_config.flag_live_read,
+      &GlobalConfig.flag_live_read,
       parse_boolean,
       -1,
-      COMMAND_SEND,
+      cmdSend,
       {
         "Read from a live output stream (e.g. a pipe).\n",
         "(default: off).\n"
@@ -341,11 +371,11 @@ static const option_t options[] = {
     {
       "message-padding",
       'P',
-      &g_config.padding_factor,
-      &g_config.flag_length_obfuscation,
+      &GlobalConfig.padding_factor,
+      &GlobalConfig.flag_length_obfuscation,
       parse_padding_factor,
       1,
-      COMMAND_SEND,
+      cmdSend,
       {
         "Enable message padding and set the padding factor. This\n",
         "avoids leaking file length information at the cost of\n",
@@ -354,13 +384,41 @@ static const option_t options[] = {
       }
     },
     {
+      "password-chars",
+      0,
+      &GlobalConfig.password_chars,
+      NULL,
+      parse_uint,
+      1,
+      cmdPassgen,
+      {
+        "Number of characters in the generated password.\n",
+        "Must be in the range [12, 256].\n",
+        "(default: 64).\n"
+      }
+    },
+    {
+      "password-words",
+      0,
+      &GlobalConfig.password_words,
+      NULL,
+      parse_uint,
+      1,
+      cmdPassgen,
+      {
+        "Number of words in the generated phonetic password.\n",
+        "Must be in the range [3, 20].\n",
+        "(default: 4).\n"
+      }
+    },
+    {
       "port",
       'p',
-      &g_config.port,
-      &g_config.flag_explicit_port,
+      &GlobalConfig.service_port,
+      &GlobalConfig.flag_explicit_port,
       parse_uint16,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Port number to listen on or connect to.\n",
         "(default: 9500).\n"
@@ -369,11 +427,11 @@ static const option_t options[] = {
     {
       "preferred-family",
       0,
-      &g_config.preferred_family,
+      &GlobalConfig.preferred_family,
       NULL,
       parse_string,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Preferred address family for the connection.\n",
         "Can be '4' for IPv4 or '6' for IPv6.\n",
@@ -383,11 +441,11 @@ static const option_t options[] = {
     {
       "recv-timeout",
       0,
-      &g_config.recv_timeout,
+      &GlobalConfig.recv_timeout,
       NULL,
       parse_uint,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Timeout for receiving data (in milliseconds).\n",
         "(default: 5000).\n"
@@ -396,38 +454,24 @@ static const option_t options[] = {
     {
       "send-timeout",
       0,
-      &g_config.send_timeout,
+      &GlobalConfig.send_timeout,
       NULL,
       parse_uint,
       1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Timeout for sending data (in milliseconds).\n",
         "(default: 5000).\n"
       }
     },
     {
-      "size",
-      's',
-      &g_config.password_size,
-      NULL,
-      parse_uint,
-      1,
-      COMMAND_PASSGEN,
-      {
-        "Size of the generated password in characters.\n",
-        "Must be in the range [12, 256].\n",
-        "(default: 32).\n"
-      }
-    },
-    {
       "tcp-fastopen",
       0,
       NULL,
-      &g_config.flag_tcp_fastopen,
+      &GlobalConfig.flag_tcp_fastopen,
       parse_boolean,
       -1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Enable TCP Fast Open (RFC 7413).\n",
         "(default: on).\n"
@@ -437,44 +481,37 @@ static const option_t options[] = {
       "tcp-nodelay",
       0,
       NULL,
-      &g_config.flag_tcp_nodelay,
+      &GlobalConfig.flag_tcp_nodelay,
       parse_boolean,
       -1,
-      COMMAND_SEND | COMMAND_RECEIVE,
+      cmdSend | cmdReceive,
       {
         "Enable TCP_NODELAY (disable Nagle's algorithm).\n",
         "(default: off).\n"
       }
     },
-    {
-      "words",
-      'w',
-      &g_config.password_size,
-      NULL,
-      parse_uint,
-      1,
-      COMMAND_PASSGEN,
-      {
-        "Number of words in the generated password.\n",
-        "Must be in the range [3, 20].\n",
-        "(default: 8).\n"
-      }
-    }
 };
 // clang-format on
 
 /*
-  width: 2 (spaces) + 2 (--) + 20 (name col) + 2 (spaces) + 2 (-X) + 1 (space)
+  width: 2 (spaces) + 3 (-X,) + 2 (spaces) + 2 (--) + 20 (name col) + 4 (spaces)
 */
-#define OPTION_HELP_INDENT (2 + 2 + 20 + 2 + 2 + 1)
+#define HELP_OPTION_INDENT_SPACES (2 + 3 + 2 + 2 + 20 + 4)
 
 static void print_help(command_t command) {
-  static const char common_help_header_text[] =
+  static const char help_header_text[] =
       "\n"
-      "zerotunnel v" ZT_VERSION_STRING " - A secure file transfer utility.\n";
+      "zerotunnel v" ZT_VERSION_STRING " - A secure file transfer utility.\n\n";
 
-  static const char generic_help_text[] =
-      "Usage: zerotunnel <command> [options] [target]\n"
+  static const char help_footer_text[] =
+      "\n"
+      "Example boolean option:\n"
+      "\t--no-tcp-fastopen or --tcp-fastopen=off or --tcp-fastopen off\n"
+      "Example string option:\n"
+      "\t--hostname=example.com or --hostname example.com\n";
+
+  static const char help_generic_text[] =
+      "Usage: zerotunnel <command> [options] [target]\n\n"
       "Commands:\n"
       "  send     Send a file over the tunnel.\n"
       "  receive  Receive a file over the tunnel.\n"
@@ -484,67 +521,28 @@ static void print_help(command_t command) {
       "For command-specific help, use `<command> --help`.\n"
       "\n";
 
-  static const char help_footer_text[] =
-      "\n"
-      "Example boolean option:\n"
-      "\t--no-tcp-fastopen or --tcp-fastopen=off or --tcp-fastopen off\n"
-      "Example string option:\n"
-      "\t--hostname=example.com or --hostname example.com\n";
+  const char *cmd_usage = "Usage: zerotunnel %s [options] [file]\n";
 
-  // clang-format off
-  static const char *help_text[] = {
-    [0] = {
-      "Usage: zerotunnel send [options] [file]\n"
-      "\n"
-      "Examples:\n"
-      "\tzerotunnel send --hostname example.com --port 8000 /path/to/file\n"
-      "\tcat hello.txt | zerotunnel send -H example.com -p 8000 -L\n"
-    },
-    [1] = {
-      "Usage: zerotunnel receive [options] [file]\n"
-      "\n"
-      "Examples:\n"
-      "\tzerotunnel receive --port 8000 /path/to/file\n"
-    },
-    [2] = {
-      "Usage: zerotunnel passgen [options] [file]\n"
-      "\n"
-      "Examples:\n"
-      "\tzerotunnel passgen --auth-type KAPPA0 -s 32\n"
-      "\tzerotunnel passgen --auth-type KAPPA1 -s 32 /path/to/passwords.txt -s 32\n"
-      "\tzerotunnel passgen --auth-type KAPPA2 -w 8\n"
-    },
-    [3] = {
-      "Usage: zerotunnel passdel [options] [file]\n"
-      "\n"
-      "Examples:\n"
-      "\tzerotunnel passdel -H 127.0.0.1\n"
-      "\tzerotunnel passdel passwords.txt\n"
-    }
-  };
-  // clang-format on
+  fputs(help_header_text, stdout);
 
-  fputs(common_help_header_text, stdout);
   switch (command) {
-  case COMMAND_NONE:
-    fputs(generic_help_text, stdout);
+  case cmdNone:
+    fputs(help_generic_text, stdout);
     return;
-  case COMMAND_SEND:
-    fputs(help_text[0], stdout);
+  case cmdSend:
+    fprintf(stdout, cmd_usage, "send");
     break;
-  case COMMAND_RECEIVE:
-    fputs(help_text[1], stdout);
+  case cmdReceive:
+    fprintf(stdout, cmd_usage, "receive");
     break;
-  case COMMAND_PASSGEN:
-    fputs(help_text[2], stdout);
+  case cmdPassgen:
+    fprintf(stdout, cmd_usage, "passgen");
     break;
-  case COMMAND_PASSDEL:
-    fputs(help_text[3], stdout);
+  case cmdPassdel:
+    fprintf(stdout, cmd_usage, "passdel");
     break;
-  default:
-    fprintf(stdout, "Command not found '%d'", command);
-    exit(EXIT_STATUS_BAD_PARSE);
   }
+
   fputs("\nOptions:\n", stdout);
 
   for (size_t i = 0; i < COUNTOF(options); ++i) {
@@ -554,15 +552,15 @@ static void print_help(command_t command) {
         continue;
       if (opt->short_name) {
         /* print first line with short option */
-        printf("  --%-20s -%c  %s", opt->long_name, opt->short_name,
-               opt->help[0]);
+        fprintf(stdout, "  -%c,  --%-20s    %s", opt->short_name, opt->long_name,
+                opt->help[0]);
       } else {
         /* maintain alignment: replace the " -X  " segment with spaces */
-        printf("  --%-20s     %s", opt->long_name, opt->help[0]);
+        fprintf(stdout, "       --%-20s    %s", opt->long_name, opt->help[0]);
       }
       /* subsequent lines aligned under first help column */
       for (int h = 1; h < 4 && opt->help[h]; ++h)
-        printf("%*s%s", OPTION_HELP_INDENT, "", opt->help[h]);
+        fprintf(stdout, "%*s%s", HELP_OPTION_INDENT_SPACES, "", opt->help[h]);
     }
   }
   fputs(help_footer_text, stdout);
@@ -657,7 +655,8 @@ static int ATTRIBUTE_NONNULL(1)
   return ret;
 }
 
-int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
+static int ATTRIBUTE_NONNULL(2)
+    argparser(int argc, char *argv[], command_t command) {
   static char option_shortcut_table[128];
   const char *first_arg = NULL;
   int n, rv;
@@ -669,14 +668,13 @@ int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
         option_shortcut_table[(unsigned char)options[i].short_name] = i + 1;
   }
 
-  /* This is very clever :O -- again, all credit to Tim Rühsen */
-  for (n = 1; n < argc && first_arg != argv[n]; ++n) {
+  for (n = 2; n < argc && first_arg != argv[n]; ++n) {
     const char *argp = argv[n]; /* store the last cmdline arg */
 
     if (argp[0] != '-') {
       // Move args behind options to allow mixed args/options like getopt().
       // In the end, the order of the args is as before.
-      const char *cur = argv[n];
+      char *cur = argv[n];
       for (int i = n; i < argc - 1; ++i)
         argv[i] = argv[i + 1];
       argv[argc - 1] = cur;
@@ -705,7 +703,7 @@ int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
         option_t *opt;
         int idx;
 
-        if (c_isalnum(argp[pos]) &&
+        if (isalnum(argp[pos]) &&
             (idx = option_shortcut_table[(unsigned char)argp[pos]])) {
           opt = &options[idx - 1];
 
@@ -745,36 +743,39 @@ int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
 
 #define DEFAULT_PASSWORDS_DIR "~/.zerotunnel/passwords/"
 
-static char *get_password_bundle_file(const char *hostname, bool check) {
+static char *get_password_file_location(const char *name, bool check) {
+  int n;
+  char *dir;
   char *fname = NULL;
   unsigned char *hex = NULL;
-  const char *dir = getenv("ZTNL_PASSWORDS_DIR");
   wordexp_t wexp;
   sha256_ctx_t ctx;
   unsigned char hash[SHA256_DIGEST_LEN];
 
+  dir = getenv("ZTNL_PASSWORDS_DIR");
   dir = (dir && *dir) ? dir : DEFAULT_PASSWORDS_DIR;
-  if (dir[0] == '~') {
-    if (wordexp(dir, &wexp, 0) == 0)
-      dir = wexp.we_wordv[0];
-    else
-      return NULL;
-  }
 
-  /* Check passwords dir exists */
+  if (wordexp(dir, &wexp, 0) == 0)
+    dir = wexp.we_wordv[0];
+  else
+    return NULL;
+
+  n = strlen(dir) - 1;
+  if (dir[n] == '/')
+    dir[n] = '\0';
+
   if (access(dir, R_OK | W_OK | X_OK) != 0) {
     wordfree(&wexp);
-    log_error(NULL,
-              "Password directory '%s' does not exist or is not accessible");
+    log_error(NULL, "Password dir not accessible");
     return NULL;
   }
 
-  (void)sha256_init(&ctx);
-  (void)sha256_update(&ctx, (const unsigned char *)hostname, strlen(hostname));
-  (void)sha256_finalize(&ctx, hash);
+  sha256_init(&ctx);
+  sha256_update(&ctx, (const uint8_t *)name, strlen(name));
+  sha256_finalize(&ctx, hash);
 
-  if (zt_hex_encode(hash, SHA256_DIGEST_LEN, &hex) /*success*/) {
-    fname = zt_malloc(strlen(dir) + strlen(hex) + 2);
+  if (zt_hex_encode(hash, SHA256_DIGEST_LEN, &hex)) {
+    fname = zt_malloc(n + strlen(hex) + 2);
     if (fname)
       sprintf(fname, "%s/%s", dir, hex);
     wordfree(&wexp);
@@ -785,26 +786,33 @@ static char *get_password_bundle_file(const char *hostname, bool check) {
     if (access(fname, R_OK | W_OK) != 0) {
       zt_free(fname);
       fname = NULL;
-      log_error(
-          NULL,
-          "Password file for hostname '%s' does not exist or is not accessible",
-          hostname);
+      log_error(NULL, "Password file not accessible for name '%s'", name);
     }
   }
   return fname;
 }
 
-command_t init_config_from_cli(int argc, char *argv[]) {
-  command_t command = 0;
+command_t init_config(int argc, char *argv[]) {
   int n;
+  command_t command = 0;
   const char *target = NULL;
 
   set_exit_status(EXIT_STATUS_BAD_PARSE);
 
+  /* These will be freed in deinit_config() */
+  GlobalConfig.ciphersuite = zt_strdup(GlobalConfig.ciphersuite);
+
   if (argc < 2) {
-    log_error(NULL, "No command specified\n");
-    print_help(COMMAND_NONE);
-    return -1;
+    print_help(cmdNone);
+    set_exit_status(EXIT_STATUS_SUCCESS);
+    return cmdNone;
+  }
+
+  /* Check for global help flags: zerotunnel --help or zerotunnel -h */
+  if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
+    print_help(cmdNone);
+    set_exit_status(EXIT_STATUS_SUCCESS);
+    return cmdNone;
   }
 
   for (int i = 0; i < COUNTOF(command_names); ++i) {
@@ -815,40 +823,51 @@ command_t init_config_from_cli(int argc, char *argv[]) {
   }
   if (!command) {
     log_error(NULL, "Unknown command: '%s'", argv[1]);
-    // print_help(COMMAND_ALL);
-    return -1;
+    return cmdNone;
   }
 
-  /* These will be freed in deinit_config() */
-  g_config.ciphersuite = zt_strdup(g_config.ciphersuite);
+  /* Check for command-specific help flag */
+  if (argc == 3 && (!strcmp(argv[2], "--help") || !strcmp(argv[2], "-h"))) {
+    print_help(command);
+    set_exit_status(EXIT_STATUS_SUCCESS);
+    return cmdNone;
+  }
 
   if ((n = argparser(argc, argv, command)) < 0)
-    return -1;
+    return cmdNone;
 
   /* Extract target from remaining arguments */
   if (n < argc)
-    target = argv[n];
+    target = argv[n++];
 
-  /* Validate arguments on a per-command basis. This will get messy but there
-   * seems to be no better way right now. */
+  if (GlobalConfig.password_bundle_size > 90)
+    goto err;
+
+  if (GlobalConfig.password_chars < 12 || GlobalConfig.password_chars > 256)
+    goto err;
+
+  if (GlobalConfig.password_words < 3 || GlobalConfig.password_words > 20)
+    goto err;
+
   switch (command) {
-  case COMMAND_SEND: {
-    if (!g_config.hostname)
+  case cmdSend: {
+    if (!GlobalConfig.hostname)
       goto err;
 
-    if (!g_config.passwddb_file && g_config.auth_type == KAPPA_AUTHTYPE_1) {
-      char *fname = get_password_bundle_file(g_config.hostname, true);
+    if (!GlobalConfig.passwdfile &&
+        GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+      char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
-        return -1;
-      g_config.passwddb_file = fname;
+        return cmdNone;
+      GlobalConfig.passwdfile = fname;
     }
 
-    if (g_config.flag_live_read) {
+    if (GlobalConfig.flag_live_read) {
       if (target)
         goto err;
-      g_config.filename = zt_strdup("-"); /* read from STDIN */
+      GlobalConfig.filename = zt_strdup("-"); /* read from STDIN */
     } else if (target) {
-      g_config.filename = zt_strdup(target);
+      GlobalConfig.filename = zt_strdup(target);
     } else {
       goto err;
     }
@@ -856,71 +875,76 @@ command_t init_config_from_cli(int argc, char *argv[]) {
     break;
   }
 
-  case COMMAND_RECEIVE: {
-    if (!g_config.hostname)
-      goto err;
+  case cmdReceive: {
+    // if (!GlobalConfig.hostname)
+      // goto err;
 
-    if (!g_config.passwddb_file && g_config.auth_type == KAPPA_AUTHTYPE_1) {
-      char *fname = get_password_bundle_file(g_config.hostname, true);
+    if (!GlobalConfig.passwdfile &&
+        GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+      char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
-        return -1;
-      g_config.passwddb_file = fname;
+        return cmdNone;
+      GlobalConfig.passwdfile = fname;
     }
 
     if (!target)
-      g_config.filename = zt_strdup("-"); /* write to STDOUT */
+      GlobalConfig.filename = zt_strdup("-"); /* write to STDOUT */
     else
-      g_config.filename = zt_strdup(target);
+      GlobalConfig.filename = zt_strdup(target);
 
     break;
   }
 
-  case COMMAND_PASSGEN: {
-    /* We either need a target location for a password file or a hostname to
-     * locate one in the default passwords directory */
-    if (!target && !g_config.hostname) {
+  case cmdPassgen: {
+    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_2)
+      goto err;
+
+    /* We either need a explicit target file location or a hostname
+     * to locate one in the default passwords directory */
+    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 && !target &&
+        !GlobalConfig.hostname) {
       goto err;
     } else if (target) {
-      g_config.passwddb_file = zt_strdup(target);
+      GlobalConfig.passwdfile = zt_strdup(target);
     } else {
-      char *fname = get_password_bundle_file(g_config.hostname, true);
+      char *fname = get_password_file_location(GlobalConfig.hostname, false);
       if (!fname)
-        return -1;
-      g_config.passwddb_file = fname;
+        return cmdNone;
+      GlobalConfig.passwdfile = fname;
     }
 
     break;
   }
 
-  case COMMAND_PASSDEL: {
-    if (!target && !g_config.hostname) {
+  case cmdPassdel: {
+    if (!GlobalConfig.hostname)
       goto err;
-    } else if (target) {
-      g_config.passwddb_file = zt_strdup(target);
+
+    if (target) {
+      GlobalConfig.passwdfile = zt_strdup(target);
     } else {
-      char *fname = get_password_bundle_file(g_config.hostname, false);
+      char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
-        return -1;
-      g_config.passwddb_file = fname;
+        return cmdNone;
+      GlobalConfig.passwdfile = fname;
     }
   }
   }
 
-  if (++target)
+  if (n != argc)
     goto err;
 
   set_exit_status(EXIT_STATUS_SUCCESS);
   return command;
 
 err:
-  log_error(NULL, "Bad set of arguments for command '%s'",
-            command_names[command]);
-  return -1;
+  log_error(NULL, "Bad args for command '%s'", argv[1]);
+  return cmdNone;
 }
 
 void deinit_config(void) {
-  zt_free(g_config.hostname);
-  zt_free(g_config.passwddb_file);
-  zt_free(g_config.ciphersuite);
-  zt_free(g_config.filename);
+  zt_free(GlobalConfig.hostname);
+  zt_free(GlobalConfig.passwdfile);
+  zt_free(GlobalConfig.ciphersuite);
+  zt_free(GlobalConfig.filename);
 }

@@ -2,14 +2,25 @@
 
 #include <stdlib.h>
 
-// clang-format off
 typedef enum {
-  EXIT_STATUS_SUCCESS     = EXIT_SUCCESS,
-  EXIT_STATUS_GENERIC     = 1,
-  EXIT_STATUS_BAD_PARSE   = 2
+  EXIT_STATUS_SUCCESS = EXIT_SUCCESS,
+  EXIT_STATUS_FAILED_INIT = 1,
+  EXIT_STATUS_GENERIC = 2,
+  EXIT_STATUS_BAD_PARSE = 3,
 } exit_status_t;
-// clang-format on
+
+typedef enum {
+  cmdNone = (0UL),
+  cmdSend = (1UL << 0),
+  cmdReceive = (1UL << 1),
+  cmdPassgen = (1UL << 2),
+  cmdPassdel = (1UL << 3),
+} command_t;
 
 void set_exit_status(exit_status_t status);
 
 exit_status_t get_exit_status(void);
+
+command_t init_config(int argc, char *argv[]);
+
+void deinit_config(void);
