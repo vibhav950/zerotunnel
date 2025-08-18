@@ -58,7 +58,7 @@ typedef struct _progressbar_st {
 } progressbar_t;
 
 static progressbar_t *progressbar;
-static pthread_t g_pb_thread;
+static pthread_t pb_thread;
 static volatile atomic_bool terminate_thread;
 static volatile sig_atomic_t winsize_changed;
 static volatile atomic_bool dont_update;
@@ -352,7 +352,7 @@ int zt_progressbar_init(void) {
   (void)zt_logger_append_after_cb(NULL, pb_log_after_cb, NULL);
 
   atomic_store(&dont_update, true);
-  if (pthread_create(&g_pb_thread, NULL, pb_update_thread, NULL)) {
+  if (pthread_create(&pb_thread, NULL, pb_update_thread, NULL)) {
     pthread_mutex_destroy(&progressbar->lock);
     free(progressbar->spaces);
     free(progressbar);
@@ -367,7 +367,7 @@ void zt_progressbar_destroy(void) {
     pthread_mutex_lock(&progressbar->lock);
     atomic_store_explicit(&terminate_thread, true, memory_order_release);
     pthread_mutex_unlock(&progressbar->lock);
-    pthread_join(g_pb_thread, NULL);
+    pthread_join(pb_thread, NULL);
     pthread_mutex_destroy(&progressbar->lock);
     zt_logger_remove_before_cb(NULL, pb_log_before_cb);
     zt_logger_remove_after_cb(NULL, pb_log_after_cb);
@@ -409,9 +409,7 @@ void zt_progressbar_update(size_t nbytes) {
     progressbar->xferd_size += nbytes;
 }
 
-void zt_progressbar_winsize_changed(int signal ATTRIBUTE_UNUSED) {
-  winsize_changed = true;
-}
+void zt_progressbar_winsize_changed(void) { winsize_changed = true; }
 
 void zt_progressbar_complete(void) {
   if (likely(progressbar)) {

@@ -33,7 +33,7 @@ typedef struct zt_logger_st {
 #endif
 
 #ifndef LOG_FP_INFO
-#define LOG_FP_INFO       stdout
+#define LOG_FP_INFO       stderr
 #endif
 
 #ifndef LOG_FP_WARN

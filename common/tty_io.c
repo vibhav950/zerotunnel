@@ -59,7 +59,7 @@ static void tty_initfp(void) {
 
   ttyfp = fopen(tty_get_name(), "r+");
   if (!ttyfp)
-    log_fatal(NULL, "cannot open '%s' (%s)", tty_get_name(), strerror(errno));
+    log_error(NULL, "cannot open '%s' (%s)", tty_get_name(), strerror(errno));
   atexit(cleanup);
 }
 
@@ -86,7 +86,7 @@ static char *do_get(const char *prompt, int hidden) {
   uint8_t ch[1];
 
   if (no_terminal)
-    log_fatal(NULL, "no terminal available -- can't get input");
+    log_error(NULL, "no terminal available -- can't get input");
 
   if (unlikely(!initialized))
     tty_initfp();
@@ -100,12 +100,12 @@ static char *do_get(const char *prompt, int hidden) {
     struct termios term;
 
     if (tcgetattr(fileno(ttyfp), &termios_save) != 0)
-      log_fatal(NULL, "tcgetattr() failed (%s)", strerror(errno));
+      log_error(NULL, "tcgetattr() failed (%s)", strerror(errno));
     restore_termios = 1;
     term = termios_save;
     term.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
     if (tcsetattr(fileno(ttyfp), TCSANOW, &term) != 0)
-      log_fatal(NULL, "tcsetattr() failed (%s)", strerror(errno));
+      log_error(NULL, "tcsetattr() failed (%s)", strerror(errno));
   }
 
   while (read(fileno(ttyfp), ch, 1) == 1 && *ch != '\n') {
@@ -127,7 +127,7 @@ static char *do_get(const char *prompt, int hidden) {
 
   if (hidden) {
     if (tcsetattr(fileno(ttyfp), TCSANOW, &termios_save) != 0)
-      log_fatal(NULL, "tcsetattr() failed (%s)", strerror(errno));
+      log_error(NULL, "tcsetattr() failed (%s)", strerror(errno));
     restore_termios = 0;
   }
 

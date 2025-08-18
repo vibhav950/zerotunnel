@@ -50,7 +50,7 @@ void zt_progressbar_update(size_t xferd_size);
  *
  * @return void.
  */
-void zt_progressbar_winsize_changed(int signal);
+void zt_progressbar_winsize_changed(void);
 
 /**
  * Mark the progressbar as completed. This function should be called when the
