@@ -63,11 +63,15 @@ typedef struct _zt_server_connection_st {
   zt_fileinfo_t
     fileinfo;                       /* file payload info */
   int
+    auth_retries;                   /* number of handshake retries (=0 on first attempt) */
+  int
     sockfd,                         /* listening socket file descriptor */
     sockfd_flags,                   /* restore listener socket flags */
     idle_timeout,                   /* server idle timeout (ms) */
     send_timeout,                   /* send timeout (ms) */
     recv_timeout;                   /* recv timeout (ms) */
+  bool
+    pending;                        /* unprocessed message in buffer */
   bool
     fl_tcp_fastopen,                /* enable TCP Fast Open (RFC 7413) on the listening socket */
     fl_tcp_nodelay,                 /* enable TCP_NODELAY on the listening socket */

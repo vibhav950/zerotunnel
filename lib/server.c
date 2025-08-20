@@ -408,7 +408,7 @@ static err_t server_send(zt_server_connection_t *conn) {
   bool is_encrypted;
 
   ASSERT(conn);
-  ASSERT(conn->state > SERVER_CONN_INIT && conn->state < SERVER_DONE);
+  ASSERT(conn->state > SERVER_CONN_INIT && conn->state <= SERVER_DONE);
   ASSERT(conn->msgbuf);
 
   if (MSG_DATA_LEN(conn->msgbuf) > ZT_MSG_MAX_RW_SIZE) {
@@ -417,7 +417,8 @@ static err_t server_send(zt_server_connection_t *conn) {
     return ERR_REQUEST_TOO_LARGE;
   }
 
-  is_encrypted = !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
+  is_encrypted = !(MSG_TYPE(conn->msgbuf) &
+                   (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
 
   len = MSG_DATA_LEN(conn->msgbuf);
 
@@ -429,6 +430,8 @@ static err_t server_send(zt_server_connection_t *conn) {
   rawptr = MSG_RAW_PTR(conn->msgbuf);
 
   if (is_encrypted) {
+    tosend = ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE;
+
     if ((ret = vcry_aead_encrypt(dataptr, len, rawptr, ZT_MSG_HEADER_SIZE,
                                  dataptr, &tosend)) != ERR_SUCCESS) {
       log_error(NULL, "encryption failed (%s)", zt_error_str(ret));
@@ -510,7 +513,13 @@ static err_t server_recv(zt_server_connection_t *conn,
     goto out;
   }
 
-  is_encrypted = !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY));
+  if (MSG_DATA_LEN(conn->msgbuf) == 0) {
+    nread = 1;
+    goto out;
+  }
+
+  is_encrypted = !(MSG_TYPE(conn->msgbuf) &
+                   (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
 
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = MSG_DATA_LEN(conn->msgbuf) + taglen;
@@ -536,6 +545,11 @@ static err_t server_recv(zt_server_connection_t *conn,
 
   /** Decrypt encrypted payload */
   if (is_encrypted) {
+    nread =
+        (MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? ZT_MSG_XBUF_SIZE
+                                                      : ZT_MSG_MAX_RAW_SIZE) -
+        (ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE);
+
     if ((ret = vcry_aead_decrypt(datap, datalen, p, ZT_MSG_HEADER_SIZE, datap,
                                  &nread)) != ERR_SUCCESS) {
       log_error(NULL, "decryption failed (%s)", zt_error_str(ret));
@@ -635,6 +649,7 @@ void zt_server_conn_dealloc(zt_server_connection_t *conn) {
 err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                     bool *done) {
   err_t ret = ERR_SUCCESS;
+  auth_type_t auth_type;
   zt_fio_t *fileptr;
   char port[6];
 
@@ -664,6 +679,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                            : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
 
   conn->state = SERVER_CONN_INIT;
+
+  *done = false;
 
   /* main message loop */
   while (1) {
@@ -708,18 +725,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       passwd_id_t passwd_id;
       static struct passwd *master_pass = NULL;
 
-      static int retrycount = 1;
-      if (retrycount > MAX_AUTH_RETRY_COUNT) {
-        log_error(NULL, "too many handshake failures -- aborting!");
-        ret = ERR_HSHAKE_ABORTED;
-        goto cleanup2;
+      if (!conn->pending) {
+        if (server_recv(conn, MSG_HANDSHAKE) != ERR_SUCCESS) {
+          ret = ERR_TCP_RECV;
+          goto cleanup2;
+        }
       }
-      retrycount++;
-
-      if (server_recv(conn, MSG_HANDSHAKE) != ERR_SUCCESS) {
-        ret = ERR_TCP_RECV;
-        goto cleanup2;
-      }
+      conn->pending = false;
 
       rcvlen = MSG_DATA_LEN(conn->msgbuf);
       rcvbuf = MSG_DATA_PTR(conn->msgbuf);
@@ -737,16 +749,26 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       memcpy(PTRV(&passwd_id), rcvbuf, sizeof(passwd_id_t));
       rcvbuf += sizeof(passwd_id_t);
 
+      memcpy(PTRV(&auth_type), rcvbuf, sizeof(auth_type_t));
+      rcvbuf += sizeof(auth_type_t);
+
       memcpy(PTRV(&conn->ciphersuite), rcvbuf, sizeof(ciphersuite_t));
       rcvbuf += sizeof(ciphersuite_t);
 
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
+      if (auth_type != GlobalConfig.auth_type) {
+        tty_printf(get_cli_prompt(OnAuthTypeMismatch), auth_type,
+                   GlobalConfig.auth_type);
+        ret = ERR_HSHAKE_ABORTED;
+        goto cleanup2;
+      }
+
       /* Load the master password */
       if (!master_pass) {
-        passwd_id =
-            zt_auth_passwd_get(GlobalConfig.passwdfile, GlobalConfig.auth_type,
-                               conn->hostname, passwd_id, &master_pass);
+        passwd_id = zt_auth_passwd_get(
+            GlobalConfig.passwdfile, GlobalConfig.auth_type,
+            GlobalConfig.passwd_bundle_id, passwd_id, &master_pass);
       }
 
       if (conn->expected_passwd.expect &&
@@ -767,14 +789,22 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "authentication failed for hostname '%s'",
                   conn->hostname);
 
+        if (++conn->auth_retries > MAX_AUTH_RETRY_COUNT) {
+          log_error(NULL, "too many authentication retries -- aborting!");
+          ret = ERR_HSHAKE_ABORTED;
+          goto cleanup2;
+        }
+
         if (!tty_get_answer_is_yes(get_cli_prompt(OnBadPasswdIdentifier))) {
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
-        log_debug(NULL, "now trying to re-negotiate with a new password...");
 
-        passwd_id_t pwid = zt_auth_passwd_load(
-            GlobalConfig.passwdfile, conn->hostname, -1, &master_pass);
+        log_info(NULL, "Retrying handshake with a new password...");
+
+        passwd_id_t pwid = zt_auth_passwd_load(GlobalConfig.passwdfile,
+                                               GlobalConfig.passwd_bundle_id,
+                                               -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "failed to load a new password for hostname '%s'",
                     conn->hostname);
@@ -822,6 +852,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       /* We don't need the master passwd anymore -- don't keep it in memory */
       zt_auth_passwd_free(master_pass, NULL);
+      master_pass = NULL;
 
       int vcry_algs[6];
       const char *csname;
@@ -890,8 +921,15 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       uint8_t *rcvbuf;
       size_t rcvlen;
 
-      if ((ret = server_recv(conn, MSG_HANDSHAKE)) != ERR_SUCCESS)
+      if ((ret = server_recv(conn, MSG_HANDSHAKE | MSG_HANDSHAKE_FIN)) !=
+          ERR_SUCCESS) {
         goto cleanup2;
+      }
+
+      if (MSG_TYPE(conn->msgbuf) == MSG_HANDSHAKE) {
+        conn->pending = true;
+        goto retryhandshake;
+      }
 
       rcvbuf = MSG_DATA_PTR(conn->msgbuf);
       rcvlen = MSG_DATA_LEN(conn->msgbuf);
@@ -916,25 +954,45 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
+      MSG_MAKE(conn->msgbuf, MSG_HANDSHAKE_FIN, NULL, 0, 0);
+
+      if (server_send(conn) != ERR_SUCCESS)
+        goto cleanup2;
+
       SERVERSTATE_CHANGE(conn->state, SERVER_COMMIT);
       break;
 
     retryhandshake:
       /**
-       * @warning Failed to verify the established session key -- this could be
-       * due to an incorrect password attempt or a possible Man-In-The-Middle
-       * and the attacker guessed wrong! Alert the user of this and ask whether
-       * to retry the handshake -- which would give the user and his
-       * correspondent another password attempt and a would-be attacker another
-       * chance to guess the password!
+       * @warning Failed to verify the established session key -- this could
+       * be due to an incorrect password attempt or a possible
+       * Man-In-The-Middle and the attacker guessed wrong! Alert the user of
+       * this and ask whether to retry the handshake -- which would give the
+       * user and his correspondent another password attempt and a would-be
+       * attacker another chance to guess the password!
        */
 
-      if (!tty_get_answer_is_yes(get_cli_prompt(OnBadPasswdIdentifier))) {
+      if (++conn->auth_retries > MAX_AUTH_RETRY_COUNT) {
+        log_error(NULL, "too many authentication retries -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
 
-      /* handshake will be restarted */
+      if (!tty_get_answer_is_yes(get_cli_prompt(OnIncorrectPasswdAttempt))) {
+        ret = ERR_HSHAKE_ABORTED;
+        goto cleanup2;
+      }
+
+      if (!conn->pending) {
+        /* There was a verification failure on our end, ask the initiator to
+         * retry authentication*/
+        MSG_MAKE(conn->msgbuf, MSG_AUTH_RETRY, NULL, 0, 0);
+
+        if ((ret = server_send(conn)) != ERR_SUCCESS)
+          goto cleanup2;
+      }
+
+      /* Handshake will be restarted -- we need to init the module again */
       vcry_module_release();
 
       SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
@@ -976,7 +1034,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_fio_t fileptr;
       off_t remaining;
 
-      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filename, FIO_WRONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filepath, FIO_WRONLY)) !=
           ERR_SUCCESS) {
         log_error(NULL, "failed to open file for writing");
         goto cleanup2;
@@ -1018,6 +1076,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_progressbar_destroy();
 
       if (remaining) {
+        log_error(NULL, "failed to write file to disk (%s)", zt_error_str(rv));
         ret = rv;
         goto cleanup2;
       }
@@ -1029,25 +1088,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     case SERVER_DONE: {
       bool errfl = false;
 
-      if ((ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS) {
-        ret = ERR_SUCCESS; // TODO: is this a reason for concern?
-        errfl = true;
-      }
+      if ((ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS)
+        goto cleanupfile;
 
-      if (MSG_DATA_LEN(conn->msgbuf) == sizeof(DONE_MSG_UTF8) &&
-          zt_memcmp(MSG_DATA_PTR(conn->msgbuf), DONE_MSG_UTF8,
-                    sizeof(DONE_MSG_UTF8)) == 0) {
-        log_info(NULL, "transfer done! shutting down...");
-      } else {
-        ret = ERR_SUCCESS; // TODO: is this a reason for concern?
-        errfl = true;
-      }
+      MSG_MAKE(conn->msgbuf, MSG_DONE, NULL, 0, 0);
 
-      if (errfl) {
-        log_error(NULL,
-                  "abrupt shutdown by peer -- but the transfer was completed "
-                  "successfully!");
-      }
+      if ((ret = server_send(conn)) != ERR_SUCCESS)
+        goto cleanupfile;
 
       SERVERSTATE_CHANGE(conn->state, SERVER_NONE);
       *done = true;
@@ -1062,6 +1109,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
     } /* switch(conn->state) */
   } /* while(1) */
+
+cleanupfile:
+  zt_file_delete(GlobalConfig.filepath);
 
 cleanup2:
   vcry_module_release();
