@@ -491,7 +491,7 @@ static err_t client_tcp_conn1(zt_client_connection_t *conn) {
  */
 static err_t client_send(zt_client_connection_t *conn) {
   err_t ret;
-  size_t len, tosend, taglen;
+  size_t len, tosend;
   uint8_t *p, *datap;
   bool is_encrypted;
 
@@ -514,13 +514,18 @@ static err_t client_send(zt_client_connection_t *conn) {
 
   if (conn->state == CLIENT_TRANSFER) {
     if (GlobalConfig.flag_length_obfuscation) {
-      size_t padding;
+      size_t pf, l, pad;
 
-      taglen = vcry_get_aead_tag_len();
+      /* Calculate padding to round up to next multiple of padding_factor */
+      l = len - 1; /* exclude END_MARKER */
+      pf = GlobalConfig.padding_factor;
 
-      padding = (len - 1) & (GlobalConfig.padding_factor - 1);
-      zt_memset(p + len, 0x00, padding); // FIX: possible side-channel?
-      len += padding;
+      // x rounded up to a multiple of N = (x + N - 1) & ~(N - 1) when N is a
+      // power of 2
+      pad = ((l + pf - 1) & ~(pf - 1)) - l;
+
+      zt_memset(p + len, 0x00, pad); // FIX: possible side-channel?
+      len += pad;
 
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_PADDING);
     } else if (GlobalConfig.flag_lz4_compression) {
@@ -627,7 +632,7 @@ static err_t client_recv(zt_client_connection_t *conn,
     goto out;
   }
   if (!msg_type_is_expected(MSG_TYPE(conn->msgbuf), expected_types)) {
-    log_error(NULL, "bad message (expected %u)", MSG_TYPE(conn->msgbuf),
+    log_error(NULL, "bad message %u (expected %u)", MSG_TYPE(conn->msgbuf),
               expected_types);
     ret = ERR_INVALID_DATUM;
     goto out;
