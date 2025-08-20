@@ -77,7 +77,7 @@ static int parse_filename(option_t *opt, const char *val,
     if (opt->flag)
       *((char *)opt->flag) = 1;
     wordfree(&wexp);
-    log_debug(NULL, "Expanded filename: '%s'", *((char **)opt->var));
+    log_debug(NULL, "Expanded filepath: '%s'", *((char **)opt->var));
     return 0;
   }
   log_error(NULL, "Error parsing string argument '%s'", val);
@@ -286,6 +286,18 @@ static option_t options[] = {
       {
         "Host address of the peer.\n",
         "Can be a host name or an IPv4/IPv6 address.\n"
+      }
+    },
+    {
+      "identifier",
+      'I',
+      &GlobalConfig.passwd_bundle_id,
+      NULL,
+      parse_string,
+      1,
+      cmdSend | cmdReceive | cmdPassgen | cmdPassdel,
+      {
+        "Unique identifier for the password bundle.\n"
       }
     },
     {
@@ -552,8 +564,8 @@ static void print_help(command_t command) {
         continue;
       if (opt->short_name) {
         /* print first line with short option */
-        fprintf(stdout, "  -%c,  --%-20s    %s", opt->short_name, opt->long_name,
-                opt->help[0]);
+        fprintf(stdout, "  -%c,  --%-20s    %s", opt->short_name,
+                opt->long_name, opt->help[0]);
       } else {
         /* maintain alignment: replace the " -X  " segment with spaces */
         fprintf(stdout, "       --%-20s    %s", opt->long_name, opt->help[0]);
@@ -770,9 +782,7 @@ static char *get_password_file_location(const char *name, bool check) {
     return NULL;
   }
 
-  sha256_init(&ctx);
-  sha256_update(&ctx, (const uint8_t *)name, strlen(name));
-  sha256_finalize(&ctx, hash);
+  SHA256(PTR8(name), strlen(name), hash);
 
   if (zt_hex_encode(hash, SHA256_DIGEST_LEN, &hex)) {
     fname = zt_malloc(n + strlen(hex) + 2);
@@ -849,13 +859,23 @@ command_t init_config(int argc, char *argv[]) {
   if (GlobalConfig.password_words < 3 || GlobalConfig.password_words > 20)
     goto err;
 
+  if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 || command == cmdPassdel) {
+    if (!GlobalConfig.passwd_bundle_id)
+      goto err;
+  } else if (GlobalConfig.passwd_bundle_id) {
+    goto err;
+  }
+
+  if (GlobalConfig.auth_type != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdfile)
+    goto err;
+
   switch (command) {
   case cmdSend: {
     if (!GlobalConfig.hostname)
       goto err;
 
-    if (!GlobalConfig.passwdfile &&
-        GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 &&
+        !GlobalConfig.passwdfile) {
       char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
         return cmdNone;
@@ -865,9 +885,9 @@ command_t init_config(int argc, char *argv[]) {
     if (GlobalConfig.flag_live_read) {
       if (target)
         goto err;
-      GlobalConfig.filename = zt_strdup("-"); /* read from STDIN */
+      GlobalConfig.filepath = zt_strdup("-"); /* read from STDIN */
     } else if (target) {
-      GlobalConfig.filename = zt_strdup(target);
+      GlobalConfig.filepath = zt_strdup(target);
     } else {
       goto err;
     }
@@ -876,11 +896,11 @@ command_t init_config(int argc, char *argv[]) {
   }
 
   case cmdReceive: {
-    // if (!GlobalConfig.hostname)
-      // goto err;
+    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 &&
+        !GlobalConfig.passwdfile) {
+      if (!GlobalConfig.hostname)
+        goto err;
 
-    if (!GlobalConfig.passwdfile &&
-        GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
       char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
         return cmdNone;
@@ -888,9 +908,9 @@ command_t init_config(int argc, char *argv[]) {
     }
 
     if (!target)
-      GlobalConfig.filename = zt_strdup("-"); /* write to STDOUT */
+      GlobalConfig.filepath = zt_strdup("-"); /* write to STDOUT */
     else
-      GlobalConfig.filename = zt_strdup(target);
+      GlobalConfig.filepath = zt_strdup(target);
 
     break;
   }
@@ -901,23 +921,29 @@ command_t init_config(int argc, char *argv[]) {
 
     /* We either need a explicit target file location or a hostname
      * to locate one in the default passwords directory */
-    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 && !target &&
-        !GlobalConfig.hostname) {
+    if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+      if (!target && !GlobalConfig.hostname) {
+        goto err;
+      } else if (target) {
+        GlobalConfig.passwdfile = zt_strdup(target);
+      } else {
+        char *fname = get_password_file_location(GlobalConfig.hostname, false);
+        if (!fname)
+          return cmdNone;
+        GlobalConfig.passwdfile = fname;
+      }
+    } else if (target || GlobalConfig.hostname) {
+      /* K0 does not take these arguments */
+      // TODO: can we have a better way of handling these restricted
+      // combinations without this messy logic?
       goto err;
-    } else if (target) {
-      GlobalConfig.passwdfile = zt_strdup(target);
-    } else {
-      char *fname = get_password_file_location(GlobalConfig.hostname, false);
-      if (!fname)
-        return cmdNone;
-      GlobalConfig.passwdfile = fname;
     }
 
     break;
   }
 
   case cmdPassdel: {
-    if (!GlobalConfig.hostname)
+    if (!target && !GlobalConfig.hostname)
       goto err;
 
     if (target) {
@@ -946,5 +972,6 @@ void deinit_config(void) {
   zt_free(GlobalConfig.hostname);
   zt_free(GlobalConfig.passwdfile);
   zt_free(GlobalConfig.ciphersuite);
-  zt_free(GlobalConfig.filename);
+  zt_free(GlobalConfig.filepath);
+  zt_free(GlobalConfig.passwd_bundle_id);
 }

@@ -1,3 +1,4 @@
+#include "common/log.h"
 #include "common/progressbar.h"
 #include "common/prompts.h"
 #include "common/tty_io.h"
@@ -91,7 +92,7 @@ static void gsh(int sig) {
 static int do_send(void) {
   err_t e;
   zt_client_connection_t *client = NULL;
-  bool done;
+  bool done = false;
 
   e = zt_client_conn_alloc(&client);
   if (e != ERR_SUCCESS)
@@ -100,7 +101,7 @@ static int do_send(void) {
   e = zt_client_run(client, NULL, &done);
 
   if (e == ERR_SUCCESS && done)
-    tty_printf(get_cli_prompt(OnSendSuccessful), GlobalConfig.filename);
+    tty_printf(get_cli_prompt(OnSendSuccessful), GlobalConfig.filepath);
 
   zt_client_conn_dealloc(client);
 
@@ -110,7 +111,7 @@ static int do_send(void) {
 static int do_receive(void) {
   err_t e;
   zt_server_connection_t *server = NULL;
-  bool done;
+  bool done = false;
 
   e = zt_server_conn_alloc(&server);
   if (e != ERR_SUCCESS)
@@ -118,8 +119,8 @@ static int do_receive(void) {
 
   e = zt_server_run(server, NULL, &done);
   if (e == ERR_SUCCESS && done) {
-    if (strcmp(GlobalConfig.filename, "-"))
-      tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filename);
+    if (strcmp(GlobalConfig.filepath, "-"))
+      tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filepath);
   }
 
   zt_server_conn_dealloc(server);
@@ -141,7 +142,7 @@ static int passgen(void) {
     if (fd < 0)
       return -1;
 
-    if (zt_auth_passwd_db_new(fd, GlobalConfig.hostname,
+    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwd_bundle_id,
                               GlobalConfig.password_chars,
                               GlobalConfig.password_bundle_size) < 0) {
       close(fd);
@@ -174,8 +175,8 @@ static int passdel(void) {
   if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileTryDelete)))
     return 0;
 
-  rv =
-      zt_auth_passwd_delete(GlobalConfig.passwdfile, GlobalConfig.hostname, -1);
+  rv = zt_auth_passwd_delete(GlobalConfig.passwdfile,
+                             GlobalConfig.passwd_bundle_id, -1);
   return rv < 0 ? -1 : 0;
 }
 
@@ -198,6 +199,10 @@ int main(int argc, char **argv) {
 
   if ((command = init_config(argc, argv)) == cmdNone)
     goto out;
+
+#ifndef DEBUG
+  zt_logger_set_level(NULL, LOG_LEVEL_ERROR);
+#endif
 
   switch (command) {
   case cmdSend:
