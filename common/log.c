@@ -172,6 +172,11 @@ zt_logger_t *zt_logger_new(const char *name, zt_log_t level) {
   return logger;
 }
 
+void zt_logger_set_level(zt_logger_t *logger, zt_log_t level) {
+  logger = logger ? logger : &global_logger;
+  logger->level = level;
+}
+
 zt_log_t zt_logger_get_level(zt_logger_t *logger) {
   return logger ? logger->level : global_logger.level;
 }

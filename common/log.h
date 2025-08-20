@@ -62,6 +62,15 @@ typedef struct zt_logger_st {
 zt_logger_t *zt_logger_new(const char *name, zt_log_t level);
 
 /**
+ * Set the log level of a logger.
+ *
+ * @param logger The logger to modify. If NULL, the global logger will be used.
+ * @param level The new log level for the logger.
+ * @return void.
+ */
+void zt_logger_set_level(zt_logger_t *logger, zt_log_t level);
+
+/**
  * Get the log level of a logger.
  *
  * @param logger The logger to query. If NULL, the global logger will be used.
