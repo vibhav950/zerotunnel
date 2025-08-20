@@ -10,13 +10,14 @@
 #include <sys/socket.h>
 
 /*
-int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
+static int tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
   int rc;
   int flags, error;
   fd_set rset, wset;
   fd_set *rsetp, *wsetp;
-  struct timeval tval;
   socklen_t len;
+  zt_timeout_t timeout;
+  int pause = 32, pause32 = 64;
 
   FD_ZERO(&rset);
   FD_SET(sockfd, &rset);
@@ -25,30 +26,35 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
   rsetp = (mode & ZT_NETIO_READABLE) ? &rset : NULL;
   wsetp = (mode & ZT_NETIO_WRITABLE) ? &wset : NULL;
 
-  tval.tv_sec = timeout_msec / 1000;
-  tval.tv_usec = (timeout_msec % 1000) * 1000;
+  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
 
-  if (select(sockfd + 1, rsetp, wsetp, NULL,
-             (timeout_msec >= 0) ? &tval : NULL) == 0) {
-    log_error(NULL, "Connection timed out\n");
-    return -1;
-  }
+  do {
+    rc = select(sockfd + 1, rsetp, wsetp, NULL, 0);
+
+    if (rc > 0) {
+      break;
+    } else if (rc < 0) {
+      log_error(NULL, "select failed (%s)", strerror(errno));
+      return -1;
+    }
+
+    decaying_sleep(pause, pause32);
+  } while (!zt_timeout_expired(&timeout, NULL));
+
+  if (rc == 0)
+    log_error(NULL, "Connection timed out");
 
   rc = 0;
   // Socket readable?
-  if (mode & ZT_NETIO_READABLE) {
-    if (!FD_ISSET(sockfd, &rset))
-      rc |= ZT_NETIO_READABLE;
-  }
+  if (mode & ZT_NETIO_READABLE && FD_ISSET(sockfd, &rset))
+    rc |= ZT_NETIO_READABLE;
   // Socket writable?
-  if (mode & ZT_NETIO_WRITABLE) {
-    if (!FD_ISSET(sockfd, &wset))
-      rc |= ZT_NETIO_WRITABLE;
-  }
+  if (mode & ZT_NETIO_WRITABLE && FD_ISSET(sockfd, &wset))
+    rc |= ZT_NETIO_WRITABLE;
 
   len = sizeof(error);
   if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
-    log_error(NULL, "getsockopt failed (%s)\n", strerror(errno));
+    log_error(NULL, "getsockopt failed (%s)", strerror(errno));
     rc = -1;
   }
   // Check for pending socket error
@@ -74,6 +80,7 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
  * If `-1`, the function will wait indefinitely.
  */
 int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
+  // return tcp_io_waitfor(sockfd, timeout_msec, mode);
   return zt_io_waitfor(sockfd, timeout_msec, mode);
 }
 
@@ -89,7 +96,7 @@ int zt_tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
  * If `-1`, the function will wait indefinitely.
  */
 bool zt_tcp_io_waitfor_read(int sockfd, timediff_t timeout_msec) {
-  // return zt_tcp_io_waitfor(sockfd, timeout_msec, ZT_NETIO_READABLE) > 0;
+  // return tcp_io_waitfor(sockfd, timeout_msec, ZT_NETIO_READABLE) > 0;
   return zt_io_waitfor(sockfd, timeout_msec, ZT_IO_READABLE) > 0;
 }
 
@@ -105,7 +112,7 @@ bool zt_tcp_io_waitfor_read(int sockfd, timediff_t timeout_msec) {
  * If `-1`, the function will wait indefinitely.
  */
 bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec) {
-  // return zt_tcp_io_waitfor(sockfd, timeout_msec, ZT_NETIO_WRITABLE) > 0;
+  // return tcp_io_waitfor(sockfd, timeout_msec, ZT_NETIO_WRITABLE) > 0;
   return zt_io_waitfor(sockfd, timeout_msec, ZT_IO_WRITABLE) > 0;
 }
 
