@@ -120,9 +120,10 @@ static const char *PGP_WORDLIST_ODD[N_WORDS_PER_LIST] = {
 /**
  * Generate a phonetic password with the given parameters.
  *
- * \p count The number of words to include in the password.
- * \p sep The separator to use between words.
- * \p have_digits Whether to include digits in the password.
+ * @param[in] count The number of words to include in the password.
+ * @param[in] sep The separator to use between words.
+ * @param[in] have_digits Whether to include digits in the password.
+ * @return A pointer to the generated password string or NULL on failure.
  */
 char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
   bool valid = false;
@@ -186,12 +187,34 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
 }
 
 /**
- * \p pass - buffer for nul-terminated password string
- * \p len - length of the password excluding null character
+ * Generate a random password string of uppercase, lowercase, numeric,
+ * and special characters.
+ *
+ * @param[in] len - length of the password excluding null character.
+ * @param[in] buf - a buffer to hold the generated password at least as big as
+ * len + 1. If NULL, memory will be allocated.
+ * @return A pointer to the generated password string or NULL on failure.
  */
-int auth_passwd_generate(char *pass, int len) {
-  if (len < 12 || len > 256)
-    return -1;
+char *auth_passwd_generate(int len, char *buf, size_t bufsize) {
+  char *pass;
 
-  return zt_rand_charset(pass, len, NULL, 0);
+  if (len < 12 || len > 256)
+    return NULL;
+
+  if (bufsize && bufsize < len + 1)
+    return NULL;
+
+  if (!bufsize) {
+    pass = zt_malloc(len + 1);
+    if (!pass)
+      return NULL;
+  } else {
+    pass = buf;
+  }
+
+  if (zt_rand_charset(pass, len + 1, NULL, 0)) {
+    zt_free(pass);
+    return NULL;
+  }
+  return pass;
 }

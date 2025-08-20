@@ -19,12 +19,14 @@
 
 typedef int32_t passwd_id_t;
 
-typedef enum {
+typedef uint8_t auth_type_t;
+
+enum {
   KAPPA_AUTHTYPE_0,
   KAPPA_AUTHTYPE_1,
   KAPPA_AUTHTYPE_2,
   AUTHTYPE_NONE = 0xff,
-} auth_type_t;
+};
 
 struct passwd {
   passwd_id_t id;
@@ -35,26 +37,26 @@ struct passwd {
 struct authid {
   union {
     uint8_t bytes[AUTHID_BYTES_LEN];
-    uint32_t words[AUTHID_BYTES_LEN/4];
+    uint32_t words[AUTHID_BYTES_LEN / 4];
   };
 };
 
-passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *peer_id,
+passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
                                 passwd_id_t pwid, struct passwd **passwd);
 
-int zt_auth_passwd_delete(const char *passwdfile, const char *peer_id,
+int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
                           passwd_id_t pwid);
 
 struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic);
 
 passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
-                               const char *peer_id, struct passwd **passwd);
+                               const char *bundle_id, struct passwd **passwd);
 
 passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
-                               const char *peer_id, passwd_id_t pwid,
+                               const char *bundle_id, passwd_id_t pwid,
                                struct passwd **passwd);
 
-int zt_auth_passwd_db_new(int fd, const char *peer_id,
+int zt_auth_passwd_db_new(int fd, const char *bundle_id,
                           unsigned short password_len,
                           unsigned short n_passwords);
 
