@@ -25,15 +25,6 @@ static void test_kdf(kdf_alg_t alg) {
   ASSERT(kdf_derive(p_kdf, ad, sizeof(ad), buf2, sizeof(buf2)) == ERR_SUCCESS);
   ASSERT_MEMEQ(buf1, buf2, sizeof(buf1));
 
-  for (size_t i = 0; i < sizeof(buf1); i++) {
-    fprintf(stderr, "%02x ", buf1[i]);
-  }
-  fprintf(stderr, "\n");
-  for (size_t i = 0; i < sizeof(buf2); i++) {
-    fprintf(stderr, "%02x ", buf2[i]);
-  }
-  fprintf(stderr, "\n");
-
   memset(ad, 0x0b, sizeof(ad));
   ASSERT(kdf_derive(p_kdf, ad, sizeof(ad), buf1, sizeof(buf2)) == ERR_SUCCESS);
   ASSERT_MEMNEQ(buf1, buf2, sizeof(buf1));
