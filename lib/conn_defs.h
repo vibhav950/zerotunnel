@@ -24,28 +24,29 @@
  * Timeouts waiting periods
  */
 
-#define ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT       15000U  /* Client connect timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT          15000U   /* Client send() timeout (msec) */
-#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT          15000U   /* Client recv() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT       15000U    /* Client connect timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_SEND_DEFAULT          120000U   /* Client send() timeout (msec) */
+#define ZT_CLIENT_TIMEOUT_RECV_DEFAULT          120000U   /* Client recv() timeout (msec) */
 
-#define ZT_SERVER_TIMEOUT_IDLE_DEFAULT          60000U  /* Server idle timeout (msec) */
-#define ZT_SERVER_TIMEOUT_SEND_DEFAULT          15000U   /* Server send() timeout (msec) */
-#define ZT_SERVER_TIMEOUT_RECV_DEFAULT          15000U   /* Server recv() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_IDLE_DEFAULT          120000U   /* Server idle timeout (msec) */
+#define ZT_SERVER_TIMEOUT_SEND_DEFAULT          120000U   /* Server send() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_RECV_DEFAULT          120000U   /* Server recv() timeout (msec) */
 
-#define CLIENT_RESOLVE_RETRIES                  8       /* Max host resolution retries */
+#define CLIENT_RESOLVE_RETRIES                  8         /* Max host resolution retries */
 
-#define MAX_AUTH_RETRY_COUNT                    3       /* Max authentication retries */
+#define MAX_AUTH_RETRY_COUNT                    3         /* Max authentication retries */
 
-#define ZT_DEFAULT_CIPHER_SUITE_ID              0x01    /* Default ciphersuite */
+#define ZT_DEFAULT_CIPHER_SUITE_ID              0x01      /* Default ciphersuite */
 
 enum {
-  MSG_HANDSHAKE   = (1 << 0), /* Crypto handshake message */
-  MSG_AUTH_RETRY  = (1 << 1), /* Authentication retry message */
-  MSG_CONTROL     = (1 << 2), /* Control message */
-  MSG_METADATA    = (1 << 3), /* File metadata message */
-  MSG_FILEDATA    = (1 << 4), /* File payload message */
-  MSG_DONE        = (1 << 5), /* No further messages pending */
-  MSG_ANY         = 0xff,
+  MSG_HANDSHAKE       = (1 << 0), /* Crypto handshake message */
+  MSG_AUTH_RETRY      = (1 << 1), /* Authentication retry message */
+  MSG_HANDSHAKE_FIN   = (1 << 2), /* Final handshake message */
+  MSG_CONTROL         = (1 << 3), /* Control message */
+  MSG_METADATA        = (1 << 4), /* File metadata message */
+  MSG_FILEDATA        = (1 << 5), /* File payload message */
+  MSG_DONE            = (1 << 6), /* No further messages pending */
+  MSG_ANY             = 0xff,
 };
 
 enum {
@@ -60,7 +61,7 @@ typedef uint16_t zt_msg_flags_t;
 #define MSG_END_BYTE                            0x01
 
 /** Message flow termination marker */
-#define DONE_MSG_UTF8                           "BYE"
+// #define DONE_MSG_UTF8                           "BYE"
 
 /** Size of message header */
 #define ZT_MSG_HEADER_SIZE                                                     \
@@ -127,7 +128,8 @@ typedef struct _zt_msg_st {
 /** Populate message `msgptr` */
 #define MSG_MAKE(msgptr, type, data, len, setflags)                            \
   do {                                                                         \
-    memcpy(MSG_DATA_PTR(msgptr), data, len);                                   \
+    if (len)                                                                   \
+      memcpy(MSG_DATA_PTR(msgptr), data, len);                                 \
     MSG_SET_TYPE(msgptr, type);                                                \
     MSG_SET_LEN(msgptr, len);                                                  \
     MSG_SET_FLAGS(msgptr, setflags);                                           \
