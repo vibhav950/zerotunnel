@@ -317,6 +317,7 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
   ASSERT(conn->state == SERVER_CONN_LISTEN);
   ASSERT(conn->sockfd >= 0);
 
+  conn->peer.addrlen = sizeof(conn->peer.addr);
   clientfd = accept4(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
                      &conn->peer.addrlen, SOCK_CLOEXEC);
   if (clientfd < 0) {
@@ -328,6 +329,7 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
        * Thanks to https://github.com/python/cpython/issues/54324
        */
       log_debug(NULL, "accept4 not supported, falling back to accept()");
+      conn->peer.addrlen = sizeof(conn->peer.addr);
       clientfd = accept(conn->sockfd, (struct sockaddr *)&conn->peer.addr,
                         &conn->peer.addrlen);
       if (clientfd < 0) {
@@ -687,14 +689,18 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     switch (conn->state) {
     case SERVER_CONN_INIT: {
       struct zt_addrinfo *ai_list = NULL;
+      uint32_t firstword;
+
       if ((ret = server_setup_host(conn, &ai_list)) != ERR_SUCCESS)
         return ret;
 
       if ((ret = server_tcp_listen(conn, ai_list)) != ERR_SUCCESS)
         return ret;
 
+      firstword = conn->self.authid.words[0];
+
       tty_printf(get_cli_prompt(OnServerListening), conn->self.ip,
-                 conn->self.port, conn->peer.authid.bytes);
+                 conn->self.port, firstword);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_CONN_LISTEN);
       ATTRIBUTE_FALLTHROUGH;
@@ -1018,8 +1024,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       off_t filesize = filesize_unit_conv(conn->fileinfo.size);
       const char *unit = filesize_unit_str(conn->fileinfo.size);
 
-      tty_printf("Incoming file transfer (name = %s, size = %jd %s)\n",
-                 conn->fileinfo.name, filesize, unit);
+      tty_printf(get_cli_prompt(OnIncomingTransfer), conn->fileinfo.name,
+                 filesize, unit);
       if (!tty_get_answer_is_yes(get_cli_prompt(OnFileTransferRequest))) {
         log_info(NULL, "shutting everything down...");
         goto cleanup2;
