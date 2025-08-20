@@ -27,8 +27,9 @@ static const char clientstate_names[][22] = {
     [CLIENT_NONE]           = "CLIENT_NONE",
     [CLIENT_CONN_INIT]      = "CLIENT_CONN_INIT",
     [CLIENT_AUTH_INIT]      = "CLIENT_AUTH_INIT",
+    [CLIENT_AUTH_VERIFY]    = "CLIENT_AUTH_VERIFY",
     [CLIENT_AUTH_COMPLETE]  = "CLIENT_AUTH_COMPLETE",
-    [CLIENT_OFFER]          = "CLIENT_TRANSFER_OFFER",
+    [CLIENT_OFFER]          = "CLIENT_OFFER",
     [CLIENT_TRANSFER]       = "CLIENT_TRANSFER",
     [CLIENT_DONE]           = "CLIENT_DONE"
 };
@@ -560,8 +561,6 @@ static err_t client_send(zt_client_connection_t *conn) {
   }
   tosend += ZT_MSG_HEADER_SIZE; /* we're sending header+payload */
 
-  printf("sending %s\n", msg_info(conn->msgbuf));
-
   if (zt_client_tcp_send(conn, p, tosend) != 0) {
     log_error(NULL, "failed to send %zu bytes to peer (%s)", tosend,
               strerror(errno));
@@ -621,8 +620,6 @@ static err_t client_recv(zt_client_connection_t *conn,
     ret = ERR_INVALID_DATUM;
     goto out;
   }
-
-  printf("received %s\n", msg_info(conn->msgbuf));
 
   if (!msg_type_isvalid(MSG_TYPE(conn->msgbuf))) {
     log_error(NULL, "recieved malformed header (invalid type)");
@@ -804,7 +801,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
             zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.auth_type,
                                GlobalConfig.passwd_bundle_id, &master_pass);
 
-        if (passwd_id > 0 && auth_type == KAPPA_AUTHTYPE_2)
+        if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
       }
 
@@ -874,11 +871,11 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_COMPLETE);
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_VERIFY);
       ATTRIBUTE_FALLTHROUGH;
     }
 
-    case CLIENT_AUTH_COMPLETE: {
+    case CLIENT_AUTH_VERIFY: {
       uint8_t *rcvbuf, *sndbuf;
       size_t rcvlen, sndlen;
 
@@ -989,19 +986,22 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         if ((ret = client_send(conn)) != ERR_SUCCESS)
           goto cleanup2;
 
-        // TODO: move this to a new state, one state should do one thing;
-        // either send or receive a message
-        if ((ret = client_recv(conn, MSG_HANDSHAKE_FIN | MSG_AUTH_RETRY)) !=
-            ERR_SUCCESS) {
-          goto cleanup2;
-        }
+        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_COMPLETE);
+      } /* case MSG_HANDSHAKE*/
+      } /* switch (MSG_TYPE(conn->msgbuf)) */
+      break;
+    } /* case CLIENT_AUTH_VERIFY */
 
-        if (MSG_TYPE(conn->msgbuf) == MSG_AUTH_RETRY)
-          goto retryhandshake;
-
-        CLIENTSTATE_CHANGE(conn->state, CLIENT_OFFER);
-      } /* case MSG_HANDSHAKE */
+    case CLIENT_AUTH_COMPLETE: {
+      if ((ret = client_recv(conn, MSG_HANDSHAKE_FIN | MSG_AUTH_RETRY)) !=
+          ERR_SUCCESS) {
+        goto cleanup2;
       }
+
+      if (MSG_TYPE(conn->msgbuf) == MSG_AUTH_RETRY)
+        goto retryhandshake;
+
+      CLIENTSTATE_CHANGE(conn->state, CLIENT_OFFER);
       break;
 
     retryhandshake:
