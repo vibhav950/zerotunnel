@@ -3,18 +3,20 @@
 typedef enum {
   /* Interaction required */
   OnBadPasswdIdentifier,
-  OnPossibleIncorrectPasswdAttempt,
+  OnIncorrectPasswdAttempt,
   OnFileTransferRequest,
   OnPasswdFileExists,
   OnPasswdFileTryDelete,
   /* Report status */
   OnServerListening,
-  /* Miscellaneous */
+  OnAuthTypeMismatch,
+  OnIncomingTransfer,
   OnNewK0Password,
   OnNewK1PasswordFile,
   OnNewK2Password,
   OnSendSuccessful,
   OnReceiveSuccessful,
+  OnSendFailure,
 } prompt_t;
 
 /** Returns a CLI prompt string */
