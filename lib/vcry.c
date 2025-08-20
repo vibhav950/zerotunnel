@@ -1425,6 +1425,9 @@ void vcry_module_release(void) {
   uint8_t *pqpub;
   size_t pqpub_len;
 
+  if (!initialized)
+    return;
+
   kex_free_peer_data(vctx->kex, &vctx->peer_ec_share);
   kem_mem_free(&kem_kyber_intf, vctx->ss, vctx->ss_len);
 

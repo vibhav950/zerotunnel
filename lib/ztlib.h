@@ -12,7 +12,8 @@ struct config {
     *hostname,                  /* peer hostname -- can be a FQDN or IP address */
     *passwdfile,                /* location of the password database file */
     *ciphersuite,               /* ciphersuite cannonical name or alias */
-    *filename;                  /* complete target file path */
+    *filepath,                  /* complete target file path */
+    *passwd_bundle_id;          /* bundle identifier for KAPPA1 auth type */
   uint32_t
     padding_factor;             /* padding factor of the form: 2^n; 1<=n<=16 */
   uint16_t
