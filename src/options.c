@@ -850,6 +850,8 @@ command_t init_config(int argc, char *argv[]) {
   if (n < argc)
     target = argv[n++];
 
+  /* Handle mutually exclusive and otherwise incompatible option values */
+
   if (GlobalConfig.password_bundle_size > 90)
     goto err;
 
@@ -857,6 +859,9 @@ command_t init_config(int argc, char *argv[]) {
     goto err;
 
   if (GlobalConfig.password_words < 3 || GlobalConfig.password_words > 20)
+    goto err;
+
+  if (GlobalConfig.flag_length_obfuscation && GlobalConfig.flag_lz4_compression)
     goto err;
 
   if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 || command == cmdPassdel) {
