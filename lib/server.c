@@ -510,7 +510,8 @@ static err_t server_recv(zt_server_connection_t *conn,
   }
 
   if (!msg_type_is_expected(MSG_TYPE(conn->msgbuf), expected_types)) {
-    log_error(NULL, "bad message (expected %u)", expected_types);
+    log_error(NULL, "bad message %u (expected %u)", MSG_TYPE(conn->msgbuf),
+              expected_types);
     ret = ERR_INVALID_DATUM;
     goto out;
   }
@@ -559,17 +560,20 @@ static err_t server_recv(zt_server_connection_t *conn,
     }
   }
 
-  zt_msg_flags_t flags = MSG_FLAGS(conn->msgbuf);
-  if (flags & MSG_FL_PADDING) {
+  if (MSG_FLAGS(conn->msgbuf) & MSG_FL_PADDING) {
     /**
      * Remove message padding - this loop intentionally iterates through
      * the entire message payload to avoid leaking the padding length due
      * to timing differences
      */
-    for (i = nread; i > 0; --i)
-      if (datap[i - 1] == MSG_END_BYTE)
+    bool found = false;
+    for (i = nread; i > 0; --i) {
+      if (datap[i - 1] == MSG_END_BYTE && !found) {
         nread = i;
-  } else if (flags & MSG_FL_COMPRESSION) {
+        found = true;
+      }
+    }
+  } else if (MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION) {
     const char *rptr = (const char *)datap;
     char *wptr = (char *)MSG_DATA_PTR(conn->msgbuf);
 
