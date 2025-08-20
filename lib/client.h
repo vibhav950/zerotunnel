@@ -17,32 +17,34 @@ typedef enum {
 // clang-format off
 typedef struct _zt_client_connection_st {
   ZT_CLIENT_STATE
-    state;
+    state;                /* current client state */
   struct zt_addrinfo
-    *ai_estab;
+    *ai_estab;            /* established address info */
 #if 1 //def USE_SIGACT_TIMEOUT
   zt_timeval_t
-    created_at;
+    created_at;           /* connection creation time */
 #endif
   zt_msg_t
-    *msgbuf;
+    *msgbuf;              /* message buffer */
   const char
-    *hostname,
-    *port;
+    *hostname,            /* hostname/IPv{4|6} to connect to */
+    *port;                /* explicit target service port */
   struct authid
-    authid_mine,   /* local AuthId */
-    authid_peer;   /* peer's AuthId */
+    authid_mine,          /* local AuthId */
+    authid_peer;          /* peer's AuthId */
   passwd_id_t
-    renegotiation_passwd;
+    renegotiation_passwd; /* passwd renegotiation from server */
   int
-    sockfd,
-    sock_flags,
-    connect_timeout,
-    send_timeout,
-    recv_timeout;
+    auth_retries;         /* number of handshake retries (=0 for first attempt) */
+  int
+    sockfd,               /* TCP socket file descriptor */
+    sock_flags,           /* saved socket flags */
+    connect_timeout,      /* connection timeout (>0 ms) */
+    send_timeout,         /* send timeout (>0 ms) */
+    recv_timeout;         /* receive timeout (>0 ms) */
   bool
-    first_send,
-    renegotiation;
+    first_send,           /* yet to send the first TCP message */
+    renegotiation;        /* renegotiation in progress */
   bool
     fl_tcp_fastopen   : 1,  /* is TCP fastopen enabled */
     fl_tcp_nodelay    : 1,  /* is TCP_NODELAY enabled */
