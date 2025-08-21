@@ -46,8 +46,8 @@ static const char b64urlsafe[] =
  *
  * Return: the length of the resulting base64-encoded string in bytes.
  */
-static inline int base64_encode(const char *table, const uint8_t *src,
-                                int srclen, char *dst) {
+static inline int base64_encode(const char *table, const uint8_t *src, int srclen,
+                                char *dst) {
   uint32_t ac = 0;
   int bits = 0;
   size_t i;

@@ -7,9 +7,8 @@
 #define __DEFINES_H__
 
 #if defined(__GNUC__) && defined(__GNUC_MINOR__)
-#define GCC_VERSION_AT_LEAST(major, minor)                                     \
-  ((__GNUC__ > (major)) ||                                                     \
-   ((__GNUC__ == (major)) && (__GNUC_MINOR__ >= (minor))))
+#define GCC_VERSION_AT_LEAST(major, minor)                                               \
+  ((__GNUC__ > (major)) || ((__GNUC__ == (major)) && (__GNUC_MINOR__ >= (minor))))
 #else
 #define GCC_VERSION_AT_LEAST(major, minor) 0
 #endif
@@ -61,8 +60,7 @@
 #endif
 
 #if GCC_VERSION_AT_LEAST(2, 5)
-#define ATTRIBUTE_FORMAT_PRINTF(fmt, args)                                     \
-  __attribute__((format(printf, fmt, args)))
+#define ATTRIBUTE_FORMAT_PRINTF(fmt, args) __attribute__((format(printf, fmt, args)))
 #else
 #define ATTRIBUTE_FORMAT_PRINTF(fmt, args)
 #endif
@@ -207,11 +205,10 @@ extern void zt_log_fatal(const char *fmt, ...)
 #undef ASSERT
 #endif
 #if defined(DEBUG)
-#define ASSERT(cond)                                                           \
-  do {                                                                         \
-    ((cond) ? (void)0                                                          \
-            : zt_log_fatal("%s:%d: assertion failed `" #cond "`", __FILE__,    \
-                           __LINE__));                                         \
+#define ASSERT(cond)                                                                     \
+  do {                                                                                   \
+    ((cond) ? (void)0                                                                    \
+            : zt_log_fatal("%s:%d: assertion failed `" #cond "`", __FILE__, __LINE__));  \
   } while (0)
 #else
 #define ASSERT(cond) (cond)
@@ -285,8 +282,8 @@ void zt_secure_mem_free(void *p);
  * This initializer must be called at the program startup before any of the zt_*
  * memory/string functions can be used.
  */
-void zt_mem_init(malloc_func *malloc_fn, calloc_func *calloc_fn,
-                 realloc_func *realloc_fn, free_func *free_fn);
+void zt_mem_init(malloc_func *malloc_fn, calloc_func *calloc_fn, realloc_func *realloc_fn,
+                 free_func *free_fn);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to the

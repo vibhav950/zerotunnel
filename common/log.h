@@ -156,11 +156,9 @@ void zt_logger_remove_after_cb(zt_logger_t *logger, log_cb cb);
 void zt_log_debug(zt_logger_t *logger, const char *fmt, ...)
     ATTRIBUTE_FORMAT_PRINTF(2, 3);
 
-void zt_log_info(zt_logger_t *logger, const char *fmt, ...)
-    ATTRIBUTE_FORMAT_PRINTF(2, 3);
+void zt_log_info(zt_logger_t *logger, const char *fmt, ...) ATTRIBUTE_FORMAT_PRINTF(2, 3);
 
-void zt_log_warn(zt_logger_t *logger, const char *fmt, ...)
-    ATTRIBUTE_FORMAT_PRINTF(2, 3);
+void zt_log_warn(zt_logger_t *logger, const char *fmt, ...) ATTRIBUTE_FORMAT_PRINTF(2, 3);
 
 void zt_log_error(zt_logger_t *logger, const char *fmt, ...)
     ATTRIBUTE_FORMAT_PRINTF(2, 3);
@@ -175,35 +173,30 @@ extern void zt_log_fatal(const char *fmt, ...)
     ATTRIBUTE_FORMAT_PRINTF(1, 2) ATTRIBUTE_NORETURN;
 
 #if defined(DEBUG)
-#define log_debug(logger, fmt, ...)                                            \
-  zt_log_debug(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__,        \
-               ##__VA_ARGS__)
+#define log_debug(logger, fmt, ...)                                                      \
+  zt_log_debug(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
-#define log_info(logger, fmt, ...)                                             \
-  zt_log_info(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__,         \
-              ##__VA_ARGS__)
+#define log_info(logger, fmt, ...)                                                       \
+  zt_log_info(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
-#define log_warn(logger, fmt, ...)                                             \
-  zt_log_warn(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__,         \
-              ##__VA_ARGS__)
+#define log_warn(logger, fmt, ...)                                                       \
+  zt_log_warn(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
-#define log_error(logger, fmt, ...)                                            \
-  zt_log_error(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__,        \
-               ##__VA_ARGS__)
+#define log_error(logger, fmt, ...)                                                      \
+  zt_log_error(logger, "%s:%d: %s: " fmt, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
-#define log_fatal(fmt, ...)                                                    \
-  zt_log_fatal("%s:%d: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define log_fatal(fmt, ...) zt_log_fatal("%s:%d: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 #else /* DEBUG */
-#define log_debug(logger, fmt, ...)                                            \
+#define log_debug(logger, fmt, ...)                                                      \
   zt_log_debug(logger, "%s: " fmt, __func__, ##__VA_ARGS__)
 
-#define log_info(logger, fmt, ...)                                             \
+#define log_info(logger, fmt, ...)                                                       \
   zt_log_info(logger, "%s: " fmt, __func__, ##__VA_ARGS__)
 
-#define log_warn(logger, fmt, ...)                                             \
+#define log_warn(logger, fmt, ...)                                                       \
   zt_log_warn(logger, "%s: " fmt, __func__, ##__VA_ARGS__)
 
-#define log_error(logger, fmt, ...)                                            \
+#define log_error(logger, fmt, ...)                                                      \
   zt_log_error(logger, "%s: " fmt, __func__, ##__VA_ARGS__)
 
 #define log_fatal(fmt, ...) zt_log_fatal("%s: " fmt, __func__, ##__VA_ARGS__)

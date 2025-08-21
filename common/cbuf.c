@@ -199,8 +199,7 @@ ssize_t cbuf_get_readable_size(cbuf_t *cbuf) {
   return offs;
 }
 
-static inline size_t readable_size(size_t capacity, uint8_t *readp,
-                                   uint8_t *writep) {
+static inline size_t readable_size(size_t capacity, uint8_t *readp, uint8_t *writep) {
   ASSERT((readp != NULL) && (writep != NULL));
 
   /* empty condition: readp == writep */
@@ -236,7 +235,7 @@ int cbuf_waitfor_readable(cbuf_t *cbuf, size_t nbytes, int64_t timeout_msec) {
   if (!cbuf || !nbytes)
     return -1;
 
-  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
   for (;;) {
     readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
     writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);
@@ -285,7 +284,7 @@ ssize_t cbuf_write_blocking(cbuf_t *cbuf, const uint8_t *buf, size_t nbytes,
   capacity = cbuf->capacity;
 
   /* Start the timeout and spin until there is space to write */
-  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
   for (;;) {
     readp = atomic_load_explicit(&cbuf->readp, memory_order_acquire);
     /* Since only the writer updates writep, a relaxed load is OK */
@@ -379,7 +378,7 @@ ssize_t cbuf_read_blocking(cbuf_t *cbuf, uint8_t *buf, size_t nbytes,
   capacity = cbuf->capacity;
 
   /* spinlock */
-  zt_timeout_begin(&timeout, timeout_msec*1000, NULL);
+  zt_timeout_begin(&timeout, timeout_msec * 1000, NULL);
   for (;;) {
     readp = atomic_load_explicit(&cbuf->readp, memory_order_relaxed);
     writep = atomic_load_explicit(&cbuf->writep, memory_order_acquire);

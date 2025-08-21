@@ -33,8 +33,7 @@ enum PB_ELEMENT_SIZES {
 
 enum PB_SCREEN_WIDTH {
   PB_MIN_SCREEN_WIDTH = 80,
-  PB_MIN_LINE1_WIDTH =
-      (PB_FILE_NAME_SIZE + PB_DATA_SIZE + PB_RECIPIENT_NAME_SIZE + 1),
+  PB_MIN_LINE1_WIDTH = (PB_FILE_NAME_SIZE + PB_DATA_SIZE + PB_RECIPIENT_NAME_SIZE + 1),
   PB_MIN_LINE2_WIDTH = (PB_DATA_SIZE + PB_PERCENT_SIZE + PB_THROUGHPUT_SIZE +
                         PB_ETA_SIZE + PB_METER_SIZE + 1),
 };
@@ -47,9 +46,9 @@ typedef struct _progressbar_st {
   pthread_mutex_t lock;
   char progress[PB_METER_SIZE - 2]; /* buffer for progress meter chars */
   char *spaces;                     /* buffer for whitespace chars */
-  int width;            /* previously recorded window width (columns) */
-  volatile bool redraw; /* redraw entire progressbar on next update */
-  bool after_log;       /* next redraw occurs after a log */
+  int width;                        /* previously recorded window width (columns) */
+  volatile bool redraw;             /* redraw entire progressbar on next update */
+  bool after_log;                   /* next redraw occurs after a log */
   char file_name[PB_FILE_NAME_SIZE];
   char recipient_name[PB_RECIPIENT_NAME_SIZE];
   size_t total_size;
@@ -145,8 +144,7 @@ static inline ATTRIBUTE_ALWAYS_INLINE void pb_restore_cursor(void) {
   fflush(stdout);
 }
 
-static inline ATTRIBUTE_ALWAYS_INLINE bool
-pb_handle_winsize_change(bool force) {
+static inline ATTRIBUTE_ALWAYS_INLINE bool pb_handle_winsize_change(bool force) {
   ASSERT(progressbar);
 
   /* Check if the window size has changed;
@@ -162,7 +160,7 @@ pb_handle_winsize_change(bool force) {
       spaces = malloc(width + 1);
       if (unlikely(!spaces)) {
         winsize_changed = false; // XXX: should we try again next update?
-        return false; /* we couldn't allocate memory, use the old size */
+        return false;            /* we couldn't allocate memory, use the old size */
       }
       if (likely(progressbar->spaces))
         free(progressbar->spaces);
@@ -200,8 +198,7 @@ static inline ATTRIBUTE_ALWAYS_INLINE void pb_clear_progressbar(void) {
      ESC [1M : delete this line (pull lines below up)
      ESC [1A : move cursor up to the cleared first line position
      ESC [1G : ensure column 1 */
-  fputs("\x1B[1A\x1B[1G\x1B[2K\x1B[1B\x1B[1G\x1B[2K\x1B[1M\x1B[1A\x1B[1G",
-        stdout);
+  fputs("\x1B[1A\x1B[1G\x1B[2K\x1B[1B\x1B[1G\x1B[2K\x1B[1M\x1B[1A\x1B[1G", stdout);
   fflush(stdout);
 }
 
@@ -236,8 +233,7 @@ static void pb_progressbar_update(void) {
     {
       const char *filename = progressbar->file_name;
       const char *recipient = progressbar->recipient_name;
-      empty = MAX(width - (int)(PB_DATA_SIZE + strlen(filename) +
-                                strlen(recipient) + 4),
+      empty = MAX(width - (int)(PB_DATA_SIZE + strlen(filename) + strlen(recipient) + 4),
                   1); /* 3 spaces */
       // clang-format off
       fprintf(stdout, " %s %s %.*s %s \n",
@@ -260,8 +256,7 @@ static void pb_progressbar_update(void) {
 
   elapsed = zt_timediff_msec(zt_time_now(), progressbar->start_time) / 1000;
   throughput = (elapsed != 0) ? nbytes / elapsed : 0;
-  estimate =
-      (throughput != 0) ? (progressbar->total_size - nbytes) / throughput : 0;
+  estimate = (throughput != 0) ? (progressbar->total_size - nbytes) / throughput : 0;
 
   // clang-format off
   /* Print the second line with progress bar */
@@ -378,14 +373,12 @@ void zt_progressbar_destroy(void) {
   }
 }
 
-void zt_progressbar_begin(const char *recipient, const char *filename,
-                          size_t filesize) {
+void zt_progressbar_begin(const char *recipient, const char *filename, size_t filesize) {
   if (progressbar) {
     pthread_mutex_lock(&progressbar->lock);
 
     if (recipient) {
-      strncpy(progressbar->recipient_name, recipient,
-              PB_RECIPIENT_NAME_SIZE - 1);
+      strncpy(progressbar->recipient_name, recipient, PB_RECIPIENT_NAME_SIZE - 1);
       progressbar->recipient_name[PB_RECIPIENT_NAME_SIZE - 1] = '\0';
     }
 

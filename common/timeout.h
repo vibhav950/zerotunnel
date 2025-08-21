@@ -13,20 +13,20 @@
 #endif
 
 // FIXME: these conditions need to be reviewed
-#if ((defined(__GNUC__) && !defined(__clang__)) &&                             \
-     (defined(__i386__) || defined(__x86_64__))) ||                            \
+#if ((defined(__GNUC__) && !defined(__clang__)) &&                                       \
+     (defined(__i386__) || defined(__x86_64__))) ||                                      \
     (defined(__has_builtin) && __has_builtin(__builtin_ia32_pause))
 #define spin_pause() __builtin_ia32_pause()
-#elif defined(__x86_64__) || defined(__i386__) || defined(__amd64__) ||        \
+#elif defined(__x86_64__) || defined(__i386__) || defined(__amd64__) ||                  \
     defined(_M_X64) || defined(_M_IX86)
 #if defined(_MSC_VER)
 // FIXME: better way to do this on MSVC without pulling <intrin.h>?
 #define spin_pause() _mm_pause()
 #else
-#define spin_pause()                                                           \
-  do {                                                                         \
-    __asm__ volatile("pause");                                                 \
-    __asm__ volatile("" ::: "memory");                                         \
+#define spin_pause()                                                                     \
+  do {                                                                                   \
+    __asm__ volatile("pause");                                                           \
+    __asm__ volatile("" ::: "memory");                                                   \
   } while (0)
 #endif
 #else
@@ -45,10 +45,10 @@
  */
 
 #if defined(_WIN32)
-#define spin_yield()                                                           \
-  do {                                                                         \
-    if (SwitchToThread() == 0)                                                 \
-      Sleep(1);                                                                \
+#define spin_yield()                                                                     \
+  do {                                                                                   \
+    if (SwitchToThread() == 0)                                                           \
+      Sleep(1);                                                                          \
   } while (0)
 #else
 #define spin_yield() sched_yield()
@@ -67,27 +67,27 @@
  *
  * Reference: https://github.com/gstrauss/plasma/blob/master/plasma_spin.c
  */
-#define decaying_sleep(pause, pause32)                                         \
-  do {                                                                         \
-    if (likely(pause)) {                                                       \
-      spin_pause();                                                            \
-      pause--;                                                                 \
-    } else if (likely(pause32)) {                                              \
-      int i = 4;                                                               \
-      do {                                                                     \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-        spin_pause();                                                          \
-      } while (--i);                                                           \
-      pause32--;                                                               \
-    } else {                                                                   \
-      spin_yield();                                                            \
-    }                                                                          \
+#define decaying_sleep(pause, pause32)                                                   \
+  do {                                                                                   \
+    if (likely(pause)) {                                                                 \
+      spin_pause();                                                                      \
+      pause--;                                                                           \
+    } else if (likely(pause32)) {                                                        \
+      int i = 4;                                                                         \
+      do {                                                                               \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+        spin_pause();                                                                    \
+      } while (--i);                                                                     \
+      pause32--;                                                                         \
+    } else {                                                                             \
+      spin_yield();                                                                      \
+    }                                                                                    \
   } while (0)
 
 /* ======================================================================= */
@@ -103,8 +103,7 @@ typedef struct _zt_timeout_st {
 /**
  * Set a timeout now
  */
-void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec,
-                      timeout_cb handler);
+void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler);
 
 /**
  * Reset the timeout

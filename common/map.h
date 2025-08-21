@@ -35,8 +35,7 @@ typedef struct _zt_map_st {
  * Callback type for iterating over a map/freeing entries.
  * \p usr is a user pointer which can be passed through \p zt_map_iterate().
  */
-typedef int (*zt_map_cb_func_t)(const void *key, size_t ksize, void *value,
-                                void *usr);
+typedef int (*zt_map_cb_func_t)(const void *key, size_t ksize, void *value, void *usr);
 
 /** Create a new map */
 zt_map_t *zt_map_create(void);
@@ -85,8 +84,8 @@ void zt_map_remove(zt_map_t *map, const void *key, size_t ksize);
  * Same as \p zt_map_remove(), but it allows you to free an entry's data first
  * via a callback.
  */
-void zt_map_remove_free(zt_map_t *m, const void *key, size_t ksize,
-                        zt_map_cb_func_t cb, void *usr);
+void zt_map_remove_free(zt_map_t *m, const void *key, size_t ksize, zt_map_cb_func_t cb,
+                        void *usr);
 #endif
 
 int zt_map_size(zt_map_t *map);

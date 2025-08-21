@@ -16,11 +16,11 @@
 #if defined(__GNUC__) // GCC, clang
 #ifdef __clang__
 #if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ < 4)
-#error("Requires clang >= 3.4")
+#error ("Requires clang >= 3.4")
 #endif // clang >=3.4
 #else
 #if __GNUC__ < 4 || (__GNUC__ == 4 && __GNUC_MINOR__ < 8)
-#error("Requires GCC >= 4.8")
+#error ("Requires GCC >= 4.8")
 #endif // gcc >=4.8
 #endif // __clang__
 
@@ -39,75 +39,83 @@
 
 // ASCII -> hex value
 static const uint8_t unhex_table[256] = {
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-          0,         1,         2,         3,         4,         5,         6,         7,
-          8,         9, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX,        10,        11,        12,        13,        14,        15, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX,        10,        11,        12,        13,        14,        15, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX
-};
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, 0,
+    1,         2,         3,         4,         5,         6,         7,
+    8,         9,         UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, 10,        11,        12,        13,        14,
+    15,        UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, 10,
+    11,        12,        13,        14,        15,        UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX};
 
 // ASCII -> hex value << 4 (upper nibble)
 static const uint8_t unhex_table4[256] = {
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-          0,        16,        32,        48,        64,        80,        96,       112,
-        128,       144, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX,       160,       176,       192,       208,       224,       240, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX,       160,       176,       192,       208,       224,       240, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
-  UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX
-};
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, 0,
+    16,        32,        48,        64,        80,        96,        112,
+    128,       144,       UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, 160,       176,       192,       208,       224,
+    240,       UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, 160,
+    176,       192,       208,       224,       240,       UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX,
+    UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX};
 
 // Looks up the value for the lower nibble.
 static inline int8_t unhexB(uint8_t x) { return unhex_table[x]; }
@@ -116,9 +124,7 @@ static inline int8_t unhexB(uint8_t x) { return unhex_table[x]; }
 static inline int8_t unhexA(uint8_t x) { return unhex_table4[x]; }
 
 #if defined(__AVX2__)
-static inline int8_t unhexBitManip(uint8_t x) {
-  return 9 * (x >> 6) + (x & 0xf);
-}
+static inline int8_t unhexBitManip(uint8_t x) { return 9 * (x >> 6) + (x & 0xf); }
 
 inline static __m256i unhexBitManip256(const __m256i value) {
   __m256i _9 = _mm256_set1_epi16(9);
@@ -133,14 +139,16 @@ inline static __m256i unhexBitManip256(const __m256i value) {
   // ... while this I think has a latency of 4, but worse throughput(?).
   // (x >> 6) * 9 is x * 8 + x:
   // ((x >> 6) << 3) + (x >> 6)
-  // We need & 0b11 to emulate 8-bit operations (narrowest shift is 16b) -- or a left shift
+  // We need & 0b11 to emulate 8-bit operations (narrowest shift is 16b) -- or a left
+  // shift
   // (((x >> 6) & 0b11) << 3) + ((x >> 6) & 0b11)
   // or
   // tmp = (x >> 6) & 0b11
   // tmp << 3 + tmp
   // there's no carry due to the mask+shift combo, so + is |
   // tmp << 3 | tmp
-  __m256i sr6_lo2 = _mm256_and_si256(_mm256_srli_epi16(value, 6), _mm256_set1_epi16(0b11));
+  __m256i sr6_lo2 =
+      _mm256_and_si256(_mm256_srli_epi16(value, 6), _mm256_set1_epi16(0b11));
   __m256i sr6_lo2_sl3 = _mm256_slli_epi16(sr6_lo2, 3);
   __m256i mul = _mm256_or_si256(sr6_lo2_sl3, sr6_lo2);
 #endif
@@ -151,8 +159,8 @@ inline static __m256i unhexBitManip256(const __m256i value) {
 
 inline static __m256i hex256(__m256i value) {
   const __m256i HEX_LUTR = _mm256_setr_epi8(
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', '0',
+      '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
   return _mm256_shuffle_epi8(HEX_LUTR, value);
 }
 
@@ -169,13 +177,11 @@ inline static __m256i nib2byte(__m256i a1, __m256i b1, __m256i a2, __m256i b2) {
   return pck64;
 }
 
-
 // a -> [a >> 4, a & 0b1111]
 inline static __m256i byte2nib(__m128i val) {
-  const __m256i ROT2 = _mm256_setr_epi8(
-    -1, 0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14,
-    -1, 0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14
-  );
+  const __m256i ROT2 =
+      _mm256_setr_epi8(-1, 0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14, -1, 0,
+                       -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14);
   __m256i doubled = _mm256_cvtepu8_epi16(val);
   __m256i hi = _mm256_srli_epi16(doubled, 4);
   __m256i lo = _mm256_shuffle_epi8(doubled, ROT2);
@@ -185,7 +191,8 @@ inline static __m256i byte2nib(__m128i val) {
 }
 
 // len is number or dest bytes (i.e. half of src length)
-static inline void decodeHexBMI(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
+static inline void decodeHexBMI(uint8_t *__restrict__ dest,
+                                const uint8_t *__restrict__ src, size_t len) {
   for (size_t i = 0; i < len; i++) {
     uint8_t a = *src++;
     uint8_t b = *src++;
@@ -196,21 +203,22 @@ static inline void decodeHexBMI(uint8_t* __restrict__ dest, const uint8_t* __res
 }
 
 // len is number or dest bytes (i.e. half of src length)
-static inline void decodeHexVec(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
-  const __m256i A_MASK = _mm256_setr_epi8(
-    0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14, -1,
-    0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14, -1);
-  const __m256i B_MASK = _mm256_setr_epi8(
-    1, -1, 3, -1, 5, -1, 7, -1, 9, -1, 11, -1, 13, -1, 15, -1,
-    1, -1, 3, -1, 5, -1, 7, -1, 9, -1, 11, -1, 13, -1, 15, -1);
+static inline void decodeHexVec(uint8_t *__restrict__ dest,
+                                const uint8_t *__restrict__ src, size_t len) {
+  const __m256i A_MASK =
+      _mm256_setr_epi8(0, -1, 2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14, -1, 0, -1,
+                       2, -1, 4, -1, 6, -1, 8, -1, 10, -1, 12, -1, 14, -1);
+  const __m256i B_MASK =
+      _mm256_setr_epi8(1, -1, 3, -1, 5, -1, 7, -1, 9, -1, 11, -1, 13, -1, 15, -1, 1, -1,
+                       3, -1, 5, -1, 7, -1, 9, -1, 11, -1, 13, -1, 15, -1);
 
-  const __m256i* val3 = (const __m256i *)src;
-  __m256i* dec256 = (__m256i *)dest;
+  const __m256i *val3 = (const __m256i *)src;
+  __m256i *dec256 = (__m256i *)dest;
 
   while (len >= 32) {
     __m256i av1 = _mm256_lddqu_si256(val3++); // 32 nibbles, 16 bytes
     __m256i av2 = _mm256_lddqu_si256(val3++);
-                                                // Separate high and low nibbles and extend into 16-bit elements
+    // Separate high and low nibbles and extend into 16-bit elements
     __m256i a1 = _mm256_shuffle_epi8(av1, A_MASK);
     __m256i b1 = _mm256_shuffle_epi8(av1, B_MASK);
     __m256i a2 = _mm256_shuffle_epi8(av2, A_MASK);
@@ -236,7 +244,8 @@ static inline void decodeHexVec(uint8_t* __restrict__ dest, const uint8_t* __res
 #endif // defined(__AVX2__)
 
 // // len is number of dest bytes
-// static inline void decodeHexLUT(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
+// static inline void decodeHexLUT(uint8_t* __restrict__ dest, const uint8_t* __restrict__
+// src, size_t len) {
 //   for (size_t i = 0; i < len; i++) {
 //     uint8_t a = *src++;
 //     uint8_t b = *src++;
@@ -247,7 +256,8 @@ static inline void decodeHexVec(uint8_t* __restrict__ dest, const uint8_t* __res
 // }
 
 // len is number of dest bytes
-static inline void decodeHexLUT4(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
+static inline void decodeHexLUT4(uint8_t *__restrict__ dest,
+                                 const uint8_t *__restrict__ src, size_t len) {
   for (size_t i = 0; i < len; i++) {
     uint8_t a = *src++;
     uint8_t b = *src++;
@@ -257,13 +267,13 @@ static inline void decodeHexLUT4(uint8_t* __restrict__ dest, const uint8_t* __re
   }
 }
 
-static const char hex_table[16] = {
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-};
+static const char hex_table[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                   '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 inline static char hex(uint8_t value) { return hex_table[value]; }
 
 // len is number of src bytes
-static inline void encodeHex(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
+static inline void encodeHex(uint8_t *__restrict__ dest, const uint8_t *__restrict__ src,
+                             size_t len) {
   for (size_t i = 0; i < len; i++) {
     uint8_t a = src[i];
     uint8_t lo = a & 0b1111;
@@ -275,9 +285,10 @@ static inline void encodeHex(uint8_t* __restrict__ dest, const uint8_t* __restri
 
 #if defined(__AVX2__)
 // len is number of src bytes
-static inline void encodeHexVec(uint8_t* __restrict__ dest, const uint8_t* __restrict__ src, size_t len) {
-  const __m128i* input128 = (const __m128i *)src;
-  __m256i* output256 = (__m256i *)dest;
+static inline void encodeHexVec(uint8_t *__restrict__ dest,
+                                const uint8_t *__restrict__ src, size_t len) {
+  const __m128i *input128 = (const __m128i *)src;
+  __m256i *output256 = (__m256i *)dest;
 
   size_t tailLen = len % 16;
   size_t vectLen = (len - tailLen) >> 4;

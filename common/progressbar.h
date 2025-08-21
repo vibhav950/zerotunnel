@@ -30,8 +30,7 @@ void zt_progressbar_destroy(void);
  *
  * @return void.
  */
-void zt_progressbar_begin(const char *recipient, const char *filename,
-                          size_t filesize);
+void zt_progressbar_begin(const char *recipient, const char *filename, size_t filesize);
 
 /**
  * Update the progressbar with the number of bytes transferred since the last

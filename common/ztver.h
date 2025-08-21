@@ -33,7 +33,7 @@
  * Convert a version number in the (major, minor, patch) representation to a
  * 6-digit (24 bits) hexadecimal number in the format 0xMMmmPP.
  */
-#define ZT_VERSION_TO_NUMERIC(major, minor, patch)                             \
+#define ZT_VERSION_TO_NUMERIC(major, minor, patch)                                       \
   (((major) << 16) | ((minor) << 8) | (patch))
 
 /**
@@ -46,7 +46,7 @@
  * A macro to check if the current Zerotunnel version is at least the version
  * specified in the (major, minor, patch) format.
  */
-#define ZT_VERSION_AT_LEAST(major, minor, patch)                               \
+#define ZT_VERSION_AT_LEAST(major, minor, patch)                                         \
   (ZT_VERSION_NUMBER >= ZT_VERSION_TO_NUMERIC(major, minor, patch))
 
 #endif /* __ZTVER_H__ */

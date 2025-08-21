@@ -73,13 +73,13 @@ const char *zt_error_str(err_t err) {
   }
 }
 
-#define WALK_CB_CHAIN(chain)                                                   \
-  do {                                                                         \
-    struct logger_cb_chain_node *cur = (struct logger_cb_chain_node *)(chain); \
-    while (cur) {                                                              \
-      cur->cb(cur->args);                                                      \
-      cur = cur->next;                                                         \
-    }                                                                          \
+#define WALK_CB_CHAIN(chain)                                                             \
+  do {                                                                                   \
+    struct logger_cb_chain_node *cur = (struct logger_cb_chain_node *)(chain);           \
+    while (cur) {                                                                        \
+      cur->cb(cur->args);                                                                \
+      cur = cur->next;                                                                   \
+    }                                                                                    \
   } while (0)
 
 void zt_log_debug(zt_logger_t *logger, const char *fmt, ...) {
@@ -181,8 +181,7 @@ zt_log_t zt_logger_get_level(zt_logger_t *logger) {
   return logger ? logger->level : global_logger.level;
 }
 
-static inline int _add_cb(struct logger_cb_chain_node **head, log_cb cb,
-                          void *args) {
+static inline int _add_cb(struct logger_cb_chain_node **head, log_cb cb, void *args) {
   struct logger_cb_chain_node *new_node, *p;
 
   new_node = malloc(sizeof(struct logger_cb_chain_node));
@@ -208,8 +207,7 @@ int zt_logger_append_before_cb(zt_logger_t *logger, log_cb cb, void *args) {
   logger = logger ? logger : &global_logger;
 
   if (cb && logger->before_chain_len < ZT_LOGGER_MAX_CB_CHAIN_LEN) {
-    int rv = _add_cb((struct logger_cb_chain_node **)&logger->before_cb_chain,
-                     cb, args);
+    int rv = _add_cb((struct logger_cb_chain_node **)&logger->before_cb_chain, cb, args);
 
     if (rv == 0) {
       logger->before_chain_len++;
@@ -223,8 +221,7 @@ int zt_logger_append_after_cb(zt_logger_t *logger, log_cb cb, void *args) {
   logger = logger ? logger : &global_logger;
 
   if (cb && logger->after_chain_len < ZT_LOGGER_MAX_CB_CHAIN_LEN) {
-    int rv = _add_cb((struct logger_cb_chain_node **)&logger->after_cb_chain,
-                     cb, args);
+    int rv = _add_cb((struct logger_cb_chain_node **)&logger->after_cb_chain, cb, args);
 
     if (rv == 0) {
       logger->after_chain_len++;

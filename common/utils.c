@@ -2,23 +2,23 @@
 
 #include <limits.h>
 
-#define MASK_UCHAR     ((unsigned char)~0)
-#define MASK_SCHAR     (MASK_UCHAR >> 1)
+#define MASK_UCHAR ((unsigned char)~0)
+#define MASK_SCHAR (MASK_UCHAR >> 1)
 
-#define MASK_USHORT    ((unsigned short)~0)
-#define MASK_SSHORT    (MASK_USHORT >> 1)
+#define MASK_USHORT ((unsigned short)~0)
+#define MASK_SSHORT (MASK_USHORT >> 1)
 
-#define MASK_UINT      ((unsigned int)~0)
-#define MASK_SINT      (MASK_UINT >> 1)
+#define MASK_UINT ((unsigned int)~0)
+#define MASK_SINT (MASK_UINT >> 1)
 
-#define MASK_ULONG     ((unsigned long)~0)
-#define MASK_SLONG     (MASK_ULONG >> 1)
+#define MASK_ULONG ((unsigned long)~0)
+#define MASK_SLONG (MASK_ULONG >> 1)
 
 #define MASK_ULONGLONG ((unsigned long long)~0)
 #define MASK_SLONGLONG (MASK_ULONGLONG >> 1)
 
-#define MASK_USIZE_T   ((size_t)~0)
-#define MASK_SSIZE_T   (MASK_USIZE_T >> 1)
+#define MASK_USIZE_T ((size_t)~0)
+#define MASK_SSIZE_T (MASK_USIZE_T >> 1)
 
 /** Unsigned long to unsigned short */
 inline unsigned short zt_ultous(unsigned long val) {

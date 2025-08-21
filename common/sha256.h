@@ -20,7 +20,6 @@ typedef struct _sha256_ctx_st {
   size_t rem_len;
 } sha256_ctx_t;
 
-
 int sha256_init(sha256_ctx_t *ctx);
 
 int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len);

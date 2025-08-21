@@ -232,9 +232,7 @@ void *zt_memdup(const void *m, size_t n) {
   return (void *)memcpy(p, (void *)m, n);
 }
 
-char *zt_strdup(const char *s) {
-  return s ? zt_memdup(s, strlen(s) + 1) : NULL;
-}
+char *zt_strdup(const char *s) { return s ? zt_memdup(s, strlen(s) + 1) : NULL; }
 
 char *zt_vstrdup(const char *fmt, ...) {
   va_list args;

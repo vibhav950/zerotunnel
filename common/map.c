@@ -108,9 +108,8 @@ static inline uint32_t hash_data(const unsigned char *data, size_t size) {
   size_t nblocks = size / 8;
   uint64_t hash = HASHMAP_HASH_INIT;
   for (size_t i = 0; i < nblocks; ++i) {
-    hash ^= (uint64_t)data[0] << 0 | (uint64_t)data[1] << 8 |
-            (uint64_t)data[2] << 16 | (uint64_t)data[3] << 24 |
-            (uint64_t)data[4] << 32 | (uint64_t)data[5] << 40 |
+    hash ^= (uint64_t)data[0] << 0 | (uint64_t)data[1] << 8 | (uint64_t)data[2] << 16 |
+            (uint64_t)data[3] << 24 | (uint64_t)data[4] << 32 | (uint64_t)data[5] << 40 |
             (uint64_t)data[6] << 48 | (uint64_t)data[7] << 56;
     hash *= 0xbf58476d1ce4e5b9;
     data += 8;
@@ -295,8 +294,8 @@ void zt_map_remove(zt_map_t *m, const void *key, size_t ksize) {
   }
 }
 
-void zt_map_remove_free(zt_map_t *m, const void *key, size_t ksize,
-                        zt_map_cb_func_t c, void *usr) {
+void zt_map_remove_free(zt_map_t *m, const void *key, size_t ksize, zt_map_cb_func_t c,
+                        void *usr) {
   uint32_t hash = hash_data(key, ksize);
   struct __bucket *entry = find_entry(m, key, ksize, hash);
 
