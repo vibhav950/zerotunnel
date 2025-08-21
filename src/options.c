@@ -56,8 +56,7 @@ static void print_version(void) {
   fprintf(stdout, "%s\n", version_text);
 }
 
-static int parse_string(option_t *opt, const char *val,
-                        bool invert ATTRIBUTE_UNUSED) {
+static int parse_string(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   zt_free(*((char **)opt->var));
   *((const char **)opt->var) = zt_strdup(val);
@@ -66,8 +65,7 @@ static int parse_string(option_t *opt, const char *val,
   return 0;
 }
 
-static int parse_filename(option_t *opt, const char *val,
-                          bool invert ATTRIBUTE_UNUSED) {
+static int parse_filename(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
   wordexp_t wexp;
 
   ASSERT(opt);
@@ -102,8 +100,7 @@ static int parse_boolean(option_t *opt, const char *val, bool invert) {
   return 0;
 }
 
-static int parse_int(option_t *opt, const char *val,
-                     bool invert ATTRIBUTE_UNUSED) {
+static int parse_int(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   *((int *)opt->var) = val ? atoi(val) : 0;
   if (opt->flag)
@@ -111,8 +108,7 @@ static int parse_int(option_t *opt, const char *val,
   return 0;
 }
 
-static int parse_uint(option_t *opt, const char *val,
-                      bool invert ATTRIBUTE_UNUSED) {
+static int parse_uint(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   long int uval = val ? strtol(val, NULL, 10) : 0;
   if (uval >= 0 && uval <= UINT_MAX) {
@@ -125,8 +121,7 @@ static int parse_uint(option_t *opt, const char *val,
   return -1;
 }
 
-static int parse_uint16(option_t *opt, const char *val,
-                        bool invert ATTRIBUTE_UNUSED) {
+static int parse_uint16(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   int port = val ? atoi(val) : 0;
   if (port >= 0 && port <= UINT16_MAX) {
@@ -170,8 +165,7 @@ static int parse_help_command(option_t *opt ATTRIBUTE_UNUSED, const char *val,
   return -1;
 }
 
-static int parse_help(option_t *opt ATTRIBUTE_UNUSED,
-                      const char *val ATTRIBUTE_UNUSED,
+static int parse_help(option_t *opt ATTRIBUTE_UNUSED, const char *val ATTRIBUTE_UNUSED,
                       bool invert ATTRIBUTE_UNUSED) {
   /* This will be handled specially in init_config */
   return 0;
@@ -563,8 +557,8 @@ static void print_help(command_t command) {
         continue;
       if (opt->short_name) {
         /* print first line with short option */
-        fprintf(stdout, "  -%c,  --%-20s    %s", opt->short_name,
-                opt->long_name, opt->help[0]);
+        fprintf(stdout, "  -%c,  --%-20s    %s", opt->short_name, opt->long_name,
+                opt->help[0]);
       } else {
         /* maintain alignment: replace the " -X  " segment with spaces */
         fprintf(stdout, "       --%-20s    %s", opt->long_name, opt->help[0]);
@@ -608,8 +602,7 @@ static int ATTRIBUTE_NONNULL(1)
     name += 3;
   }
 
-  opt = bsearch(name, options, COUNTOF(options), sizeof(options[0]),
-                option_compare);
+  opt = bsearch(name, options, COUNTOF(options), sizeof(options[0]), option_compare);
 
   if (!opt) {
     log_error(NULL, "Unknown option: '%s'", name);
@@ -645,8 +638,7 @@ static int ATTRIBUTE_NONNULL(1)
         return -1;
       }
 
-      if (invert &&
-          (opt->parser_f == parse_string || opt->parser_f == parse_filename)) {
+      if (invert && (opt->parser_f == parse_string || opt->parser_f == parse_filename)) {
         /* unset the value */
         val = NULL;
       } else {
@@ -667,8 +659,7 @@ static int ATTRIBUTE_NONNULL(1)
   return ret;
 }
 
-static int ATTRIBUTE_NONNULL(2)
-    argparser(int argc, char *argv[], command_t command) {
+static int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
   static char option_shortcut_table[128];
   const char *first_arg = NULL;
   int n, rv;
@@ -703,8 +694,8 @@ static int ATTRIBUTE_NONNULL(2)
       if (argp[2] == '\0')
         return n + 1;
 
-      if ((rv = set_long_option(argp + 2, n < argc - 1 ? argv[n + 1] : NULL,
-                                command)) < 0) {
+      if ((rv = set_long_option(argp + 2, n < argc - 1 ? argv[n + 1] : NULL, command)) <
+          0) {
         return rv;
       }
 
@@ -720,8 +711,7 @@ static int ATTRIBUTE_NONNULL(2)
           opt = &options[idx - 1];
 
           if (!(opt->command & command)) {
-            log_error(NULL, "Option '-%c' is not valid for this command",
-                      argp[pos]);
+            log_error(NULL, "Option '-%c' is not valid for this command", argp[pos]);
             return -1;
           }
 
@@ -729,8 +719,7 @@ static int ATTRIBUTE_NONNULL(2)
             const char *val;
 
             if (!argp[pos + 1] && argc <= n + opt->args) {
-              log_error(NULL, "Missing argument(s) for option '-%c'",
-                        argp[pos]);
+              log_error(NULL, "Missing argument(s) for option '-%c'", argp[pos]);
               return -1;
             }
             val = argp[pos + 1] ? argp + pos + 1 : argv[++n];

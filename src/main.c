@@ -147,13 +147,11 @@ static int passgen(void) {
         return -1;
     }
 
-    fd = open(GlobalConfig.passwdfile, O_RDWR | O_CREAT | O_TRUNC,
-              S_IRUSR | S_IWUSR);
+    fd = open(GlobalConfig.passwdfile, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0)
       return -1;
 
-    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwdBundleId,
-                              GlobalConfig.passwordChars,
+    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwdBundleId, GlobalConfig.passwordChars,
                               GlobalConfig.passwordBundleSize) < 0) {
       close(fd);
       return -1;
@@ -185,8 +183,7 @@ static int passdel(void) {
   if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileTryDelete)))
     return 0;
 
-  rv = zt_auth_passwd_delete(GlobalConfig.passwdfile,
-                             GlobalConfig.passwdBundleId, -1);
+  rv = zt_auth_passwd_delete(GlobalConfig.passwdfile, GlobalConfig.passwdBundleId, -1);
   return rv < 0 ? -1 : 0;
 }
 
