@@ -86,20 +86,19 @@ static int parse_filename(option_t *opt, const char *val,
 
 static int parse_boolean(option_t *opt, const char *val, bool invert) {
   ASSERT(opt);
-  if (!val || !strcmp(val, "1") || !strcasecmp(val, "true") ||
-      !strcasecmp(val, "yes") || !strcasecmp(val, "on")) {
-    *((bool *)opt->var) = !invert;
-    goto jsetflag;
-  } else if (!*val || !strcmp(val, "0") || !strcasecmp(val, "false") ||
-             !strcasecmp(val, "no") || !strcasecmp(val, "off")) {
-    *((bool *)opt->var) = invert;
-    goto jsetflag;
+
+  if (opt->var) {
+    if (!val || !strcmp(val, "1") || !strcasecmp(val, "true") ||
+        !strcasecmp(val, "yes") || !strcasecmp(val, "on")) {
+      *((bool *)opt->var) = !invert;
+    } else if (!*val || !strcmp(val, "0") || !strcasecmp(val, "false") ||
+               !strcasecmp(val, "no") || !strcasecmp(val, "off")) {
+      *((bool *)opt->var) = invert;
+    } else {
+      log_error(NULL, "Invalid boolean value '%s'", val);
+      return -1;
+    }
   }
-  log_error(NULL, "Invalid boolean value '%s'", val);
-  return -1;
-jsetflag:
-  if (opt->flag)
-    *((char *)opt->flag) = 1;
   return 0;
 }
 
@@ -240,8 +239,8 @@ static option_t options[] = {
     {
       "compress",
       'C',
-      NULL,
       &GlobalConfig.flag_lz4_compression,
+      NULL,
       parse_boolean,
       -1,
       cmdSend,
@@ -316,8 +315,8 @@ static option_t options[] = {
     {
       "ipv4-only",
       '4',
-      NULL,
       &GlobalConfig.flag_ipv4_only,
+      NULL,
       parse_boolean,
       -1,
       cmdSend | cmdReceive,
@@ -329,8 +328,8 @@ static option_t options[] = {
     {
       "ipv6-only",
       '6',
-      NULL,
       &GlobalConfig.flag_ipv6_only,
+      NULL,
       parse_boolean,
       -1,
       cmdSend | cmdReceive,
@@ -370,8 +369,8 @@ static option_t options[] = {
     /* {
       "live-read",
       'L',
-      NULL,
       &GlobalConfig.flag_live_read,
+      NULL,
       parse_boolean,
       -1,
       cmdSend,
@@ -479,8 +478,8 @@ static option_t options[] = {
     {
       "tcp-fastopen",
       0,
-      NULL,
       &GlobalConfig.flag_tcp_fastopen,
+      NULL,
       parse_boolean,
       -1,
       cmdSend | cmdReceive,
@@ -492,8 +491,8 @@ static option_t options[] = {
     {
       "tcp-nodelay",
       0,
-      NULL,
       &GlobalConfig.flag_tcp_nodelay,
+      NULL,
       parse_boolean,
       -1,
       cmdSend | cmdReceive,
@@ -623,6 +622,7 @@ static int ATTRIBUTE_NONNULL(1)
   }
 
   if (value_present) {
+    // "option=*"
     if (invert) {
       if (!opt->args || opt->parser_f == parse_string ||
           opt->parser_f == parse_filename) {
@@ -634,6 +634,7 @@ static int ATTRIBUTE_NONNULL(1)
       return -1;
     }
   } else {
+    // "option"
     switch (opt->args) {
     case 0:
       val = NULL;
@@ -644,8 +645,8 @@ static int ATTRIBUTE_NONNULL(1)
         return -1;
       }
 
-      if (invert && opt->parser_f == parse_string ||
-          opt->parser_f == parse_filename) {
+      if (invert &&
+          (opt->parser_f == parse_string || opt->parser_f == parse_filename)) {
         /* unset the value */
         val = NULL;
       } else {
@@ -653,8 +654,7 @@ static int ATTRIBUTE_NONNULL(1)
       }
       break;
     case -1:
-      if (val)
-        ret = 1;
+      val = NULL;
       break;
     default:
       break;
@@ -861,8 +861,11 @@ command_t init_config(int argc, char *argv[]) {
   if (GlobalConfig.password_words < 3 || GlobalConfig.password_words > 20)
     goto err;
 
-  if (GlobalConfig.flag_length_obfuscation && GlobalConfig.flag_lz4_compression)
+  if (GlobalConfig.flag_length_obfuscation &&
+      GlobalConfig.flag_lz4_compression) {
+    printf("BYE\n");
     goto err;
+  }
 
   if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1 || command == cmdPassdel) {
     if (!GlobalConfig.passwd_bundle_id)
