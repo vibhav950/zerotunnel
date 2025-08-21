@@ -38,8 +38,8 @@
 
 #if defined(_WIN32)
 static inline void _win32_sys_rand(uint8_t *buf, size_t bytes) {
-  if (BCryptGenRandom(NULL, (BYTE *)buf, (ULONG)bytes,
-                      BCRYPT_USE_SYSTEM_PREFERRED_RNG) != STATUS_SUCCESS) {
+  if (BCryptGenRandom(NULL, (BYTE *)buf, (ULONG)bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) !=
+      STATUS_SUCCESS) {
     // better to fail than return bad random data
     zt_log_fatal("system RNG failure");
   }

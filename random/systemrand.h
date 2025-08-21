@@ -62,7 +62,6 @@ static const char RAND_DEFAULT_CHARSET[] = "abcdefghijklmnopqrstuvwxyz"
  *
  * \return 0 on success, -1 on error.
  */
-int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
-                    size_t charset_len);
+int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset, size_t charset_len);
 
 #endif // __SYSTEMRAND_H__

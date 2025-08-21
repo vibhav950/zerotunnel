@@ -10,8 +10,7 @@
  *
  * Returns 1 on success, 0 on underflow.
  */
-extern inline int __attribute__((always_inline))
-rdrand16_step(uint16_t *therand) {
+extern inline int __attribute__((always_inline)) rdrand16_step(uint16_t *therand) {
   uint16_t val;
   int cf_error_status;
   asm volatile("\n\
@@ -25,8 +24,7 @@ rdrand16_step(uint16_t *therand) {
   return cf_error_status;
 }
 
-extern inline int __attribute__((always_inline))
-rdseed16_step(uint16_t *therand) {
+extern inline int __attribute__((always_inline)) rdseed16_step(uint16_t *therand) {
   uint16_t val;
   int cf_error_status;
   asm volatile("\n\
@@ -46,8 +44,7 @@ rdseed16_step(uint16_t *therand) {
  *
  * Returns 1 on success, 0 on underflow.
  */
-extern inline int __attribute__((always_inline))
-rdrand32_step(uint32_t *therand) {
+extern inline int __attribute__((always_inline)) rdrand32_step(uint32_t *therand) {
   uint32_t val;
   int cf_error_status;
   asm volatile("\n\
@@ -61,8 +58,7 @@ rdrand32_step(uint32_t *therand) {
   return cf_error_status;
 }
 
-extern inline int __attribute__((always_inline))
-rdseed32_step(uint32_t *therand) {
+extern inline int __attribute__((always_inline)) rdseed32_step(uint32_t *therand) {
   uint32_t val;
   int cf_error_status;
   asm volatile("\n\
@@ -82,8 +78,7 @@ rdseed32_step(uint32_t *therand) {
  *
  * Returns 1 on success, 0 on underflow.
  */
-extern inline int __attribute__((always_inline))
-rdrand64_step(uint64_t *therand) {
+extern inline int __attribute__((always_inline)) rdrand64_step(uint64_t *therand) {
   uint64_t val;
   int cf_error_status;
   asm volatile("\n\
@@ -97,8 +92,7 @@ rdrand64_step(uint64_t *therand) {
   return cf_error_status;
 }
 
-extern inline int __attribute__((always_inline))
-rdseed64_step(uint64_t *therand) {
+extern inline int __attribute__((always_inline)) rdseed64_step(uint64_t *therand) {
   uint64_t val;
   int cf_error_status;
   asm volatile("\n\
