@@ -509,13 +509,13 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   (void)posix_fadvise(fio->fd, fio->offset, bufsize, POSIX_FADV_SEQUENTIAL);
 #endif
 
+  *nread = 0;
   rc = read(fio->fd, buf, bufsize);
   switch (rc) {
   case -1:
     log_error(NULL, "Failed to read from file '%s' (%s)", fio->path, strerror(errno));
     return ERR_FIO_READ;
   case 0:
-    *nread = 0;
     return ERR_EOF;
   default:
     *nread = rc;

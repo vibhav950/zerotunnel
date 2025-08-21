@@ -1015,8 +1015,11 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       fileinfo.size = hton64(fileinfo.size);
       fileinfo.reserved = hton32(fileinfo.reserved);
+
       MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t), 0);
-      memzero(&fileinfo, sizeof(zt_fileinfo_t));
+
+      fileinfo.size = ntoh64(fileinfo.size);
+      fileinfo.reserved = ntoh32(fileinfo.reserved);
 
       if ((ret = client_send(conn)) != ERR_SUCCESS) {
         zt_fio_close(&fileptr);
