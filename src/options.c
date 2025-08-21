@@ -38,6 +38,15 @@ struct option {
 
 static exit_status_t exit_status;
 
+#define CHECK_RANGE(param, val, min, max)                                                \
+  do {                                                                                   \
+    if (!(((val) <= (max)) && ((val) >= (min)))) {                                       \
+      log_error(NULL, "Invalid %s: %d, expected in range [%d, %d]", param, val, min,     \
+                max);                                                                    \
+      goto err;                                                                          \
+    }                                                                                    \
+  } while (0)
+
 void set_exit_status(exit_status_t status) {
   if (exit_status) {
     if (status < exit_status)
@@ -253,7 +262,7 @@ static option_t options[] = {
       cmdSend | cmdReceive,
       {
         "Timeout for host name resolution (in milliseconds).\n",
-        "(default: 10000).\n"
+        "(default: 15000).\n"
       }
     },
     {
@@ -303,7 +312,7 @@ static option_t options[] = {
       cmdSend | cmdReceive,
       {
         "Timeout for the server being idle (in milliseconds).\n",
-        "(default: 60000).\n"
+        "(default: 120000).\n"
       }
     },
     {
@@ -453,7 +462,7 @@ static option_t options[] = {
       cmdSend | cmdReceive,
       {
         "Timeout for receiving data (in milliseconds).\n",
-        "(default: 5000).\n"
+        "(default: 120000).\n"
       }
     },
     {
@@ -466,7 +475,7 @@ static option_t options[] = {
       cmdSend | cmdReceive,
       {
         "Timeout for sending data (in milliseconds).\n",
-        "(default: 5000).\n"
+        "(default: 120000).\n"
       }
     },
     {
@@ -530,23 +539,25 @@ static void print_help(command_t command) {
 
   fputs(help_header_text, stdout);
 
+  const char *cmd;
   switch (command) {
   case cmdNone:
     fputs(help_generic_text, stdout);
     return;
   case cmdSend:
-    fprintf(stdout, cmd_usage, "send");
+    cmd = "send";
     break;
   case cmdReceive:
-    fprintf(stdout, cmd_usage, "receive");
+    cmd = "receive";
     break;
   case cmdPassgen:
-    fprintf(stdout, cmd_usage, "passgen");
+    cmd = "passgen";
     break;
   case cmdPassdel:
-    fprintf(stdout, cmd_usage, "passdel");
+    cmd = "passdel";
     break;
   }
+  fprintf(stdout, cmd_usage, cmd);
 
   fputs("\nOptions:\n", stdout);
 
@@ -839,31 +850,39 @@ command_t init_config(int argc, char *argv[]) {
   if (n < argc)
     target = argv[n++];
 
-  /* Handle mutually exclusive and otherwise incompatible option values */
+  /* Handle mutually exclusive and otherwise incompatible or incorrect option values,
+   * now that all user options have been processed */
 
-  if (GlobalConfig.passwordBundleSize > 90)
-    goto err;
+  CHECK_RANGE("bundle-size", GlobalConfig.passwordBundleSize, 1, 90);
 
-  if (GlobalConfig.passwordChars < 12 || GlobalConfig.passwordChars > 256)
-    goto err;
+  CHECK_RANGE("password-chars", GlobalConfig.passwordChars, 12, 256);
 
-  if (GlobalConfig.passwordWords < 3 || GlobalConfig.passwordWords > 20)
-    goto err;
+  CHECK_RANGE("password-words", GlobalConfig.passwordWords, 3, 20);
 
   if (GlobalConfig.flagLengthObfuscation && GlobalConfig.flagLZ4Compression) {
-    printf("BYE\n");
+    log_error(NULL, "Can't have both --compression and --message-padding on");
     goto err;
   }
 
-  if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 || command == cmdPassdel) {
-    if (!GlobalConfig.passwdBundleId)
+  if (command == cmdPassdel || GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
+    if (!GlobalConfig.passwdBundleId) {
+      log_error(NULL, "Missing required option --identifier");
       goto err;
+    }
   } else if (GlobalConfig.passwdBundleId) {
+    log_error(NULL, "Option --identifier does not apply for this command");
     goto err;
   }
 
-  if (GlobalConfig.authType != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdfile)
+  if (GlobalConfig.authType != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdfile) {
+    log_error(NULL, "Option --keyfile does not apply for KAPPA0 or KAPPA2 auth types");
     goto err;
+  }
+
+  if (GlobalConfig.flagIPv4Only && GlobalConfig.flagIPv6Only) {
+    log_error(NULL, "Can't have both --ipv4-only and --ipv6-only");
+    goto err;
+  }
 
   switch (command) {
   case cmdSend: {
@@ -938,7 +957,7 @@ command_t init_config(int argc, char *argv[]) {
 
   case cmdPassdel: {
     if (!target && !GlobalConfig.hostname)
-      goto err;
+      goto err; /* no way to locate the K1 password file */
 
     if (target) {
       GlobalConfig.passwdfile = zt_strdup(target);

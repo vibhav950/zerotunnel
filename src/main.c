@@ -83,6 +83,7 @@ static void gsh(int sig) {
     if (terminate)
       exit(EXIT_STATUS_GENERIC);
     terminate = true;
+    break;
   case SIGWINCH:
     /* Handle window size changes */
     zt_progressbar_winsize_changed();
