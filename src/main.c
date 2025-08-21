@@ -98,6 +98,11 @@ static int do_send(void) {
   if (e != ERR_SUCCESS)
     return -1;
 
+  zt_client_enable_tcp_fastopen(client, GlobalConfig.flagTCPFastOpen);
+  zt_client_enable_tcp_nodelay(client, GlobalConfig.flagTCPNoDelay);
+  zt_client_enable_explicit_port(client, GlobalConfig.flagExplicitPort);
+  zt_client_enable_live_read(client, GlobalConfig.flagLiveRead);
+
   e = zt_client_run(client, NULL, &done);
 
   if (e == ERR_SUCCESS && done)
@@ -117,7 +122,12 @@ static int do_receive(void) {
   if (e != ERR_SUCCESS)
     return -1;
 
+  zt_server_enable_tcp_fastopen(server, GlobalConfig.flagTCPFastOpen);
+  zt_server_enable_tcp_nodelay(server, GlobalConfig.flagTCPNoDelay);
+  zt_server_enable_explicit_port(server, GlobalConfig.flagExplicitPort);
+
   e = zt_server_run(server, NULL, &done);
+
   if (e == ERR_SUCCESS && done) {
     if (strcmp(GlobalConfig.filepath, "-"))
       tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filepath);
@@ -129,7 +139,7 @@ static int do_receive(void) {
 }
 
 static int passgen(void) {
-  if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+  if (GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
     int fd;
 
     if (access(GlobalConfig.passwdfile, F_OK) == 0) {
@@ -142,19 +152,19 @@ static int passgen(void) {
     if (fd < 0)
       return -1;
 
-    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwd_bundle_id,
-                              GlobalConfig.password_chars,
-                              GlobalConfig.password_bundle_size) < 0) {
+    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwdBundleId,
+                              GlobalConfig.passwordChars,
+                              GlobalConfig.passwordBundleSize) < 0) {
       close(fd);
       return -1;
     }
     close(fd);
 
     tty_printf(get_cli_prompt(OnNewK1PasswordFile), GlobalConfig.passwdfile);
-  } else if (GlobalConfig.auth_type == KAPPA_AUTHTYPE_0) {
+  } else if (GlobalConfig.authType == KAPPA_AUTHTYPE_0) {
     struct passwd *passwd;
 
-    passwd = zt_auth_passwd_single_new(GlobalConfig.password_chars, false);
+    passwd = zt_auth_passwd_single_new(GlobalConfig.passwordChars, false);
     if (!passwd)
       return -1;
 
@@ -176,7 +186,7 @@ static int passdel(void) {
     return 0;
 
   rv = zt_auth_passwd_delete(GlobalConfig.passwdfile,
-                             GlobalConfig.passwd_bundle_id, -1);
+                             GlobalConfig.passwdBundleId, -1);
   return rv < 0 ? -1 : 0;
 }
 

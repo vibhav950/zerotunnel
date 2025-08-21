@@ -10,6 +10,8 @@
 
 #define GENERICPROMPT(prompt) (PURPLE_FG prompt CLEAR)
 
+#define ALERTPROMPT(prompt) (RED_FG prompt CLEAR)
+
 static const char *cli_prompts[] = {
     [OnBadPasswdIdentifier] =
         CAUTIONPROMPT("\nHandshake failed... either the password bundle is "
@@ -44,7 +46,7 @@ static const char *cli_prompts[] = {
         GENERICPROMPT("\nYour one-time use session password: %s\n"),
     [OnSendSuccessful] = GENERICPROMPT("File sent successfully.\n"),
     [OnReceiveSuccessful] = GENERICPROMPT("File saved to %s.\n"),
-    [OnSendFailure] = GENERICPROMPT(
+    [OnSendFailure] = ALERTPROMPT(
         "Failed to transfer file... either your correspondent declined "
         "the transfer or there was an unexpected network failure.\n"),
 };

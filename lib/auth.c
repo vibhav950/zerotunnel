@@ -452,7 +452,7 @@ passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
   if (auth_type == KAPPA_AUTHTYPE_0)
     pw = auth_passwd_prompt("\nEnter password: ", 0);
   else if (auth_type == KAPPA_AUTHTYPE_2)
-    pw = auth_passwd_generate_phonetic(GlobalConfig.password_words, 0, 1);
+    pw = auth_passwd_generate_phonetic(GlobalConfig.passwordWords, 0, 1);
 
   if (!pw)
     goto err;
