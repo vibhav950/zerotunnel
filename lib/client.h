@@ -90,11 +90,10 @@ void zt_client_conn_dealloc(zt_client_connection_t *conn);
  */
 err_t zt_client_run(zt_client_connection_t *conn, void *args, bool *done);
 
-int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
-                       size_t nbytes);
+int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf, size_t nbytes);
 
-ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
-                           size_t nbytes, bool *pending);
+ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf, size_t nbytes,
+                           bool *pending);
 
 /**
  * Enable/disable TCP_FASTOPEN for the client connection

@@ -114,11 +114,10 @@ void zt_server_conn_dealloc(zt_server_connection_t *conn);
  */
 err_t zt_server_run(zt_server_connection_t *conn, void *args, bool *done);
 
-int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
-                       size_t nbytes);
+int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf, size_t nbytes);
 
-ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
-                           size_t nbytes, bool *pending);
+ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf, size_t nbytes,
+                           bool *pending);
 
 /**
  * Enable/disable TCP_FASTOPEN for the server connection

@@ -243,7 +243,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
     (*passwd)->pwlen = strlen(pw);
   } else {
     /* If all passwords are exhausted, we will end up having
-    * the final index in pwid_cmp */
+     * the final index in pwid_cmp */
     pwid_cmp = -1;
   }
 

@@ -56,8 +56,7 @@ passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
                                const char *bundle_id, passwd_id_t pwid,
                                struct passwd **passwd);
 
-int zt_auth_passwd_db_new(int fd, const char *bundle_id,
-                          unsigned short password_len,
+int zt_auth_passwd_db_new(int fd, const char *bundle_id, unsigned short password_len,
                           unsigned short n_passwords);
 
 void zt_auth_passwd_free(struct passwd *pass, ...);

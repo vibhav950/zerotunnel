@@ -1,5 +1,5 @@
-#include "conn_defs.h"
 #include "common/defines.h"
+#include "conn_defs.h"
 
 #include <arpa/inet.h>
 

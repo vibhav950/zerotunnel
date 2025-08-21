@@ -376,7 +376,7 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
               conn->peer.ip, sizeof(conn->peer.ip), conn->peer.port,
               sizeof(conn->peer.port), NI_NUMERICHOST | NI_NUMERICSERV);
   log_info(NULL, "New connection accepted on fd=%d (from '%s:%s')", clientfd,
-            conn->peer.ip, conn->peer.port);
+           conn->peer.ip, conn->peer.port);
 
   return ERR_SUCCESS;
 }
