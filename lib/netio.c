@@ -34,7 +34,7 @@ static int tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
     if (rc > 0) {
       break;
     } else if (rc < 0) {
-      log_error(NULL, "select failed (%s)", strerror(errno));
+      log_error(NULL, "select: Failed (%s)", strerror(errno));
       return -1;
     }
 
@@ -54,7 +54,7 @@ static int tcp_io_waitfor(int sockfd, timediff_t timeout_msec, int mode) {
 
   len = sizeof(error);
   if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) == -1) {
-    log_error(NULL, "getsockopt failed (%s)", strerror(errno));
+    log_error(NULL, "getsockopt: Failed (%s)", strerror(errno));
     rc = -1;
   }
   // Check for pending socket error
@@ -140,8 +140,7 @@ bool zt_tcp_io_waitfor_write(int sockfd, timediff_t timeout_msec) {
  *
  * The timeout can be set using `zt_client_set_send_timeout()`.
  */
-int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
-                       size_t nbytes) {
+int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf, size_t nbytes) {
   ssize_t nwritten = 0;
 
   if (unlikely(!conn || !buf || !nbytes))
@@ -152,18 +151,18 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
 
 #if defined(MSG_FASTOPEN) && !defined(TCP_FASTOPEN_CONNECT)
     if (conn->fl_tcp_fastopen && conn->first_send) {
-      n = sendto(conn->sockfd, buf, nbytes, MSG_FASTOPEN,
-                 conn->ai_estab->ai_addr, conn->ai_estab->ai_addrlen);
+      n = sendto(conn->sockfd, buf, nbytes, MSG_FASTOPEN, conn->ai_estab->ai_addr,
+                 conn->ai_estab->ai_addrlen);
       conn->first_send = false;
 
       if (unlikely(n < 0 && errno == EOPNOTSUPP)) {
         /** TFO disabled on system; fallback to a normal connect() */
         conn->fl_tcp_fastopen = false;
-        int rv = connect(conn->sockfd, conn->ai_estab->ai_addr,
-                         conn->ai_estab->ai_addrlen);
+        int rv =
+            connect(conn->sockfd, conn->ai_estab->ai_addr, conn->ai_estab->ai_addrlen);
 
         if (unlikely(rv == -1 && errno != EAGAIN && errno != EINPROGRESS)) {
-          log_error(NULL, "connect: failed (%s)", strerror(errno));
+          log_error(NULL, "connect: Failed (%s)", strerror(errno));
           close(conn->sockfd);
           return -1;
         }
@@ -230,8 +229,8 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf,
  *
  * The timeout can be set using `zt_client_set_recv_timeout()`.
  */
-ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
-                           size_t nbytes, bool *pending) {
+ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf, size_t nbytes,
+                           bool *pending) {
   ssize_t nread;
 
   if (unlikely(!conn || !buf || !nbytes))
@@ -284,8 +283,7 @@ ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf,
  *
  * The timeout can be set using `zt_server_set_send_timeout()`.
  */
-int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
-                       size_t nbytes) {
+int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf, size_t nbytes) {
   ssize_t nwritten = 0;
 
   if (unlikely(!conn || !buf || !nbytes))
@@ -335,8 +333,8 @@ int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf,
  *
  * The timeout can be set using `zt_server_set_recv_timeout()`.
  */
-ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf,
-                           size_t nbytes, bool *pending) {
+ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf, size_t nbytes,
+                           bool *pending) {
   ssize_t nread;
 
   if (unlikely(!conn || !buf || !nbytes))

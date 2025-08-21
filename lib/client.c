@@ -48,7 +48,7 @@ static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
   if (likely(state >= CLIENT_NONE && state <= CLIENT_DONE))
     return clientstate_names[state];
   else
-    return "Unknown";
+    return "unknown";
 }
 
 static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
@@ -76,13 +76,16 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   ASSERT(conn->state == CLIENT_CONN_INIT);
   ASSERT(timeout_msec > 0);
 
+  conn->created_at = zt_time_now();
+
 #if 1 // USE_SIGACT_TIMEOUT
   if (atomic_flag_test_and_set(&jmpenv_lock))
     return ERR_ALREADY;
 
   if (sigsetjmp(jmpenv, 1)) {
     /* This is coming from a siglongjmp() after an alarm signal */
-    log_error(NULL, "host resolution timed out");
+    log_error(NULL, "Host resolution timed out after %lds",
+              zt_timediff_msec(zt_time_now(), conn->created_at));
     ret = ERR_TIMEOUT;
     goto out;
   } else {
@@ -117,7 +120,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
   af = zt_choose_ip_family(!GlobalConfig.flagIPv6Only, use_ipv6);
   if (af < 0) {
-    log_error(NULL, "could not choose a suitable address family");
+    log_error(NULL, "Could not pick a suitable address family");
     ret = ERR_BAD_ARGS;
     goto out;
   }
@@ -131,20 +134,20 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   hints.ai_protocol = IPPROTO_TCP;
   hints.ai_flags = AI_NUMERICSERV;
 
-  for (int ntries = 0; ntries < CLIENT_RESOLVE_RETRIES; ntries++) {
+  for (int ntries = 0; ntries < ZT_CLIENT_RESOLVE_RETRIES; ntries++) {
     status = getaddrinfo(conn->hostname, conn->port, &hints, &res);
 
     if (status == 0 || status != EAI_AGAIN)
       break;
 
-    if (ntries < CLIENT_RESOLVE_RETRIES - 1)
-      sleep(1);
+    if (ntries < ZT_CLIENT_RESOLVE_RETRIES - 1)
+      sleep(ZT_CLIENT_RESOLVE_RETRY_INTERVAL);
   }
 
   if (status) {
-    const char *errstr = (status == EAI_SYSTEM) ? (const char *)strerror(errno)
-                                                : gai_strerror(status);
-    log_error(NULL, "getaddrinfo: failed for %s (%s)", conn->hostname, errstr);
+    const char *errstr =
+        (status == EAI_SYSTEM) ? (const char *)strerror(errno) : gai_strerror(status);
+    log_error(NULL, "getaddrinfo: Failed to resolve '%s' (%s)", conn->hostname, errstr);
     ret = ERR_NORESOLVE;
     goto out;
   }
@@ -226,8 +229,8 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 #endif
 
     if (addr_ptr) {
-      log_debug(NULL, "Resolved %s to %s", conn->hostname,
-                inet_ntop(cur->ai_family, addr_ptr, ipstr, sizeof(ipstr)));
+      log_info(NULL, "Resolved '%s' to '%s'", conn->hostname,
+               inet_ntop(cur->ai_family, addr_ptr, ipstr, sizeof(ipstr)));
     }
   }
 
@@ -257,8 +260,7 @@ out:
    * here
    */
   if (prev_alarm) {
-    timediff_t elapsed_sec =
-        zt_timediff_msec(zt_time_now(), conn->created_at) / 1000;
+    timediff_t elapsed_sec = zt_timediff_msec(zt_time_now(), conn->created_at) / 1000;
 
     unsigned long alarm_runout = (unsigned long)(prev_alarm - elapsed_sec);
 
@@ -266,8 +268,7 @@ out:
      * Check if the previous alarm has possibly already expired by checking for
      * an unsigned wraparound indicating a negative value
      */
-    if (!alarm_runout ||
-        (alarm_runout >= 0x80000000 && prev_alarm <= 0x80000000)) {
+    if (!alarm_runout || (alarm_runout >= 0x80000000 && prev_alarm <= 0x80000000)) {
       /* Set off the alarm; note that alarm(0) would switch it
        * off instead of firing it now! */
       alarm(1);
@@ -287,8 +288,7 @@ out:
   return ret;
 }
 
-static err_t client_tcp_conn0(zt_client_connection_t *conn,
-                              struct zt_addrinfo *ai_list) {
+static err_t client_tcp_conn0(zt_client_connection_t *conn, struct zt_addrinfo *ai_list) {
   err_t ret = ERR_SUCCESS;
   struct zt_addrinfo *ai_cur, *ai_estab = NULL;
   int sockfd, on;
@@ -301,34 +301,31 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
     if ((sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
                          ai_cur->ai_protocol)) < 0) {
-      log_error(NULL, "socket: failed (%s)", strerror(errno));
+      log_error(NULL, "socket: Failed (%s)", strerror(errno));
       continue;
     }
 
     if (SOCK_CLOEXEC == 0) {
       int flags = fcntl(sockfd, F_GETFD);
       if (flags < 0) {
-        log_error(NULL, "fcntl: failed to get flags (%s)", strerror(errno));
+        log_error(NULL, "fcntl: Failed to get socket flags (%s)", strerror(errno));
         flags = 0;
       }
       flags |= FD_CLOEXEC;
       if (fcntl(sockfd, F_SETFD, flags) == -1)
-        log_error(NULL, "fcntl: failed to set O_CLOEXEC (%s)", strerror(errno));
+        log_error(NULL, "fcntl: Failed to set O_CLOEXEC (%s)", strerror(errno));
     }
 
     /* Try to enable TCP_NODELAY */
     if (conn->fl_tcp_nodelay) {
 #ifdef TCP_NODELAY
       on = 1;
-      if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&on,
-                     sizeof(on)) == -1) {
-        log_error(NULL, "setsockopt: failed to set TCP_NODELAY (%s)",
-                  strerror(errno));
+      if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&on, sizeof(on)) == -1) {
+        log_error(NULL, "setsockopt: Failed to set TCP_NODELAY (%s)", strerror(errno));
         conn->fl_tcp_nodelay = false;
       }
 #else
-      log_error(NULL,
-                "TCP_NODELAY was requested but not supported by this build");
+      log_error(NULL, "TCP_NODELAY was requested but not supported by this build");
       conn->fl_tcp_nodelay = false;
 #endif
     }
@@ -339,13 +336,12 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
       on = 1;
       if (setsockopt(sockfd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, (void *)&on,
                      sizeof(on)) == -1) {
-        log_error(NULL, "setsockopt: failed to set TCP_FASTOPEN_CONNECT (%s)",
+        log_error(NULL, "setsockopt: Failed to set TCP_FASTOPEN_CONNECT (%s)",
                   strerror(errno));
         conn->fl_tcp_fastopen = false;
       }
 #elif !defined(MSG_FASTOPEN) /* old Linux */
-      log_error(NULL,
-                "TCP_FASTOPEN was requested but not supported by this build");
+      log_error(NULL, "TCP_FASTOPEN was requested but not supported by this build");
       conn->fl_tcp_fastopen = false;
 #endif
     }
@@ -353,29 +349,23 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
     /* Try to enable TCP_KEEPALIVE for live reads */
     if (conn->fl_live_read) {
       on = 1;
-      if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on,
-                     sizeof(on)) == -1) {
-        log_error(NULL, "setsockopt: failed to set SO_KEEPALIVE (%s)",
-                  strerror(errno));
+      if (setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&on, sizeof(on)) == -1) {
+        log_error(NULL, "setsockopt: Failed to set SO_KEEPALIVE (%s)", strerror(errno));
       }
     }
 
     tval.tv_sec = conn->send_timeout / 1000;
     tval.tv_usec = (conn->send_timeout % 1000) * 1000;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval,
-                   sizeof(tval)) == -1) {
-      log_error(NULL, "setsockopt: failed to set SO_SNDTIMEO (%s)",
-                strerror(errno));
+    if (setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, (void *)&tval, sizeof(tval)) == -1) {
+      log_error(NULL, "setsockopt: Failed to set SO_SNDTIMEO (%s)", strerror(errno));
       close(sockfd);
       continue;
     }
 
     tval.tv_sec = conn->recv_timeout / 1000;
     tval.tv_usec = (conn->recv_timeout % 1000) * 1000;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval,
-                   sizeof(tval)) == -1) {
-      log_error(NULL, "setsockopt: failed to set SO_RCVTIMEO (%s)",
-                strerror(errno));
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (void *)&tval, sizeof(tval)) == -1) {
+      log_error(NULL, "setsockopt: Failed to set SO_RCVTIMEO (%s)", strerror(errno));
       close(sockfd);
       continue;
     }
@@ -393,7 +383,7 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
     conn->sockfd = sockfd;
     conn->ai_estab = ai_estab;
   } else {
-    log_error(NULL, "could not create a suitable socket for any address");
+    log_error(NULL, "Could not create a suitable socket for any address");
     ret = ERR_INTERNAL;
   }
 
@@ -453,17 +443,16 @@ static err_t client_tcp_conn1(zt_client_connection_t *conn) {
     errno != EWOULDBLOCK &&
     errno != EINPROGRESS) {
     // clang-format on
-    log_error(NULL, "connect: failed (%s)", strerror(errno));
+    log_error(NULL, "connect: Failed for fd=%d (%s)", sockfd, strerror(errno));
     close(conn->sockfd);
     return ERR_TCP_CONNECT;
   }
 
 #ifdef DEBUG
   char address[INET6_ADDRSTRLEN + 6];
-  getnameinfo(ai_estab->ai_addr, ai_estab->ai_addrlen, address,
-              INET6_ADDRSTRLEN, &address[INET6_ADDRSTRLEN], 6,
-              NI_NUMERICHOST | NI_NUMERICSERV);
-  log_debug(NULL, "connected to %s:%s", address, &address[INET6_ADDRSTRLEN]);
+  getnameinfo(ai_estab->ai_addr, ai_estab->ai_addrlen, address, INET6_ADDRSTRLEN,
+              &address[INET6_ADDRSTRLEN], 6, NI_NUMERICHOST | NI_NUMERICSERV);
+  log_info(NULL, "Connected to '%s:%s'", address, &address[INET6_ADDRSTRLEN]);
 #endif
 
   /**
@@ -498,13 +487,12 @@ static err_t client_send(zt_client_connection_t *conn) {
   ASSERT(conn->msgbuf);
 
   if (MSG_DATA_LEN(conn->msgbuf) > ZT_MSG_MAX_RW_SIZE) {
-    log_error(NULL, "message data too large (%zu bytes)",
-              MSG_DATA_LEN(conn->msgbuf));
+    log_error(NULL, "Message is too big (%zu bytes)", MSG_DATA_LEN(conn->msgbuf));
     return ERR_REQUEST_TOO_LARGE;
   }
 
-  is_encrypted = !(MSG_TYPE(conn->msgbuf) &
-                   (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
+  is_encrypted =
+      !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
 
   p = MSG_DATA_PTR(conn->msgbuf);
   len = MSG_DATA_LEN(conn->msgbuf);
@@ -532,15 +520,13 @@ static err_t client_send(zt_client_connection_t *conn) {
 
       len = LZ4_compress_default(rptr, wptr, len, ZT_MSG_XBUF_SIZE);
       if (len == 0) {
-        log_error(NULL, "LZ4_compress_default: failed to compress %zu bytes",
-                  len);
+        log_error(NULL, "LZ4_compress_default: Failed to compress %zu bytes", len);
         return ERR_INTERNAL;
       }
 
       MSG_SET_LEN(conn->msgbuf, len); /*update length in header before copying*/
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_COMPRESSION);
-      memcpy(MSG_XBUF_PTR(conn->msgbuf), MSG_RAW_PTR(conn->msgbuf),
-             ZT_MSG_HEADER_SIZE);
+      memcpy(MSG_XBUF_PTR(conn->msgbuf), MSG_RAW_PTR(conn->msgbuf), ZT_MSG_HEADER_SIZE);
     }
   }
   MSG_SET_LEN(conn->msgbuf, len); /* update length in header */
@@ -549,14 +535,13 @@ static err_t client_send(zt_client_connection_t *conn) {
                                                    : MSG_RAW_PTR(conn->msgbuf);
   datap = p + ZT_MSG_HEADER_SIZE;
   if (is_encrypted) {
-    tosend =
-        (MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? ZT_MSG_XBUF_SIZE
-                                                      : ZT_MSG_MAX_RAW_SIZE) -
-        ZT_MSG_HEADER_SIZE;
+    tosend = (MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? ZT_MSG_XBUF_SIZE
+                                                           : ZT_MSG_MAX_RAW_SIZE) -
+             ZT_MSG_HEADER_SIZE;
 
-    if ((ret = vcry_aead_encrypt(datap, len, p, ZT_MSG_HEADER_SIZE, datap,
-                                 &tosend)) != ERR_SUCCESS) {
-      log_error(NULL, "encryption failed (%s)", zt_error_str(ret));
+    if ((ret = vcry_aead_encrypt(datap, len, p, ZT_MSG_HEADER_SIZE, datap, &tosend)) !=
+        ERR_SUCCESS) {
+      log_error(NULL, "Encryption failed (%s)", zt_error_str(ret));
       return ret;
     }
   } else {
@@ -565,8 +550,7 @@ static err_t client_send(zt_client_connection_t *conn) {
   tosend += ZT_MSG_HEADER_SIZE; /* we're sending header+payload */
 
   if (zt_client_tcp_send(conn, p, tosend) != 0) {
-    log_error(NULL, "failed to send %zu bytes to peer (%s)", tosend,
-              strerror(errno));
+    log_error(NULL, "Failed to send %zu bytes to peer (%s)", tosend, strerror(errno));
     return ERR_TCP_SEND;
   }
 
@@ -575,8 +559,7 @@ static err_t client_send(zt_client_connection_t *conn) {
   return ERR_SUCCESS;
 }
 
-#define msg_type_is_expected(msgtype, mask)                                    \
-  (msgtype == MSG_ANY || (msgtype & mask) != 0)
+#define msg_type_is_expected(msgtype, mask) (msgtype == MSG_ANY || (msgtype & mask) != 0)
 
 /**
  * @param[in] conn The client connection context.
@@ -596,8 +579,7 @@ static err_t client_send(zt_client_connection_t *conn) {
  *
  * Encrypted payload data is decrypted in-place in `conn->msgbuf->data[]`.
  */
-static err_t client_recv(zt_client_connection_t *conn,
-                         zt_msg_type_t expected_types) {
+static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expected_types) {
   err_t ret = ERR_SUCCESS;
   ssize_t nread;
   size_t datalen, taglen;
@@ -614,23 +596,23 @@ static err_t client_recv(zt_client_connection_t *conn,
   /* Read the message header */
   nread = zt_client_tcp_recv(conn, rawptr, ZT_MSG_HEADER_SIZE, NULL);
   if (nread < 0) {
-    log_error(NULL, "failed to read TCP data (%s)", strerror(errno));
+    log_error(NULL, "Failed to read TCP data (%s)", strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
   if (nread != ZT_MSG_HEADER_SIZE) {
-    log_error(NULL, "received malformed header (invalid length)");
+    log_error(NULL, "Received malformed header (invalid length)");
     ret = ERR_INVALID_DATUM;
     goto out;
   }
 
   if (!msg_type_isvalid(MSG_TYPE(conn->msgbuf))) {
-    log_error(NULL, "recieved malformed header (invalid type)");
+    log_error(NULL, "Received malformed header (invalid type)");
     ret = ERR_INVALID_DATUM;
     goto out;
   }
   if (!msg_type_is_expected(MSG_TYPE(conn->msgbuf), expected_types)) {
-    log_error(NULL, "bad message %u (expected %u)", MSG_TYPE(conn->msgbuf),
+    log_error(NULL, "Bad message %u (expected %u)", MSG_TYPE(conn->msgbuf),
               expected_types);
     ret = ERR_INVALID_DATUM;
     goto out;
@@ -641,8 +623,8 @@ static err_t client_recv(zt_client_connection_t *conn,
     goto out;
   }
 
-  is_encrypted = !(MSG_TYPE(conn->msgbuf) &
-                   (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
+  is_encrypted =
+      !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
 
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = MSG_DATA_LEN(conn->msgbuf) + taglen;
@@ -650,13 +632,13 @@ static err_t client_recv(zt_client_connection_t *conn,
   /* Read message payload */
   nread = zt_client_tcp_recv(conn, dataptr, datalen, NULL);
   if (nread < 0) {
-    log_error(NULL, "failed to read TCP data (%s)", strerror(errno));
+    log_error(NULL, "Failed to read TCP data (%s)", strerror(errno));
     ret = ERR_TCP_RECV;
     goto out;
   }
   if (nread != datalen) {
-    log_error(NULL, "received only %zu bytes of payload (expected %zu bytes)",
-              nread, datalen);
+    log_error(NULL, "Received only %zu bytes of payload (expected %zu bytes)", nread,
+              datalen);
     ret = ERR_INVALID_DATUM;
     goto out;
   }
@@ -665,15 +647,15 @@ static err_t client_recv(zt_client_connection_t *conn,
   if (is_encrypted) {
     nread = ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE;
 
-    if ((ret = vcry_aead_decrypt(dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
-                                 dataptr, &nread)) != ERR_SUCCESS) {
-      log_error(NULL, "decryption failed (%s)", zt_error_str(ret));
+    if ((ret = vcry_aead_decrypt(dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE, dataptr,
+                                 &nread)) != ERR_SUCCESS) {
+      log_error(NULL, "Decryption failed (%s)", zt_error_str(ret));
       goto out;
     }
   }
 
   if (dataptr[nread - 1] != MSG_END_BYTE) {
-    log_error(NULL, "received malformed payload (missing end byte)");
+    log_error(NULL, "Received malformed payload (missing end byte)");
     ret = ERR_INVALID_DATUM;
   }
 
@@ -699,11 +681,9 @@ err_t zt_client_conn_alloc(zt_client_connection_t **conn) {
   if (!(*conn = zt_calloc(1, alloc_size)))
     return ERR_MEM_FAIL;
 
-  (*conn)->msgbuf =
-      (zt_msg_t *)((char *)(*conn) + sizeof(zt_client_connection_t));
+  (*conn)->msgbuf = (zt_msg_t *)((char *)(*conn) + sizeof(zt_client_connection_t));
   (*conn)->msgbuf->_xbuf =
-      (uint8_t *)((char *)(*conn) + sizeof(zt_client_connection_t) +
-                  sizeof(zt_msg_t));
+      (uint8_t *)((char *)(*conn) + sizeof(zt_client_connection_t) + sizeof(zt_msg_t));
 
   (*conn)->sockfd = -1;
 
@@ -757,12 +737,10 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   conn->connect_timeout = GlobalConfig.connectTimeout > 0
                               ? GlobalConfig.connectTimeout
                               : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
-  conn->recv_timeout = GlobalConfig.recvTimeout > 0
-                           ? GlobalConfig.recvTimeout
-                           : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = GlobalConfig.sendTimeout > 0
-                           ? GlobalConfig.sendTimeout
-                           : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
+  conn->recv_timeout = GlobalConfig.recvTimeout > 0 ? GlobalConfig.recvTimeout
+                                                    : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
+  conn->send_timeout = GlobalConfig.sendTimeout > 0 ? GlobalConfig.sendTimeout
+                                                    : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
 
   auth_type = GlobalConfig.authType;
 
@@ -796,13 +774,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
-        passwd_id = zt_auth_passwd_load(
-            GlobalConfig.passwdfile, GlobalConfig.passwdBundleId,
-            conn->renegotiation_passwd, &master_pass);
-      } else {
         passwd_id =
-            zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.authType,
-                               GlobalConfig.passwdBundleId, &master_pass);
+            zt_auth_passwd_load(GlobalConfig.passwdfile, GlobalConfig.passwdBundleId,
+                                conn->renegotiation_passwd, &master_pass);
+      } else {
+        passwd_id = zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.authType,
+                                       GlobalConfig.passwdBundleId, &master_pass);
 
         if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
@@ -810,8 +787,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if (passwd_id < 0) {
         ret = ERR_INTERNAL;
-        log_error(NULL, "could not load a usable password for hostname '%s'",
-                  conn->hostname);
+        log_error(NULL, "Could not load a usable password");
         goto cleanup2;
       }
 
@@ -822,44 +798,37 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       vcry_set_role_initiator();
 
-      if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) !=
-          ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_authpass : %s", zt_error_str(ret));
+      if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) != ERR_SUCCESS) {
+        log_error(NULL, "vcry_set_authpass: %s", zt_error_str(ret));
         zt_auth_passwd_free(master_pass, NULL);
         goto cleanup2;
       }
       zt_auth_passwd_free(master_pass, NULL);
       master_pass = NULL;
 
-      // clang-format off
-      if ((ret = vcry_set_crypto_params(
-               vcry_algs[0], vcry_algs[1], vcry_algs[2],
-               vcry_algs[3], vcry_algs[4], vcry_algs[5])) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_set_crypto_params : %s", zt_error_str(ret));
+      if ((ret = vcry_set_crypto_params(vcry_algs[0], vcry_algs[1], vcry_algs[2],
+                                        vcry_algs[3], vcry_algs[4], vcry_algs[5])) !=
+          ERR_SUCCESS) {
+        log_error(NULL, "vcry_set_crypto_params: %s", zt_error_str(ret));
         goto cleanup2;
       }
-      // clang-format on
 
       if ((ret = vcry_handshake_initiate(&sndbuf, &sndlen)) != ERR_SUCCESS) {
-        log_error(NULL, "vcry_handshake_initiate : %s", zt_error_str(ret));
+        log_error(NULL, "vcry_handshake_initiate: %s", zt_error_str(ret));
         goto cleanup2;
       }
 
-      memcpy(MSG_DATA_PTR(conn->msgbuf), conn->authid_mine.bytes,
-             AUTHID_BYTES_LEN);
+      memcpy(MSG_DATA_PTR(conn->msgbuf), conn->authid_mine.bytes, AUTHID_BYTES_LEN);
       len = AUTHID_BYTES_LEN;
 
-      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&passwd_id),
-             sizeof(passwd_id_t));
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&passwd_id), sizeof(passwd_id_t));
       len += sizeof(passwd_id_t);
 
-      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&auth_type),
-             sizeof(auth_type));
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&auth_type), sizeof(auth_type));
       len += sizeof(auth_type);
 
       // XXX: we don't need to send this again with renegotiation messages
-      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&ciphersuite),
-             sizeof(ciphersuite_t));
+      memcpy(MSG_DATA_PTR(conn->msgbuf) + len, PTRV(&ciphersuite), sizeof(ciphersuite_t));
       len += sizeof(ciphersuite_t);
 
       memcpy(MSG_DATA_PTR(conn->msgbuf) + len, sndbuf, sndlen);
@@ -882,8 +851,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       uint8_t *rcvbuf, *sndbuf;
       size_t rcvlen, sndlen;
 
-      if ((ret = client_recv(conn, MSG_AUTH_RETRY | MSG_HANDSHAKE)) !=
-          ERR_SUCCESS) {
+      if ((ret = client_recv(conn, MSG_AUTH_RETRY | MSG_HANDSHAKE)) != ERR_SUCCESS) {
         goto cleanup2;
       }
 
@@ -902,13 +870,13 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
         if (GlobalConfig.authType != KAPPA_AUTHTYPE_1) {
-          log_error(NULL, "peer sent MSG_AUTH_RETRY but auth_type!=KAPPA1");
+          log_error(NULL, "Invalid message sequence");
           ret = ERR_BAD_CONTROL_FLOW;
           goto cleanup2;
         }
 
-        if (++conn->auth_retries > MAX_AUTH_RETRY_COUNT) {
-          log_error(NULL, "too many authentication retries -- aborting!");
+        if (++conn->auth_retries > ZT_MAX_AUTH_RETRY_COUNT) {
+          log_error(NULL, "Too many authentication retries -- aborting!");
           ret = ERR_HSHAKE_ABORTED;
           goto cleanup2;
         }
@@ -947,9 +915,9 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         rcvlen -= AUTHID_BYTES_LEN;
 
         /* process handshake response */
-        if ((ret = vcry_handshake_complete(
-                 rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
-          log_error(NULL, "vcry_handshake_complete : %s", zt_error_str(ret));
+        if ((ret = vcry_handshake_complete(rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) !=
+            ERR_SUCCESS) {
+          log_error(NULL, "vcry_handshake_complete: %s", zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -958,11 +926,9 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* create our verify-initiation message */
         if ((ret = vcry_initiator_verify_initiate(
-                 &sndbuf, &sndlen, conn->authid_mine.bytes,
-                 conn->authid_peer.bytes, AUTHID_BYTES_LEN,
-                 AUTHID_BYTES_LEN)) != ERR_SUCCESS) {
-          log_error(NULL, "vcry_initiator_verify_initiate : %s",
-                    zt_error_str(ret));
+                 &sndbuf, &sndlen, conn->authid_mine.bytes, conn->authid_peer.bytes,
+                 AUTHID_BYTES_LEN, AUTHID_BYTES_LEN)) != ERR_SUCCESS) {
+          log_error(NULL, "vcry_initiator_verify_initiate: %s", zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -971,17 +937,15 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* Process the responder's verify-initiation message */
         ret = vcry_initiator_verify_complete(
-            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
-            conn->authid_mine.bytes, conn->authid_peer.bytes, AUTHID_BYTES_LEN,
-            AUTHID_BYTES_LEN);
+            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN), conn->authid_mine.bytes,
+            conn->authid_peer.bytes, AUTHID_BYTES_LEN, AUTHID_BYTES_LEN);
         switch (ret) {
         case ERR_SUCCESS:
           break; /* successful */
         case ERR_AUTH_FAIL:
           goto retryhandshake;
         default:
-          log_error(NULL, "vcry_initiator_verify_complete : %s",
-                    zt_error_str(ret));
+          log_error(NULL, "vcry_initiator_verify_complete: %s", zt_error_str(ret));
           goto cleanup2;
         }
 
@@ -996,8 +960,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     } /* case CLIENT_AUTH_VERIFY */
 
     case CLIENT_AUTH_COMPLETE: {
-      if ((ret = client_recv(conn, MSG_HANDSHAKE_FIN | MSG_AUTH_RETRY)) !=
-          ERR_SUCCESS) {
+      if ((ret = client_recv(conn, MSG_HANDSHAKE_FIN | MSG_AUTH_RETRY)) != ERR_SUCCESS) {
         goto cleanup2;
       }
 
@@ -1017,8 +980,8 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * initiation phase.
        */
 
-      if (++conn->auth_retries > MAX_AUTH_RETRY_COUNT) {
-        log_error(NULL, "too many authentication retries -- aborting!");
+      if (++conn->auth_retries > ZT_MAX_AUTH_RETRY_COUNT) {
+        log_error(NULL, "Too many authentication retries -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -1052,8 +1015,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       fileinfo.size = hton64(fileinfo.size);
       fileinfo.reserved = hton32(fileinfo.reserved);
-      MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo,
-               sizeof(zt_fileinfo_t), 0);
+      MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t), 0);
       memzero(&fileinfo, sizeof(zt_fileinfo_t));
 
       if ((ret = client_send(conn)) != ERR_SUCCESS) {
@@ -1070,14 +1032,14 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       err_t rv;
 
       if (zt_progressbar_init() != 0)
-        log_error(NULL, "failed to create progress bar");
+        log_error(NULL, "Failed to create progress bar");
 
       zt_progressbar_begin(GlobalConfig.hostname, fileinfo.name, fileinfo.size);
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {
-        rv = zt_fio_read(&fileptr, MSG_DATA_PTR(conn->msgbuf),
-                         ZT_MSG_MAX_RW_SIZE, &nread);
+        rv =
+            zt_fio_read(&fileptr, MSG_DATA_PTR(conn->msgbuf), ZT_MSG_MAX_RW_SIZE, &nread);
         if (rv != ERR_SUCCESS)
           break;
 
@@ -1121,8 +1083,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
 
     default: {
-      log_error(NULL, "bad client state - %s",
-                get_clientstate_name(conn->state));
+      log_error(NULL, "Bad client state '%s'", get_clientstate_name(conn->state));
       ret = ERR_INVALID;
       goto cleanup2;
     }
@@ -1151,8 +1112,7 @@ err_t zt_client_enable_tcp_fastopen(zt_client_connection_t *conn, bool enable) {
   conn->fl_tcp_fastopen = enable;
 }
 
-err_t zt_client_enable_explicit_port(zt_client_connection_t *conn,
-                                     bool enable) {
+err_t zt_client_enable_explicit_port(zt_client_connection_t *conn, bool enable) {
   if (!conn)
     return ERR_NULL_PTR;
 

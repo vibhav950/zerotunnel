@@ -32,9 +32,11 @@
 #define ZT_SERVER_TIMEOUT_SEND_DEFAULT          120000U   /* Server send() timeout (msec) */
 #define ZT_SERVER_TIMEOUT_RECV_DEFAULT          120000U   /* Server recv() timeout (msec) */
 
-#define CLIENT_RESOLVE_RETRIES                  8         /* Max host resolution retries */
+#define ZT_CLIENT_RESOLVE_RETRY_INTERVAL        1000U     /* Client resolve retry interval (msec) */
 
-#define MAX_AUTH_RETRY_COUNT                    3         /* Max authentication retries */
+#define ZT_CLIENT_RESOLVE_RETRIES               8         /* Max host resolution retries */
+
+#define ZT_MAX_AUTH_RETRY_COUNT                 3         /* Max authentication retries */
 
 #define ZT_DEFAULT_CIPHER_SUITE_ID              0x01      /* Default ciphersuite */
 

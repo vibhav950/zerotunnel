@@ -22,16 +22,14 @@
 #include <unistd.h>
 
 // "kappaxzerotunnel"
-#define ZT_APP_AUTHID128()                                                     \
+#define ZT_APP_AUTHID128()                                                               \
   SD_ID128_MAKE(6b, 61, 70, 70, 61, 78, 7a, 65, 72, 6f, 74, 75, 6e, 6e, 65, 6c)
 
-extern char *auth_passwd_generate_phonetic(int count, char sep,
-                                           bool have_digits);
+extern char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits);
 
 extern char *auth_passwd_generate(int len, char *buf, size_t bufsize);
 
-static char *auth_passwd_prompt(const char *prompt,
-                                int flags ATTRIBUTE_UNUSED) {
+static char *auth_passwd_prompt(const char *prompt, int flags ATTRIBUTE_UNUSED) {
   int rppflags;
   char buf[MAX_PASSWD_LEN + 1], *ret;
 
@@ -48,8 +46,7 @@ static char *auth_passwd_prompt(const char *prompt,
   return ret;
 }
 
-static inline ssize_t line_read_hex(const char *line, const char *prefix,
-                                    char buf[]) {
+static inline ssize_t line_read_hex(const char *line, const char *prefix, char buf[]) {
   ssize_t len = 0;
 
   while (isspace((unsigned char)*line))
@@ -95,8 +92,7 @@ static inline ssize_t line_read_decode_b64(const char *line, const char *prefix,
   return (ssize_t)zt_b64_decode(line, elen, buf, &len);
 }
 
-static inline int line_read_uint(const char *line, uint32_t *val,
-                                 const char *fmt) {
+static inline int line_read_uint(const char *line, uint32_t *val, const char *fmt) {
   return (sscanf(line, fmt, val) != 1) ? -1 : 1;
 }
 
@@ -130,14 +126,12 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
     return -1;
 
   if ((fd = open(passwdfile, O_RDWR)) < 0) {
-    log_error(NULL, "open: could not open %s (%s)", passwdfile,
-              strerror(errno));
+    log_error(NULL, "open: Could not open '%s' (%s)", passwdfile, strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    log_error(NULL, "fdopen: could not open %s (%s)", passwdfile,
-              strerror(errno));
+    log_error(NULL, "fdopen: Could not open '%s' (%s)", passwdfile, strerror(errno));
     close(fd);
     return -1;
   }
@@ -148,7 +142,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwdfile,
+    log_error(NULL, "fcntl: Failed to acquire x-lock on '%s' (%s)", passwdfile,
               strerror(errno));
     fclose(fp);
     close(fd);
@@ -176,8 +170,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
 
     // read "::<idhash>"
     if (*linep && !found) {
-      if (line_read_hex(linep, "::", bufx1) !=
-          SHA256_DIGEST_LEN * 2 /* hex chars */) {
+      if (line_read_hex(linep, "::", bufx1) != SHA256_DIGEST_LEN * 2 /* hex chars */) {
         continue;
       }
 
@@ -249,8 +242,8 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
     (*passwd)->pw = pw;
     (*passwd)->pwlen = strlen(pw);
   } else {
-    /* If all passwords are exhausted, we will end up having the final index in
-     * pwid_cmp */
+    /* If all passwords are exhausted, we will end up having
+    * the final index in pwid_cmp */
     pwid_cmp = -1;
   }
 
@@ -296,14 +289,12 @@ int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
     return -1;
 
   if ((fd = open(passwdfile, O_RDWR)) < 0) {
-    log_error(NULL, "open: could not open %s (%s)", passwdfile,
-              strerror(errno));
+    log_error(NULL, "open: Could not open '%s' (%s)", passwdfile, strerror(errno));
     return -1;
   }
 
   if ((fp = fdopen(fd, "r+")) == NULL) {
-    log_error(NULL, "fdopen: could not open %s (%s)", passwdfile,
-              strerror(errno));
+    log_error(NULL, "fdopen: Could not open '%s' (%s)", passwdfile, strerror(errno));
     close(fd);
     return -1;
   }
@@ -314,7 +305,7 @@ int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
   fl.l_whence = SEEK_SET;
   fl.l_len = 0;
   if (fcntl(fd, F_SETLK, &fl) < 0) {
-    log_error(NULL, "fcntl: failed to acquire x-lock on %s (%s)", passwdfile,
+    log_error(NULL, "fcntl: Failed to acquire x-lock on '%s' (%s)", passwdfile,
               strerror(errno));
     fclose(fp);
     close(fd);
@@ -337,8 +328,7 @@ int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
 
     // read "::<idhash>"
     if (*linep) {
-      if (line_read_hex(linep, "::", bufx1) ==
-          SHA256_DIGEST_LEN * 2 /* hex chars */) {
+      if (line_read_hex(linep, "::", bufx1) == SHA256_DIGEST_LEN * 2 /* hex chars */) {
         // Don't delete passwords for other peers
         if (zt_strcmp(bufx1, idhash) != 0) {
           found = false;
@@ -437,8 +427,7 @@ passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
   if (auth_type == KAPPA_AUTHTYPE_1) {
     int id = zt_auth_passwd_load(passwdfile, bundle_id, -1, passwd);
     if (id < 0) {
-      log_error(NULL, "found no matching entries (bundleId=%s, pwId=%d)",
-                bundle_id, id);
+      log_error(NULL, "Found no matching entries (bundleId=%s, pwId=%d)", bundle_id, id);
       return -1;
     }
 
@@ -497,8 +486,8 @@ passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
     return 0;
   } else {
     if (zt_auth_passwd_load(passwdfile, bundle_id, pwid, passwd) < 0) {
-      log_error(NULL, "found no matching entries (bundleId=%s, pwId=%d)",
-                bundle_id, pwid);
+      log_error(NULL, "Found no matching entries (bundleId=%s, pwId=%d)", bundle_id,
+                pwid);
       return -1;
     }
 
@@ -506,8 +495,7 @@ passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
   }
 }
 
-int zt_auth_passwd_db_new(int fd, const char *bundle_id,
-                          unsigned short password_len,
+int zt_auth_passwd_db_new(int fd, const char *bundle_id, unsigned short password_len,
                           unsigned short n_passwords) {
   int ret = 0;
   FILE *fp;
@@ -524,7 +512,7 @@ int zt_auth_passwd_db_new(int fd, const char *bundle_id,
     return -1;
 
   if ((fp = fdopen(fd, "w")) == NULL) {
-    log_error(NULL, "fdopen: could not open fd=%d (%s)", fd, strerror(errno));
+    log_error(NULL, "fdopen: Could not open fd=%d (%s)", fd, strerror(errno));
     return -1;
   }
 
@@ -613,7 +601,7 @@ int zt_get_hostid(struct authid *authid) {
   base = ZT_APP_AUTHID128();
 
   if (sd_id128_get_machine_app_specific(base, &ret) != 0) {
-    log_error(NULL, "failed to get system ID");
+    log_error(NULL, "Failed to get system ID");
     return -1;
   }
 

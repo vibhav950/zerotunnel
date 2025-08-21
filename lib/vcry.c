@@ -338,12 +338,12 @@ static err_t vcry_set_cipher_from_id(int id) {
     key_len = CHACHA20_KEY_LEN;
     break;
   default:
-    log_error(NULL, "unknown cipher id (%d)", id);
+    log_error(NULL, "Unknown cipher Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&cipher_intf, alg)) {
-    log_error(NULL, "cipher algorithm not supported");
+    log_error(NULL, "Cipher algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -391,12 +391,12 @@ static err_t vcry_set_aead_from_id(int id) {
     alg = AEAD_CHACHA20_POLY1305;
     break;
   default:
-    log_error(NULL, "unknown aead id (%d)", id);
+    log_error(NULL, "Unknown AEAD Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!cipher_intf_alg_is_supported(&aead_intf, alg)) {
-    log_error(NULL, "aead algorithm not supported");
+    log_error(NULL, "AEAD algorithm not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -460,7 +460,7 @@ static err_t vcry_set_hmac_from_id(int id) {
     alg = HMAC_SHA3_512;
     break;
   default:
-    log_error(NULL, "unknown HMAC id (%d)", id);
+    log_error(NULL, "Unknown HMAC Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
@@ -523,12 +523,12 @@ static err_t vcry_set_ecdh_from_id(int id) {
     curve = KEX_CURVE_X448;
     break;
   default:
-    log_error(NULL, "unknown KEX id (%d)", id);
+    log_error(NULL, "Unknown KEX curve Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
   if (!kex_intf_curve_is_supported(&kex_ecc_intf, curve)) {
-    log_error(NULL, "curve not supported");
+    log_error(NULL, "Curve not supported");
     return VCRY_ERR_SET(ERR_NOT_SUPPORTED);
   }
 
@@ -566,7 +566,7 @@ static err_t vcry_set_kem_from_id(int id) {
     alg = KEM_Kyber_1024;
     break;
   default:
-    log_error(NULL, "unknown KEM id (%d)", id);
+    log_error(NULL, "Unknown KEM Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
@@ -609,7 +609,7 @@ static err_t vcry_set_kdf_from_id(int id) {
     alg = KDF_ALG_argon2;
     break;
   default:
-    log_error(NULL, "unknown KDF id (%d)", id);
+    log_error(NULL, "Unknown KDF Id: %d", id);
     return VCRY_ERR_SET(ERR_BAD_ARGS);
   }
 
