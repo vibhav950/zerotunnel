@@ -82,7 +82,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
 
 #ifdef USE_IPV6
   /* Check for IPv6 availability */
-  if (!GlobalConfig.flag_ipv4_only) {
+  if (!GlobalConfig.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -91,17 +91,15 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!GlobalConfig.flag_ipv6_only, use_ipv6);
+  af = zt_choose_ip_family(!GlobalConfig.flagIPv6Only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "could not choose a suitable address family");
     ret = ERR_BAD_ARGS;
     goto out;
   }
 
-  if (af == AF_UNSPEC) {
-    preferred_family =
-        GlobalConfig.preferred_family == '4' ? AF_INET : AF_INET6;
-  }
+  if (af == AF_UNSPEC)
+    preferred_family = GlobalConfig.preferredFamily == '4' ? AF_INET : AF_INET6;
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -227,8 +225,10 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
   for (ai_cur = ai_list; ai_cur; ai_cur = ai_cur->ai_next) {
     (sockfd = socket(ai_cur->ai_family, ai_cur->ai_socktype | SOCK_CLOEXEC,
                      ai_cur->ai_protocol));
+
     if (sockfd < 0)
       continue; /* failed -- try next candidate */
+
     if (SOCK_CLOEXEC == 0) {
       /* SOCK_CLOEXEC isn't supported, set O_CLOEXEC using fcntl */
       int flags = fcntl(sockfd, F_GETFD);
@@ -252,12 +252,12 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
                 strerror(errno));
     }
 
-    if (bind(sockfd, ai_cur->ai_addr, ai_cur->ai_addrlen) == 0)
-      break; /* success */
-    else
+    if (bind(sockfd, ai_cur->ai_addr, ai_cur->ai_addrlen) != 0) {
       log_error(NULL, "bind: failed to bind socket (%s)", strerror(errno));
+      goto next;
+    }
 
-    /* try to enable TFO */
+    /* Try to enable TFO */
     if (conn->fl_tcp_fastopen) {
 #if defined(TCP_FASTOPEN)
       optval = 5; /* allow maximum 5 pending SYNs */
@@ -273,6 +273,9 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
 #endif
     }
 
+    break; /* Successfully bound to a suitable socket */
+
+  next:
     close(sockfd);
   }
 
@@ -668,20 +671,20 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   conn->hostname = GlobalConfig.hostname ? GlobalConfig.hostname : "0.0.0.0";
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", GlobalConfig.service_port);
+    snprintf(port, sizeof(port), "%u", GlobalConfig.servicePort);
     conn->listen_port = port;
   } else {
     conn->listen_port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->idle_timeout = GlobalConfig.idle_timeout > 0
-                           ? GlobalConfig.idle_timeout
+  conn->idle_timeout = GlobalConfig.idleTimeout > 0
+                           ? GlobalConfig.idleTimeout
                            : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
-  conn->recv_timeout = GlobalConfig.recv_timeout > 0
-                           ? GlobalConfig.recv_timeout
+  conn->recv_timeout = GlobalConfig.recvTimeout > 0
+                           ? GlobalConfig.recvTimeout
                            : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = GlobalConfig.send_timeout > 0
-                           ? GlobalConfig.send_timeout
+  conn->send_timeout = GlobalConfig.sendTimeout > 0
+                           ? GlobalConfig.sendTimeout
                            : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
 
   conn->state = SERVER_CONN_INIT;
@@ -767,9 +770,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
-      if (auth_type != GlobalConfig.auth_type) {
+      if (auth_type != GlobalConfig.authType) {
         tty_printf(get_cli_prompt(OnAuthTypeMismatch), auth_type,
-                   GlobalConfig.auth_type);
+                   GlobalConfig.authType);
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -777,8 +780,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /* Load the master password */
       if (!master_pass) {
         passwd_id = zt_auth_passwd_get(
-            GlobalConfig.passwdfile, GlobalConfig.auth_type,
-            GlobalConfig.passwd_bundle_id, passwd_id, &master_pass);
+            GlobalConfig.passwdfile, GlobalConfig.authType,
+            GlobalConfig.passwdBundleId, passwd_id, &master_pass);
       }
 
       if (conn->expected_passwd.expect &&
@@ -790,7 +793,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "could not negotiate a usable password -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
-      } else if (passwd_id < 0 && GlobalConfig.auth_type == KAPPA_AUTHTYPE_1) {
+      } else if (passwd_id < 0 && GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
         /**
          * KAPPA1 authentication failure -- this can happen due to the passwddb
          * files becoming out-of-sync so we ask the user if we may renegotiate a
@@ -812,9 +815,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         log_info(NULL, "Retrying handshake with a new password...");
 
-        passwd_id_t pwid = zt_auth_passwd_load(GlobalConfig.passwdfile,
-                                               GlobalConfig.passwd_bundle_id,
-                                               -1, &master_pass);
+        passwd_id_t pwid =
+            zt_auth_passwd_load(GlobalConfig.passwdfile,
+                                GlobalConfig.passwdBundleId, -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "failed to load a new password for hostname '%s'",
                     conn->hostname);

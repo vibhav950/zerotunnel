@@ -106,7 +106,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
 #ifdef USE_IPV6
   /* Check if the system has IPv6 enabled and the config allows it */
-  if (!GlobalConfig.flag_ipv4_only) {
+  if (!GlobalConfig.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -115,17 +115,15 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!GlobalConfig.flag_ipv6_only, use_ipv6);
+  af = zt_choose_ip_family(!GlobalConfig.flagIPv6Only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "could not choose a suitable address family");
     ret = ERR_BAD_ARGS;
     goto out;
   }
 
-  if (af == AF_UNSPEC) {
-    preferred_family =
-        GlobalConfig.preferred_family == '4' ? AF_INET : AF_INET6;
-  }
+  if (af == AF_UNSPEC)
+    preferred_family = GlobalConfig.preferredFamily == '4' ? AF_INET : AF_INET6;
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -339,8 +337,8 @@ static err_t client_tcp_conn0(zt_client_connection_t *conn,
     if (conn->fl_tcp_fastopen) {
 #if defined(TCP_FASTOPEN_CONNECT) /* Linux >= 4.11 */
       on = 1;
-      if (setsockopt(conn->sockfd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT,
-                     (void *)&on, sizeof(on)) == -1) {
+      if (setsockopt(sockfd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, (void *)&on,
+                     sizeof(on)) == -1) {
         log_error(NULL, "setsockopt: failed to set TCP_FASTOPEN_CONNECT (%s)",
                   strerror(errno));
         conn->fl_tcp_fastopen = false;
@@ -513,12 +511,12 @@ static err_t client_send(zt_client_connection_t *conn) {
   p[len++] = MSG_END_BYTE; /* end of data */
 
   if (conn->state == CLIENT_TRANSFER) {
-    if (GlobalConfig.flag_length_obfuscation) {
+    if (GlobalConfig.flagLengthObfuscation) {
       size_t pf, l, pad;
 
       /* Calculate padding to round up to next multiple of padding_factor */
       l = len - 1; /* exclude END_MARKER */
-      pf = GlobalConfig.padding_factor;
+      pf = GlobalConfig.paddingFactor;
 
       // x rounded up to a multiple of N = (x + N - 1) & ~(N - 1) when N is a
       // power of 2
@@ -528,7 +526,7 @@ static err_t client_send(zt_client_connection_t *conn) {
       len += pad;
 
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_PADDING);
-    } else if (GlobalConfig.flag_lz4_compression) {
+    } else if (GlobalConfig.flagLZ4Compression) {
       const char *rptr = (const char *)p;
       char *wptr = (char *)(MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE);
 
@@ -695,7 +693,7 @@ err_t zt_client_conn_alloc(zt_client_connection_t **conn) {
     return ERR_NULL_PTR;
 
   alloc_size = sizeof(zt_client_connection_t) + sizeof(zt_msg_t);
-  if (GlobalConfig.flag_lz4_compression)
+  if (GlobalConfig.flagLZ4Compression)
     alloc_size += ZT_MSG_XBUF_SIZE;
 
   if (!(*conn = zt_calloc(1, alloc_size)))
@@ -750,23 +748,23 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   *done = false;
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", GlobalConfig.service_port);
+    snprintf(port, sizeof(port), "%u", GlobalConfig.servicePort);
     conn->port = port;
   } else {
     conn->port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->connect_timeout = GlobalConfig.connect_timeout > 0
-                              ? GlobalConfig.connect_timeout
+  conn->connect_timeout = GlobalConfig.connectTimeout > 0
+                              ? GlobalConfig.connectTimeout
                               : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
-  conn->recv_timeout = GlobalConfig.recv_timeout > 0
-                           ? GlobalConfig.recv_timeout
+  conn->recv_timeout = GlobalConfig.recvTimeout > 0
+                           ? GlobalConfig.recvTimeout
                            : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = GlobalConfig.send_timeout > 0
-                           ? GlobalConfig.send_timeout
+  conn->send_timeout = GlobalConfig.sendTimeout > 0
+                           ? GlobalConfig.sendTimeout
                            : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
 
-  auth_type = GlobalConfig.auth_type;
+  auth_type = GlobalConfig.authType;
 
   conn->state = CLIENT_CONN_INIT;
 
@@ -799,12 +797,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
         passwd_id = zt_auth_passwd_load(
-            GlobalConfig.passwdfile, GlobalConfig.passwd_bundle_id,
+            GlobalConfig.passwdfile, GlobalConfig.passwdBundleId,
             conn->renegotiation_passwd, &master_pass);
       } else {
         passwd_id =
-            zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.auth_type,
-                               GlobalConfig.passwd_bundle_id, &master_pass);
+            zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.authType,
+                               GlobalConfig.passwdBundleId, &master_pass);
 
         if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
@@ -903,7 +901,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          * 2. Check if this password Id is available in the passwddb, and offer
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
-        if (GlobalConfig.auth_type != KAPPA_AUTHTYPE_1) {
+        if (GlobalConfig.authType != KAPPA_AUTHTYPE_1) {
           log_error(NULL, "peer sent MSG_AUTH_RETRY but auth_type!=KAPPA1");
           ret = ERR_BAD_CONTROL_FLOW;
           goto cleanup2;
