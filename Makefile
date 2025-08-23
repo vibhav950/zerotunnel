@@ -1,6 +1,7 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -I./ -DOPENSSL -DLIBOQS -O2 -march=native -fstack-protector-strong -D_FORTIFY_SOURCE=1 -Wformat -Wl,-z,relro,-z,now
-LIBS := -lcrypto -lm -loqs -lbsd -lsystemd -pthread
+CFLAGS := -Wno-pedantic -std=gnu17 -I./ -DOPENSSL -DLIBOQS -DHAVE_SQLITE3 -O2 -march=native \
+					-fstack-protector-strong -D_FORTIFY_SOURCE=1 -Wformat -Wl,-z,relro,-z,now
+LIBS := -lcrypto -lm -loqs -lbsd -lsystemd -lsqlite3 -pthread
 
 # Object files from all directories
 COMMON_OBJS = bin/log.o bin/mem.o bin/memzero.o bin/time_utils.o bin/timeout.o \
@@ -13,7 +14,8 @@ CRYPTO_OBJS = bin/cipher.o bin/cipher_ossl.o bin/aead_ossl.o \
               bin/kem.o bin/kem_kyber_oqs.o bin/kex.o bin/kex_ecc_ossl.o
 
 LIB_OBJS = bin/vcry.o bin/auth.o bin/ciphersuites.o bin/client.o bin/server.o \
-           bin/io.o bin/ip.o bin/lz4.o bin/netio.o bin/password.o bin/zt_addrinfo.o
+           bin/io.o bin/ip.o bin/lz4.o bin/netio.o bin/password.o bin/wordlist.o \
+           bin/zt_addrinfo.o
 
 RANDOM_OBJS = bin/rdrand.o bin/systemrand.o
 
@@ -148,6 +150,9 @@ bin/netio.o: lib/netio.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/password.o: lib/password.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+bin/wordlist.o: lib/wordlist.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/zt_addrinfo.o: lib/zt_addrinfo.c
