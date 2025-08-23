@@ -6,13 +6,13 @@ zerotunnel uses the KAPPA protocol to establish ephemeral session keys using a P
 
 ## TODO
 
-- [x] Complete the crypto API.
-- [x] Add support for LZ4 compression.
-- [ ] Add signal handlers to cleanup on Ctrl-C, etc.
-- [ ] Write the net utils (client and server state machines).
-- [ ] Add options parser.
+- [X] Complete the crypto API.
+- [X] Add support for LZ4 compression.
+- [X] Add signal handlers to cleanup on Ctrl-C, etc.
+- [X] Write the net utils (client and server state machines).
+- [X] Add options parser.
 - [ ] Write tests for all crypto modules.
-- [ ] Implement ciphersuites and ciphersuite negotiation.
-- [ ] Add support for seding multiple files and entire folders.
+- [X] Implement ciphersuites and ciphersuite negotiation.
+- [ ] Add support for sending multiple files and entire folders.
 - [ ] Add the ability to read the input file from stdin.
 - [ ] Multi-threaded file read/send.
