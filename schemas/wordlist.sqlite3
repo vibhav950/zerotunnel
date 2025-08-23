@@ -1,0 +1,4 @@
+CREATE TABLE wordlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    word TEXT NOT NULL
+);
