@@ -364,28 +364,90 @@ char *zt_strmemdup(const void *m, size_t n);
  *                        Miscellaneous                       *
  **************************************************************/
 
+/** Unsigned long to unsigned short */
 unsigned short zt_ultous(unsigned long val);
+
+/** Unsigned long to unsigned char */
 unsigned char zt_ultouc(unsigned long val);
+
+/** Unsigned long long to unsigned long */
 unsigned long zt_ulltoul(unsigned long long val);
+
+/** Unsigned long long to unsigned int */
 unsigned int zt_ulltoui(unsigned long long val);
+
+/** Unsigned long long to unsigned short */
 unsigned short zt_ulltous(unsigned long long val);
+
+/** Unsigned size_t to unsigned long */
 unsigned long zt_ustoul(size_t val);
+
+/** Unsigned size_t to unsigned int */
 unsigned int zt_ustoui(size_t val);
+
+/** Unsigned size_t to unsigned short */
 unsigned short zt_ustous(size_t val);
+
+/** Signed long to signed int */
 int zt_sltoi(long val);
+
+/** Signed long to unsigned int */
 unsigned int zt_sltoui(long val);
+
+/** Signed long to signed short */
 short zt_sltos(long val);
+
+/** Signed long to unsigned short */
 unsigned short zt_sltous(long val);
+
+/** Unsigned long long to signed long long */
 long long zt_ulltoll(unsigned long long val);
+
+/** Unsigned long long to signed long */
 long zt_ulltol(unsigned long long val);
+
+/** Unsigned long long to signed int */
 int zt_ulltoi(unsigned long long val);
+
+/** Signed long long to signed long */
 long zt_slltol(long long val);
+
+/** Signed long long to signed int */
 int zt_slltoi(long long val);
+
+/** Signed long long to signed short */
 short zt_slltos(long long val);
+
+/** size_t to ssize_t */
 ssize_t zt_ssztosz(size_t val);
+
+/** size_t to int */
 int zt_sztoi(size_t val);
+
+/** size_t to short */
 short zt_sztos(size_t val);
+
+/** ssize_t to unsigned int */
 unsigned int zt_ssztoui(ssize_t val);
+
+/** ssize_t to unsigned short */
 unsigned short zt_ssztous(ssize_t val);
+
+#define SIZE_KB ((off_t)1024)    /* 1 KB */
+#define SIZE_MB (1024 * SIZE_KB) /* 1 MB */
+#define SIZE_GB (1024 * SIZE_MB) /* 1 GB */
+#define SIZE_TB (1024 * SIZE_GB) /* 1 TB */
+
+/**
+ * Convert file size to size in an appropriate unit.
+ * Use `zt_filesize_unit_str()` to get the unit string.
+ */
+uint64_t zt_filesize_unit_conv(uint64_t size);
+
+/**
+ * Convert file size to appropriate unit.
+ * Use `zt_filesize_unit_conv()` to get the size in the same unit.
+ */
+const char *zt_filesize_unit_str(uint64_t size);
 
 #endif /* __DEFINES_H__ */

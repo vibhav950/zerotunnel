@@ -11,6 +11,7 @@ typedef enum {
   OnServerListening,
   OnAuthTypeMismatch,
   OnIncomingTransfer,
+  OnIncomingLiveRead,
   OnNewK0Password,
   OnNewK1PasswordFile,
   OnNewK2Password,

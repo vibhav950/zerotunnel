@@ -14,10 +14,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define SIZE_KB ((size_t)1024)   /* 1 KB */
-#define SIZE_MB (1024 * SIZE_KB) /* 1 MB */
-#define SIZE_GB (1024 * SIZE_MB) /* 1 GB */
-
 /* =================== Defines for time estimation =================== */
 
 /* Keep last 8 throughput samples (power of 2 for efficiency) */

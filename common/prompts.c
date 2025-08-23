@@ -37,6 +37,8 @@ static const char *cli_prompts[] = {
         CAUTIONPROMPT("Mismatch in authentication type... cannot proceed.\n"),
     [OnIncomingTransfer] =
         GENERICPROMPT("\nIncoming file transfer (name = %s, size = %jd %s)\n"),
+    [OnIncomingLiveRead] = GENERICPROMPT(
+        "\nIncoming live read file. Transfer will be limited to %llu %s.\n"),
     [OnNewK0Password] = GENERICPROMPT("\nNew password: %s\n Your correspondent "
                                       "must enter the same password."),
     [OnNewK1PasswordFile] = GENERICPROMPT("\nPassword bundle saved to %s\n"),
