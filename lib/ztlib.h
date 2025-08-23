@@ -10,10 +10,11 @@
 struct config {
   char            
     *hostname,                  /* peer hostname -- can be a FQDN or IP address */
-    *passwdfile,                /* location of the password database file */
+    *passwdFile,                /* location of the password database file */
     *ciphersuite,               /* ciphersuite cannonical name or alias */
-    *filepath,                  /* complete target file path */
-    *passwdBundleId;            /* bundle identifier for KAPPA1 auth type */
+    *filePath,                  /* complete target file path */
+    *passwdBundleId,            /* bundle identifier for KAPPA1 auth type */
+    *wordlistFile;              /* path to the phonetic wordlist file */
   uint32_t
     paddingFactor;              /* padding factor of the form: 2^n; 1<=n<=16 */
   uint16_t

@@ -487,7 +487,7 @@ static err_t client_send(zt_client_connection_t *conn) {
   ASSERT(conn->msgbuf);
 
   if (MSG_DATA_LEN(conn->msgbuf) > ZT_MSG_MAX_RW_SIZE) {
-    log_error(NULL, "Message is too big (%zu bytes)", MSG_DATA_LEN(conn->msgbuf));
+    log_error(NULL, "Message is too big (%u bytes)", MSG_DATA_LEN(conn->msgbuf));
     return ERR_REQUEST_TOO_LARGE;
   }
 
@@ -775,11 +775,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
         passwd_id =
-            zt_auth_passwd_load(GlobalConfig.passwdfile, GlobalConfig.passwdBundleId,
+            zt_auth_passwd_load(GlobalConfig.passwdFile, GlobalConfig.passwdBundleId,
                                 conn->renegotiation_passwd, &master_pass);
       } else {
-        passwd_id = zt_auth_passwd_new(GlobalConfig.passwdfile, GlobalConfig.authType,
-                                       GlobalConfig.passwdBundleId, &master_pass);
+        passwd_id = zt_auth_passwd_new(GlobalConfig.passwdFile, GlobalConfig.wordlistFile,
+                                       GlobalConfig.authType, GlobalConfig.passwdBundleId,
+                                       GlobalConfig.passwordWords, &master_pass);
 
         if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
@@ -1005,7 +1006,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
        */
-      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filepath, FIO_RDONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filePath, FIO_RDONLY)) !=
           ERR_SUCCESS) {
         goto cleanup2;
       }

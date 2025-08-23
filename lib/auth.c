@@ -27,7 +27,10 @@
 
 extern char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits);
 
-extern char *auth_passwd_generate(int len, char *buf, size_t bufsize);
+extern char *auth_passwd_generate(int len, char *buf, size_t bufsize, bool ascii);
+
+extern char *auth_passwd_from_wordlist(const char *wordlistpath, unsigned short count,
+                                       char sep, bool have_digit);
 
 static char *auth_passwd_prompt(const char *prompt, int flags ATTRIBUTE_UNUSED) {
   int rppflags;
@@ -109,6 +112,25 @@ static ssize_t auth_sha256_idhash_hex(const char *id, uint8_t **idhash) {
   return len ? (ssize_t)len : -1;
 }
 
+/**
+ * Load a password from a password database file.
+ *
+ * @param[in] passwdfile Path to the password file.
+ * @param[in] bundle_id The Id of the bundle to be loaded from the file.
+ * @param[in] pwid The Id of the password to be loaded.
+ * @param[out] passwd Pointer to the loaded password structure.
+ * @return The positive Id of the loaded password or -1 on failure.
+ *
+ * This function will parse a zerotunnel password file, and try to load a password that
+ * satisfies the given parameters. If a password is successfully found, its corresponding
+ * entry in the database is marked deleted and the password is overwritten with '0'
+ * characters. This means, if this function successfully loads a password, said password
+ * is permanently deleted from the database.
+ *
+ * If a password is found, it is loaded into a `struct passwd` and @p passwd is set to
+ * point the same. Once done, the user MUST remember to safely free this memory by calling
+ * `zt_auth_passwd_free()`.
+ */
 passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
                                 passwd_id_t pwid, struct passwd **passwd) {
   int fd;
@@ -122,7 +144,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
   passwd_id_t pwid_cmp = -1;
   bool found = false;
 
-  if (passwdfile == NULL || bundle_id == NULL || passwd == NULL || pwid == 0)
+  if (passwdfile == NULL || bundle_id == NULL || passwd == NULL || pwid <= 0)
     return -1;
 
   if ((fd = open(passwdfile, O_RDWR)) < 0) {
@@ -271,6 +293,25 @@ cleanup:
   return pwid_cmp;
 }
 
+/**
+ * Delete one or more passwords from the password file.
+ *
+ * @param[in] passwdfile Path to the password file.
+ * @param[in] bundle_id  The Id of the bundle to delete passwords for.
+ * @param[in] pwid       The Id of the password to delete (or -1 to delete all).
+ * @return               -1 on failure.
+ *
+ * @warning A return value of -1 means certain failure, however a return value of 0
+ * indicates a successful parse and not that a password was deleted.
+ *
+ * This function will parse a zerotunnel password file, and try to delete one or more
+ * passwords that match the given parameters. If @p pwid is a positive password Id whose
+ * corresponding entry exists in the database for the given @p bundle_id then the password
+ * will be marked used and overwritten with '0' characters.
+ *
+ * A @p pwid value of `-1` will delete all passwords for the given @p bundle_id in the
+ * same way described above.
+ */
 int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
                           passwd_id_t pwid) {
   int ret = -1;
@@ -388,7 +429,29 @@ cleanup:
   return ret;
 }
 
-struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic) {
+/**
+ * Generate a password string.
+ *
+ * @param[in] wordlistfile Path to a custom SQLite3 wordlist database file. If NULL, the
+ * default PGP wordlist will be used.
+ * @param[in] count Number of words (if using phonetic) or length in characters of the
+ * desired password.
+ * @param[in] phonetic If true, generate a phonetic password.
+ * @return A pointer to the newly created password structure, or NULL on failure.
+ *
+ * - If @p wordlistfile is not NULL and @p phonetic is true, this function returns a
+ *   password made up of @p count words chosen randomly from the wordlist. The
+ *   wordlist DB must be an SQLite3 database file with the expected standard schema.
+ * - If @p wordlistfile is NULL and @p phonetic is true, this function returns a
+ *   password made up of @p count words chosen from the PGP wordlist.
+ * - If @p phonetic is false, this function returns a password made up of @p count
+ *   random ASCII characters.
+ *
+ * The returned password struct must be safely freed after use by calling
+ * `zt_auth_passwd_free()`.
+ */
+struct passwd *zt_auth_passwd_single_new(const char *wordlistfile, unsigned short count,
+                                         bool phonetic) {
   char *pw;
   struct passwd *passwd;
 
@@ -397,10 +460,14 @@ struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic) {
   else if (count < 12 || count > 256)
     return NULL;
 
-  if (phonetic)
-    pw = auth_passwd_generate_phonetic(count, 0, true);
-  else
-    pw = auth_passwd_generate(count, NULL, 0);
+  if (phonetic) {
+    if (wordlistfile)
+      pw = auth_passwd_from_wordlist(wordlistfile, count, 0, true);
+    else
+      pw = auth_passwd_generate_phonetic(count, 0, true);
+  } else {
+    pw = auth_passwd_generate(count, NULL, 0, true);
+  }
   if (!pw)
     return NULL;
 
@@ -417,8 +484,43 @@ struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic) {
   return passwd;
 }
 
-passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
-                               const char *bundle_id, struct passwd **passwd) {
+/**
+ * Generate a new password for the current session.
+ *
+ * @param[in] passwdfile Path to the password DB file.
+ * @param[in] wordlistfile Path to the wordlist DB file.
+ * @param[in] auth_type Authentication type.
+ * @param[in] bundle_id Bundle Id.
+ * @param[in] n_words Number of words.
+ * @param[out] passwd Pointer to a pointer to the resulting password structure.
+ * @return
+ *  - A positive password Id if the password is loaded from a zerotunnel password file.
+ *  - 0 upon successful generation of a KAPPA0/2 password.
+ *  - -1 on error.
+ *
+ * This function is intended to be called by the handshake initiator.
+ *
+ * The used parameter set is determined by the value of @p auth_type
+ * - If @p auth_type is KAPPA0, the user is prompted for the pre-shared password from the
+ *   tty. In this case @p passwdfile, @p bundle_id, and @p n_words are ignored.
+ *
+ * - If @p auth_type is KAPPA1, a password is loaded from the zerotunnel password file.
+ *   In this case @p passwdfile and @p bundle_id must be provided but @p n_words is
+ *   ignored.
+ *
+ * - If @p auth_type is KAPPA2, a one-time phonetic password will be generated.
+ *   If @p wordlistfile is not NULL, the words will be chosen from the given SQLite3
+ *   password DB file which must follow the expected schema. Otherwise, the words will be
+ *   chosen from the default PGP wordlist. The @p n_words parameter determines the number
+ *   of words to generate. In this case @p passwdfile and @p bundle_id are ignored.
+ *
+ * This way of conditionally choosing required parameters is probably an anti-pattern, but
+ * these are supposed to be passed as config variables and hence the options parser must
+ * have taken care of them.
+ */
+passwd_id_t zt_auth_passwd_new(const char *passwdfile, const char *wordlistfile,
+                               auth_type_t auth_type, const char *bundle_id, int n_words,
+                               struct passwd **passwd) {
   char *pw;
 
   if ((auth_type == KAPPA_AUTHTYPE_1) && (!passwdfile || !bundle_id))
@@ -438,10 +540,14 @@ passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
   if (!*passwd)
     return -1;
 
-  if (auth_type == KAPPA_AUTHTYPE_0)
+  if (auth_type == KAPPA_AUTHTYPE_0) {
     pw = auth_passwd_prompt("\nEnter password: ", 0);
-  else if (auth_type == KAPPA_AUTHTYPE_2)
-    pw = auth_passwd_generate_phonetic(GlobalConfig.passwordWords, 0, 1);
+  } else if (auth_type == KAPPA_AUTHTYPE_2) {
+    if (wordlistfile)
+      pw = auth_passwd_from_wordlist(wordlistfile, n_words, 0, true);
+    else
+      pw = auth_passwd_generate_phonetic(n_words, 0, true);
+  }
 
   if (!pw)
     goto err;
@@ -458,6 +564,32 @@ err:
   return -1;
 }
 
+/**
+ * Get the session password.
+ *
+ * @param[in] passwdfile Path to the password DB file.
+ * @param[in] auth_type Authentication type.
+ * @param[in] bundle_id Bundle Id.
+ * @param[in] pwid Password Id.
+ * @param[out] passwd Pointer to a pointer to the resulting password structure.
+ * @return
+ *  - A positive password Id if the password is loaded from a zerotunnel password file.
+ *  - 0 upon successful retrieval of the password.
+ *  - -1 on error.
+ *
+ * This function is intended to be called by the handshake responder.
+ *
+ * The usable set of parameters is determined by the value of @p auth_type
+ * - If @p auth_type is KAPPA0, the user is prompted for the pre-shared password from the
+ *   tty. In this case @p passwdfile, @p bundle_id, and @p pwid are ignored.
+ *
+ * - If @p auth_type is KAPPA1, a password is loaded from the zerotunnel password file.
+ *   In this case @p passwdfile, @p bundle_id, and @p pwid must be provided. If a password
+ *   with the given @p pwid is not found, the function fails.
+ *
+ * - If @p auth_type is KAPPA2, the user is prompted for the one-time password generated
+ *   by the initiator. In this case @p passwdfile, @p bundle_id, and @p pwid are ignored.
+ */
 passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
                                const char *bundle_id, passwd_id_t pwid,
                                struct passwd **passwd) {
@@ -495,6 +627,18 @@ passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
   }
 }
 
+/**
+ * Create a new password database file.
+ *
+ * @param[in] fd An open file descriptor for the password file.
+ * @param[in] bundle_id Bundle Id for the password bundle.
+ * @param[in] password_len Length of the passwords in the bundle.
+ * @param[in] n_passwords Number of passwords in the bundle.
+ * @return 0 on success, -1 on failure.
+ *
+ * The caller must ensure that the @p fd is opened in writeable mode with adequately
+ * restrictive permissions.
+ */
 int zt_auth_passwd_db_new(int fd, const char *bundle_id, unsigned short password_len,
                           unsigned short n_passwords) {
   int ret = 0;
@@ -532,7 +676,7 @@ int zt_auth_passwd_db_new(int fd, const char *bundle_id, unsigned short password
   zt_free(idhash_hex);
 
   for (int pwidx = 1; pwidx <= n_passwords; ++pwidx) {
-    if (auth_passwd_generate(password_len, buf, sizeof(buf)) == NULL) {
+    if (auth_passwd_generate(password_len, buf, sizeof(buf), false) == NULL) {
       ret = -1;
       goto cleanup;
     }
@@ -557,7 +701,13 @@ cleanup:
   return ret;
 }
 
-/** Safely free passwords */
+/**
+ * Safely free allocated passwords.
+ *
+ * Example usage:
+ *  zt_auth_passwd_free(pass1, NULL);
+ *  zt_auth_passwd_free(pass1, pass2, NULL);
+ */
 void zt_auth_passwd_free(struct passwd *pass, ...) {
   va_list args;
 

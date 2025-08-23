@@ -113,10 +113,10 @@ static const char *PGP_WORDLIST_ODD[N_WORDS_PER_LIST] = {
  *
  * @param[in] count The number of words to include in the password.
  * @param[in] sep The separator to use between words.
- * @param[in] have_digits Whether to include digits in the password.
+ * @param[in] have_digit Whether to include a digit in the password.
  * @return A pointer to the generated password string or NULL on failure.
  */
-char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
+char *auth_passwd_generate_phonetic(int count, char sep, bool have_digit) {
   bool valid = false;
   char *pass;
   char buf[(9 * 10) + (11 * 10) + 21];
@@ -127,7 +127,7 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
 
   uint8_t randbytes[count];
 
-  // The separator can only be a printable special character
+  /* The separator can only be a printable special character */
   if (sep == 0) /* use the default separator */
     valid = true;
   else if (sep >= 33 /* ! */ && sep <= 47 /* / */)
@@ -147,7 +147,7 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
 
   zt_systemrand_bytes(randbytes, count);
 
-  digit_idx = have_digits ? zt_rand_ranged(count - 1) : count;
+  digit_idx = have_digit ? zt_rand_ranged(count - 1) : count;
 
   int j = 0;
   for (int i = 0; i < count; i++) {
@@ -184,9 +184,11 @@ char *auth_passwd_generate_phonetic(int count, char sep, bool have_digits) {
  * @param[in] len - length of the password excluding null character.
  * @param[in] buf - a buffer to hold the generated password at least as big as
  * len + 1. If NULL, memory will be allocated.
+ * @param[in] bufsize - size of the provided buffer. Must be 0 if @p buf is NULL.
+ * @param[in] ascii - if true, generate a password using only ASCII characters.
  * @return A pointer to the generated password string or NULL on failure.
  */
-char *auth_passwd_generate(int len, char *buf, size_t bufsize) {
+char *auth_passwd_generate(int len, char *buf, size_t bufsize, bool ascii) {
   char *pass;
 
   if (len < 12 || len > 256)
@@ -203,9 +205,16 @@ char *auth_passwd_generate(int len, char *buf, size_t bufsize) {
     pass = buf;
   }
 
-  if (zt_rand_charset(pass, len + 1, NULL, 0)) {
-    zt_free(pass);
-    return NULL;
+  if (ascii) {
+    if (zt_rand_charset(pass, len + 1, NULL, 0))
+      goto err;
+  } else {
+    zt_systemrand_bytes((uint8_t *)pass, len);
+    pass[len] = 0;
   }
+
   return pass;
+err:
+  zt_free(pass);
+  return NULL;
 }

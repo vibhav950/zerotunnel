@@ -732,7 +732,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /* Load the master password */
       if (!master_pass) {
         passwd_id =
-            zt_auth_passwd_get(GlobalConfig.passwdfile, GlobalConfig.authType,
+            zt_auth_passwd_get(GlobalConfig.passwdFile, GlobalConfig.authType,
                                GlobalConfig.passwdBundleId, passwd_id, &master_pass);
       }
 
@@ -766,7 +766,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_info(NULL, "Retrying handshake with a new password...");
 
         passwd_id_t pwid = zt_auth_passwd_load(
-            GlobalConfig.passwdfile, GlobalConfig.passwdBundleId, -1, &master_pass);
+            GlobalConfig.passwdFile, GlobalConfig.passwdBundleId, -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "Failed to load a new password");
           ret = ERR_HSHAKE_ABORTED;
@@ -998,8 +998,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       err_t rv;
       off_t size, remaining;
 
-      if ((ret = zt_fio_open(&fio, GlobalConfig.filepath, FIO_WRONLY)) != ERR_SUCCESS) {
-        log_error(NULL, "Failed to open file '%s' for writing", GlobalConfig.filepath);
+      if ((ret = zt_fio_open(&fio, GlobalConfig.filePath, FIO_WRONLY)) != ERR_SUCCESS) {
+        log_error(NULL, "Failed to open file '%s' for writing", GlobalConfig.filePath);
         goto cleanup2;
       }
 
@@ -1053,19 +1053,19 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         off_t size;
 
         if (MSG_TYPE(conn->msgbuf) != MSG_DONE) {
-          log_error(NULL, "Transfer was capped at the limit of %lld%s",
+          log_error(NULL, "Transfer was capped at the limit of %lu%s",
                     zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize),
                     zt_filesize_unit_str(GlobalConfig.maxFileRecvSize));
           goto cleanupfile;
         }
 
         if ((ret = zt_fio_trim(&fio, &size)) != ERR_SUCCESS) {
-          log_error(NULL, "Failed to trim file '%s' (%s)", GlobalConfig.filepath,
+          log_error(NULL, "Failed to trim file '%s' (%s)", GlobalConfig.filePath,
                     zt_error_str(ret));
           goto cleanupfile;
         }
 
-        log_info(NULL, "Transfer completed after %lld%s of data",
+        log_info(NULL, "Transfer completed after %lu%s of data",
                  zt_filesize_unit_conv(size), zt_filesize_unit_str(size));
       }
 
@@ -1101,8 +1101,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   } /* while(1) */
 
 cleanupfile:
-  if (strcmp(GlobalConfig.filepath, "-"))
-    zt_file_delete(GlobalConfig.filepath);
+  if (strcmp(GlobalConfig.filePath, "-"))
+    zt_file_delete(GlobalConfig.filePath);
 
 cleanup2:
   zt_fio_close(&fio);

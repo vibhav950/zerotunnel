@@ -47,10 +47,12 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
 int zt_auth_passwd_delete(const char *passwdfile, const char *bundle_id,
                           passwd_id_t pwid);
 
-struct passwd *zt_auth_passwd_single_new(unsigned short count, bool phonetic);
+struct passwd *zt_auth_passwd_single_new(const char *wordlistfile, unsigned short count,
+                                         bool phonetic);
 
-passwd_id_t zt_auth_passwd_new(const char *passwdfile, auth_type_t auth_type,
-                               const char *bundle_id, struct passwd **passwd);
+passwd_id_t zt_auth_passwd_new(const char *passwdfile, const char *wordlistfile,
+                               auth_type_t auth_type, const char *bundle_id, int n_words,
+                               struct passwd **passwd);
 
 passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
                                const char *bundle_id, passwd_id_t pwid,
