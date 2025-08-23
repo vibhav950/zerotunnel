@@ -25,10 +25,6 @@ typedef enum {
   FIO_RDAPPEND,   /* read and append */
 } zt_fio_mode_t;
 
-#define SIZE_KB ((off_t)1024)    /* 1 KB */
-#define SIZE_MB (1024 * SIZE_KB) /* 1 MB */
-#define SIZE_GB (1024 * SIZE_MB) /* 1 GB */
-
 #define FIO_FL_OPEN     (1U << 0)  /* open file */
 #define FIO_FL_WRITE    (1U << 1)  /* writable file */
 #define FIO_FL_READ     (1U << 2)  /* readable file */
@@ -74,10 +70,13 @@ void zt_fio_close(zt_fio_t *fio);
 err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info);
 
 // err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize);
+
 err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread);
 
 err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size);
 
 err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize);
+
+err_t zt_fio_trim(zt_fio_t *fio, off_t *size);
 
 #endif /* __IO_H__ */

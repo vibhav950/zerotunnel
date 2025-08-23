@@ -587,28 +587,6 @@ out:
   return ret;
 }
 
-static inline uint64_t filesize_unit_conv(uint64_t size) {
-  if (size > SIZE_GB)
-    return size / SIZE_GB;
-  else if (size > SIZE_MB)
-    return size / SIZE_MB;
-  else if (size > SIZE_KB)
-    return size / SIZE_KB;
-  else
-    return size; /* in bytes */
-}
-
-static inline const char *filesize_unit_str(uint64_t size) {
-  if (size > SIZE_GB)
-    return "GB";
-  else if (size > SIZE_MB)
-    return "MB";
-  else if (size > SIZE_KB)
-    return "KB";
-  else
-    return "bytes"; /* in bytes */
-}
-
 err_t zt_server_conn_alloc(zt_server_connection_t **conn) {
   size_t alloc_size;
 
@@ -640,7 +618,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
                     bool *done) {
   err_t ret = ERR_SUCCESS;
   auth_type_t auth_type;
-  zt_fio_t *fileptr;
+  zt_fio_t fio;
   char port[6];
 
   if (!conn || !done)
@@ -714,13 +692,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       passwd_id_t passwd_id;
       static struct passwd *master_pass = NULL;
 
-      if (!conn->pending) {
+      if (!conn->fl_pending) {
         if (server_recv(conn, MSG_HANDSHAKE) != ERR_SUCCESS) {
           ret = ERR_TCP_RECV;
           goto cleanup2;
         }
       }
-      conn->pending = false;
+      conn->fl_pending = false;
 
       rcvlen = MSG_DATA_LEN(conn->msgbuf);
       rcvbuf = MSG_DATA_PTR(conn->msgbuf);
@@ -905,7 +883,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       }
 
       if (MSG_TYPE(conn->msgbuf) == MSG_HANDSHAKE) {
-        conn->pending = true;
+        conn->fl_pending = true;
         goto retryhandshake;
       }
 
@@ -960,7 +938,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      if (!conn->pending) {
+      if (!conn->fl_pending) {
         /* There was a verification failure on our end, ask the initiator to
          * retry authentication*/
         MSG_MAKE(conn->msgbuf, MSG_AUTH_RETRY, NULL, 0, 0);
@@ -977,6 +955,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
 
     case SERVER_COMMIT: {
+      off_t size;
+      const char *unit;
+
       if ((ret = server_recv(conn, MSG_METADATA)) != ERR_SUCCESS)
         goto cleanup2;
 
@@ -988,15 +969,26 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       memcpy(PTRV(&conn->fileinfo), MSG_DATA_PTR(conn->msgbuf), sizeof(zt_fileinfo_t));
 
-      conn->fileinfo.size = ntoh64(conn->fileinfo.size);
-      conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
+      if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ) {
+        size = zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize);
+        unit = zt_filesize_unit_str(GlobalConfig.maxFileRecvSize);
 
-      off_t filesize = filesize_unit_conv(conn->fileinfo.size);
-      const char *unit = filesize_unit_str(conn->fileinfo.size);
+        tty_printf(get_cli_prompt(OnIncomingLiveRead), size, unit);
+      } else {
+        size = zt_filesize_unit_conv(conn->fileinfo.size);
+        unit = zt_filesize_unit_str(conn->fileinfo.size);
 
-      tty_printf(get_cli_prompt(OnIncomingTransfer), conn->fileinfo.name, filesize, unit);
+        tty_printf(get_cli_prompt(OnIncomingTransfer), conn->fileinfo.name, size, unit);
+      }
+
       if (!tty_get_answer_is_yes(get_cli_prompt(OnFileTransferRequest)))
         goto cleanup2;
+
+      if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ)
+        conn->fl_live_read = true;
+
+      conn->fileinfo.size = ntoh64(conn->fileinfo.size);
+      conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_TRANSFER);
       ATTRIBUTE_FALLTHROUGH;
@@ -1004,54 +996,80 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
     case SERVER_TRANSFER: {
       err_t rv;
-      zt_fio_t fileptr;
-      off_t remaining;
+      off_t size, remaining;
 
-      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filepath, FIO_WRONLY)) !=
-          ERR_SUCCESS) {
+      if ((ret = zt_fio_open(&fio, GlobalConfig.filepath, FIO_WRONLY)) != ERR_SUCCESS) {
         log_error(NULL, "Failed to open file '%s' for writing", GlobalConfig.filepath);
         goto cleanup2;
       }
 
-      if ((ret = zt_fio_write_allocate(&fileptr, conn->fileinfo.size)) != ERR_SUCCESS) {
-        log_error(NULL, "Not enough disk space (need %zu bytes)", conn->fileinfo.size);
-        zt_fio_close(&fileptr);
+      size = conn->fl_live_read ? GlobalConfig.maxFileRecvSize : conn->fileinfo.size;
+
+      if ((ret = zt_fio_write_allocate(&fio, size)) != ERR_SUCCESS) {
+        log_error(NULL, "Not enough disk space (need %zu bytes)", size);
+        zt_fio_close(&fio);
         goto cleanup2;
       }
 
       if (zt_progressbar_init() != 0)
         log_error(NULL, "Failed to create progress bar");
 
-      remaining = conn->fileinfo.size;
+      remaining = size;
       zt_progressbar_begin(conn->peer.ip, conn->fileinfo.name, remaining);
 
       while (remaining > 0) {
         off_t writelen;
 
-        if ((ret = server_recv(conn, MSG_FILEDATA)) != ERR_SUCCESS) {
-          zt_fio_close(&fileptr);
+        if ((ret = server_recv(conn, MSG_FILEDATA | MSG_DONE)) != ERR_SUCCESS) {
+          zt_fio_close(&fio);
           zt_progressbar_complete();
           zt_progressbar_destroy();
-          goto cleanup2;
+          goto cleanupfile;
+        }
+
+        if (MSG_TYPE(conn->msgbuf) == MSG_DONE) {
+          conn->fl_pending = true;
+          break;
         }
 
         writelen = MIN(remaining, MSG_DATA_LEN(conn->msgbuf));
-        rv = zt_fio_write(&fileptr, MSG_DATA_PTR(conn->msgbuf), writelen);
+        rv = zt_fio_write(&fio, MSG_DATA_PTR(conn->msgbuf), writelen);
         if (rv != ERR_SUCCESS)
           break;
 
         zt_progressbar_update(writelen);
         remaining -= writelen;
       }
-      zt_fio_close(&fileptr);
       zt_progressbar_complete();
       zt_progressbar_destroy();
 
-      if (remaining) {
+      if (!conn->fl_live_read && remaining) {
         log_error(NULL, "Failed to write file to disk (%s)", zt_error_str(rv));
         ret = rv;
-        goto cleanup2;
+        goto cleanupfile;
       }
+
+      if (conn->fl_live_read) {
+        off_t size;
+
+        if (MSG_TYPE(conn->msgbuf) != MSG_DONE) {
+          log_error(NULL, "Transfer was capped at the limit of %lld%s",
+                    zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize),
+                    zt_filesize_unit_str(GlobalConfig.maxFileRecvSize));
+          goto cleanupfile;
+        }
+
+        if ((ret = zt_fio_trim(&fio, &size)) != ERR_SUCCESS) {
+          log_error(NULL, "Failed to trim file '%s' (%s)", GlobalConfig.filepath,
+                    zt_error_str(ret));
+          goto cleanupfile;
+        }
+
+        log_info(NULL, "Transfer completed after %lld%s of data",
+                 zt_filesize_unit_conv(size), zt_filesize_unit_str(size));
+      }
+
+      zt_fio_close(&fio);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_DONE);
       ATTRIBUTE_FALLTHROUGH;
@@ -1060,8 +1078,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     case SERVER_DONE: {
       bool errfl = false;
 
-      if ((ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS)
+      if (!conn->fl_pending && (ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS)
         goto cleanupfile;
+      conn->fl_pending = false;
 
       MSG_MAKE(conn->msgbuf, MSG_DONE, NULL, 0, 0);
 
@@ -1082,9 +1101,12 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   } /* while(1) */
 
 cleanupfile:
-  zt_file_delete(GlobalConfig.filepath);
+  if (strcmp(GlobalConfig.filepath, "-"))
+    zt_file_delete(GlobalConfig.filepath);
 
 cleanup2:
+  zt_fio_close(&fio);
+
   vcry_module_release();
 
   shutdown(conn->peer.fd, SHUT_RDWR);

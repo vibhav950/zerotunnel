@@ -61,7 +61,7 @@ typedef struct _zt_server_connection_st {
     passwd_id_t id;                 /* expected passwd Id after renegotiation */
   } expected_passwd;
   zt_fileinfo_t
-    fileinfo;                       /* file payload info */
+    fileinfo;                       /* file information */
   int
     auth_retries;                   /* number of handshake retries (=0 on first attempt) */
   int
@@ -71,11 +71,11 @@ typedef struct _zt_server_connection_st {
     send_timeout,                   /* send timeout (ms) */
     recv_timeout;                   /* recv timeout (ms) */
   bool
-    pending;                        /* unprocessed message in buffer */
-  bool
     fl_tcp_fastopen,                /* enable TCP Fast Open (RFC 7413) on the listening socket */
     fl_tcp_nodelay,                 /* enable TCP_NODELAY on the listening socket */
-    fl_explicit_port;               /* override default service port */
+    fl_explicit_port,               /* override default service port */
+    fl_pending,                     /* unprocessed message in buffer */
+    fl_live_read;                   /* ongoing live read */
 } zt_server_connection_t;
 // clang-format on
 

@@ -31,8 +31,8 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
   if (mode & ZT_IO_WRITABLE)
     pollfd.events |= POLLOUT;
 
+  rc = 0;
   if ((rc = poll(&pollfd, 1, timeout_msec)) > 0) {
-    rc = 0;
     if (pollfd.revents & POLLIN)
       rc |= ZT_IO_READABLE;
     if (pollfd.revents & POLLOUT)
@@ -71,8 +71,8 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
     goto cleanup;
   }
 
+  rc = 0;
   if ((rc = epoll_wait(epfd, events, 1, timeout_msec)) > 0) {
-    rc = 0;
     if (events[0].events & EPOLLIN)
       rc |= ZT_IO_READABLE;
     if (events[0].events & EPOLLOUT)
@@ -244,6 +244,19 @@ off_t zt_file_getsize(int fd) {
 #define FIO_FL_SET(fio, flag) (fio->flags |= (flag))
 #define FIO_FL_CLR(fio, flag) (fio->flags &= ~(flag))
 
+static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
+  ASSERT(fio);
+
+  fio->fd = -1;
+  fio->path = NULL;
+  fio->flags = 0;
+  fio->size = 0;
+  fio->offset = 0;
+  fio->_prev = NULL;
+  fio->_prevsize = 0;
+  fio->_pa_chunk_size = 0;
+}
+
 /**
  * @param[in] fio An fio structure to be initialized.
  * @param[in] filepath The path of the file to open.
@@ -270,6 +283,8 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
 
   if (!fio || !filepath)
     return ERR_NULL_PTR;
+
+  _reset_fio(fio);
 
   if (!strcmp(filepath, "-")) {
     switch (mode) {
@@ -320,7 +335,7 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
     return ERR_BAD_ARGS;
   }
 
-  /** lock the file */
+  /** Lock the file */
   fl.l_type = (mode == FIO_RDONLY) ? F_RDLCK : F_WRLCK;
   fl.l_start = 0;
   fl.l_whence = SEEK_SET;
@@ -333,7 +348,6 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
 
   size = zt_file_getsize(fd);
 
-  zt_memset(fio, 0, sizeof(zt_fio_t));
   fio->fd = fd;
   fio->size = size;
   fio->path = zt_strdup(filepath);
@@ -379,8 +393,7 @@ void zt_fio_close(zt_fio_t *fio) {
       close(fio->fd);
       zt_free(fio->path);
     }
-    zt_memset(fio, 0, sizeof(zt_fio_t));
-    fio->fd = -1;
+    _reset_fio(fio);
   }
 }
 
@@ -400,20 +413,23 @@ err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
   if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN)))
     return ERR_BAD_ARGS;
 
-  if (unlikely(fio->fd < 3))
-    return ERR_INVALID;
+  if (fio->fd >= 3) {
+    p = basename(fio->path);
+    /** Sanity check; this should never happen with an open fio */
+    if (unlikely((p[0] == '/') || ((p[0] == '.') && (p[1] == '\0')) ||
+                 ((p[0] == '.') && (p[1] == '.') && (p[2] == '\0')))) {
+      return ERR_BAD_ARGS;
+    }
+    strncpy(info->name, p, NAME_MAX);
+    info->name[NAME_MAX] = '\0';
 
-  p = basename(fio->path);
-  /** Sanity check; this should never happen with an open fio */
-  if (unlikely((p[0] == '/') || ((p[0] == '.') && (p[1] == '\0')) ||
-               ((p[0] == '.') && (p[1] == '.') && (p[2] == '\0')))) {
-    return ERR_BAD_ARGS;
+    info->size = (uint64_t)fio->size;
+    info->reserved = 0;
+  } else {
+    info->name[0] = '\0';
+    info->size = 0;
+    info->reserved = 0;
   }
-  strncpy(info->name, p, NAME_MAX);
-  info->name[NAME_MAX] = '\0';
-
-  info->size = (uint64_t)fio->size;
-  info->reserved = 0;
 
   return ERR_SUCCESS;
 }
@@ -596,5 +612,37 @@ err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
   }
 
   fio->offset += rc;
+  return ERR_SUCCESS;
+}
+
+/**
+ * @param[in] fio An fio opened in one of the writeable modes.
+ * @param[out] size Set to the current size of the file after trimming.
+ * @return An `err_t` status code.
+ *
+ * Trims the file represented by @p fio to the current offset.
+ *
+ * @note For a file whose allocated size was greater than the sum of all
+ *       writes through this @p fio, this function will trim the file to
+ *       the current offset from the writes.
+ */
+err_t zt_fio_trim(zt_fio_t *fio, off_t *size) {
+  if (unlikely(!fio))
+    return ERR_NULL_PTR;
+
+  if (!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_WRITE))
+    return ERR_INVALID;
+
+  if (fio->fd < 3)
+    return ERR_INVALID;
+
+  if (ftruncate(fio->fd, fio->offset) != 0) {
+    log_error(NULL, "Failed to truncate file '%s' (%s)", fio->path, strerror(errno));
+    return ERR_INVALID;
+  }
+
+  if (size)
+    *size = fio->offset;
+
   return ERR_SUCCESS;
 }

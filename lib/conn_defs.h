@@ -54,6 +54,7 @@ enum {
 enum {
   MSG_FL_COMPRESSION = (1 << 0), /* Message is compressed */
   MSG_FL_PADDING     = (1 << 1), /* Message is padded */
+  MSG_FL_LIVE_READ   = (1 << 2), /* Live read message */
 };
 
 typedef uint8_t zt_msg_type_t;

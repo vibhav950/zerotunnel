@@ -999,6 +999,8 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     }
 
     case CLIENT_OFFER: {
+      int setflags;
+
       /**
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
@@ -1016,7 +1018,10 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       fileinfo.size = hton64(fileinfo.size);
       fileinfo.reserved = hton32(fileinfo.reserved);
 
-      MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t), 0);
+      setflags = GlobalConfig.flagLiveRead ? MSG_FL_LIVE_READ : 0;
+
+      MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t),
+               setflags);
 
       fileinfo.size = ntoh64(fileinfo.size);
       fileinfo.reserved = ntoh32(fileinfo.reserved);
