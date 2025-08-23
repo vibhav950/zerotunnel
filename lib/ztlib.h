@@ -20,6 +20,8 @@ struct config {
     servicePort;                /* explicit service port number */
   char
     preferredFamily;            /* preferred address family: '4' for IPv4, '6' for IPv6 */
+  long
+    maxFileRecvSize;            /* maximum number of bytes to receive on an incoming transfer */
   int
     passwordBundleSize,         /* number of passwords in a bundle */
     passwordChars,              /* number of UTF-8 chars in a password */

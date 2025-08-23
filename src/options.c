@@ -143,6 +143,44 @@ static int parse_uint16(option_t *opt, const char *val, bool invert ATTRIBUTE_UN
   return -1;
 }
 
+static int parse_numbytes(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+  ASSERT(opt);
+  char *endptr;
+  unsigned long long nbytes = strtoull(val, &endptr, 10);
+  if (endptr == val) {
+    log_error(NULL, "Invalid number of bytes: '%s'", val);
+    return -1;
+  }
+  switch (tolower((unsigned char)*endptr)) {
+  case 'g':
+    nbytes *= SIZE_GB;
+    endptr++;
+    break;
+  case 'm':
+    nbytes *= SIZE_MB;
+    endptr++;
+    break;
+  case 'k':
+    nbytes *= SIZE_KB;
+    endptr++;
+    break;
+  default:
+    break;
+  }
+  if (*endptr != '\0') {
+    log_error(NULL, "Invalid suffix in number of bytes: '%s'", val);
+    return -1;
+  }
+  if (nbytes > LONG_MAX) {
+    log_error(NULL, "Number of bytes too large (max %ld): '%s'", LONG_MAX, val);
+    return -1;
+  }
+  *((long *)opt->var) = zt_ulltol(nbytes);
+  if (opt->flag)
+    *((char *)opt->flag) = 1;
+  return 0;
+}
+
 static int parse_padding_factor(option_t *opt, const char *val,
                                 bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
@@ -188,6 +226,7 @@ static int parse_help(option_t *opt ATTRIBUTE_UNUSED, const char *val ATTRIBUTE_
 struct config GlobalConfig = {
     .ciphersuite = "K-01",
     .preferredFamily = '4',
+    .maxFileRecvSize = 4 * SIZE_GB,
     .passwordBundleSize = 20,
     .passwordChars = 32,
     .passwordWords = 4,
@@ -369,7 +408,7 @@ static option_t options[] = {
         "(default: 0.0.0.0 -- all IPv4 interfaces).\n"
       }
     },
-    /* {
+    {
       "live-read",
       'L',
       &GlobalConfig.flagLiveRead,
@@ -381,7 +420,7 @@ static option_t options[] = {
         "Read from a live output stream (e.g. a pipe).\n",
         "(default: off).\n"
       }
-    }, */
+    },
     {
       "message-padding",
       'P',
@@ -450,6 +489,20 @@ static option_t options[] = {
         "Preferred address family for the connection.\n",
         "Can be '4' for IPv4 or '6' for IPv6.\n",
         "(default: '4').\n"
+      }
+    },
+    {
+      "receive-limit",
+      'R',
+      &GlobalConfig.maxFileRecvSize,
+      NULL,
+      parse_numbytes,
+      1,
+      cmdReceive,
+      {
+        "Maximum number of bytes to receive on an incoming transfer.\n",
+        "An incoming or outgoing live read will be limited to this size.\n",
+        "(default: 4G).\n"
       }
     },
     {
