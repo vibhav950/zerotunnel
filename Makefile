@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wno-pedantic -std=gnu17 -I./ -DDEBUG -DOPENSSL -DLIBOQS -ggdb -fsanitize=address
+CFLAGS := -Wno-pedantic -std=gnu17 -I./ -DOPENSSL -DLIBOQS -O2 -march=native -fstack-protector-strong -D_FORTIFY_SOURCE=1 -Wformat -Wl,-z,relro,-z,now
 LIBS := -lcrypto -lm -loqs -lbsd -lsystemd -pthread
 
 # Object files from all directories
