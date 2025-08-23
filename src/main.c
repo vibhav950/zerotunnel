@@ -107,7 +107,7 @@ static int do_send(void) {
   e = zt_client_run(client, NULL, &done);
 
   if (e == ERR_SUCCESS && done)
-    tty_printf(get_cli_prompt(OnSendSuccessful), GlobalConfig.filepath);
+    tty_printf(get_cli_prompt(OnSendSuccessful), GlobalConfig.filePath);
 
   zt_client_conn_dealloc(client);
 
@@ -130,8 +130,8 @@ static int do_receive(void) {
   e = zt_server_run(server, NULL, &done);
 
   if (e == ERR_SUCCESS && done) {
-    if (strcmp(GlobalConfig.filepath, "-"))
-      tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filepath);
+    if (strcmp(GlobalConfig.filePath, "-"))
+      tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filePath);
   }
 
   zt_server_conn_dealloc(server);
@@ -143,12 +143,12 @@ static int passgen(void) {
   if (GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
     int fd;
 
-    if (access(GlobalConfig.passwdfile, F_OK) == 0) {
+    if (access(GlobalConfig.passwdFile, F_OK) == 0) {
       if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileExists)))
         return -1;
     }
 
-    fd = open(GlobalConfig.passwdfile, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    fd = open(GlobalConfig.passwdFile, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0)
       return -1;
 
@@ -159,11 +159,11 @@ static int passgen(void) {
     }
     close(fd);
 
-    tty_printf(get_cli_prompt(OnNewK1PasswordFile), GlobalConfig.passwdfile);
+    tty_printf(get_cli_prompt(OnNewK1PasswordFile), GlobalConfig.passwdFile);
   } else if (GlobalConfig.authType == KAPPA_AUTHTYPE_0) {
     struct passwd *passwd;
 
-    passwd = zt_auth_passwd_single_new(GlobalConfig.passwordChars, false);
+    passwd = zt_auth_passwd_single_new(NULL, GlobalConfig.passwordChars, false);
     if (!passwd)
       return -1;
 
@@ -178,13 +178,13 @@ static int passgen(void) {
 static int passdel(void) {
   int rv;
 
-  if (access(GlobalConfig.passwdfile, F_OK))
+  if (access(GlobalConfig.passwdFile, F_OK))
     return -1;
 
   if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileTryDelete)))
     return 0;
 
-  rv = zt_auth_passwd_delete(GlobalConfig.passwdfile, GlobalConfig.passwdBundleId, -1);
+  rv = zt_auth_passwd_delete(GlobalConfig.passwdFile, GlobalConfig.passwdBundleId, -1);
   return rv < 0 ? -1 : 0;
 }
 

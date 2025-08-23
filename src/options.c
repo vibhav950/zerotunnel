@@ -383,7 +383,7 @@ static option_t options[] = {
     {
       "keyfile",
       'k',
-      &GlobalConfig.passwdfile,
+      &GlobalConfig.passwdFile,
       NULL,
       parse_filename,
       1,
@@ -557,6 +557,19 @@ static option_t options[] = {
         "(default: off).\n"
       }
     },
+    {
+      "wordlist",
+      'W',
+      &GlobalConfig.wordlistFile,
+      NULL,
+      parse_filename,
+      1,
+      cmdSend,
+      {
+        "Path to a SQLite3 wordlist file for password generation.\n",
+        "This is only supported for KAPPA2 passwords.\n"
+      }
+    }
 };
 // clang-format on
 
@@ -927,7 +940,7 @@ command_t init_config(int argc, char *argv[]) {
     goto err;
   }
 
-  if (GlobalConfig.authType != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdfile) {
+  if (GlobalConfig.authType != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdFile) {
     log_error(NULL, "Option --keyfile does not apply for KAPPA0 or KAPPA2 auth types");
     goto err;
   }
@@ -942,19 +955,19 @@ command_t init_config(int argc, char *argv[]) {
     if (!GlobalConfig.hostname)
       goto err;
 
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdfile) {
+    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdFile) {
       char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdfile = fname;
+      GlobalConfig.passwdFile = fname;
     }
 
     if (GlobalConfig.flagLiveRead) {
       if (target)
         goto err;
-      GlobalConfig.filepath = zt_strdup("-"); /* read from STDIN */
+      GlobalConfig.filePath = zt_strdup("-"); /* read from STDIN */
     } else if (target) {
-      GlobalConfig.filepath = zt_strdup(target);
+      GlobalConfig.filePath = zt_strdup(target);
     } else {
       goto err;
     }
@@ -963,20 +976,20 @@ command_t init_config(int argc, char *argv[]) {
   }
 
   case cmdReceive: {
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdfile) {
+    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdFile) {
       if (!GlobalConfig.hostname)
         goto err;
 
       char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdfile = fname;
+      GlobalConfig.passwdFile = fname;
     }
 
     if (!target)
-      GlobalConfig.filepath = zt_strdup("-"); /* write to STDOUT */
+      GlobalConfig.filePath = zt_strdup("-"); /* write to STDOUT */
     else
-      GlobalConfig.filepath = zt_strdup(target);
+      GlobalConfig.filePath = zt_strdup(target);
 
     break;
   }
@@ -991,12 +1004,12 @@ command_t init_config(int argc, char *argv[]) {
       if (!target && !GlobalConfig.hostname) {
         goto err;
       } else if (target) {
-        GlobalConfig.passwdfile = zt_strdup(target);
+        GlobalConfig.passwdFile = zt_strdup(target);
       } else {
         char *fname = get_password_file_location(GlobalConfig.hostname, false);
         if (!fname)
           return cmdNone;
-        GlobalConfig.passwdfile = fname;
+        GlobalConfig.passwdFile = fname;
       }
     } else if (target || GlobalConfig.hostname) {
       /* K0 does not take these arguments */
@@ -1013,12 +1026,12 @@ command_t init_config(int argc, char *argv[]) {
       goto err; /* no way to locate the K1 password file */
 
     if (target) {
-      GlobalConfig.passwdfile = zt_strdup(target);
+      GlobalConfig.passwdFile = zt_strdup(target);
     } else {
       char *fname = get_password_file_location(GlobalConfig.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdfile = fname;
+      GlobalConfig.passwdFile = fname;
     }
   }
   }
@@ -1036,8 +1049,8 @@ err:
 
 void deinit_config(void) {
   zt_free(GlobalConfig.hostname);
-  zt_free(GlobalConfig.passwdfile);
+  zt_free(GlobalConfig.passwdFile);
   zt_free(GlobalConfig.ciphersuite);
-  zt_free(GlobalConfig.filepath);
+  zt_free(GlobalConfig.filePath);
   zt_free(GlobalConfig.passwdBundleId);
 }
