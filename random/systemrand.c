@@ -4,9 +4,9 @@
 #include "rdrand.h"
 
 #if defined(_WIN32)
-#include <bcrypt.h>
-#include <ntstatus.h>
 #include <windows.h>
+#include <ntstatus.h>
+#include <bcrypt.h>
 #if defined(_MSC_VER)
 #pragma comment(lib, "bcrypt.lib")
 #endif
@@ -17,11 +17,12 @@
 /* Linux */
 #include <errno.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #define HAVE_DEV_URANDOM 1
-#elif defined(__OpenBSD__) && defined(__FreeBSD__)
-/* OpenBSD, FreeBSD */
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+/* FreeBSD, NetBSD, OpenBSD */
 #include <stdlib.h>
 #define HAVE_ARC4RANDOM 1
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -34,11 +35,15 @@
 #include <unistd.h>
 #define HAVE_DEV_URANDOM 1
 #endif
+#else
+#error "unknown platform"
 #endif
+
+#define U64_FROM_2_U32(hi, lo) (((uint64_t)(hi) << 32) + (lo))
 
 #if defined(_WIN32)
 static inline void _win32_sys_rand(uint8_t *buf, size_t bytes) {
-  if (BCryptGenRandom(NULL, (BYTE *)buf, (ULONG)bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) !=
+  if (BCryptGenRandom(NULL, (PUCHAR)buf, (ULONG)bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) !=
       STATUS_SUCCESS) {
     // better to fail than return bad random data
     zt_log_fatal("system RNG failure");
@@ -55,13 +60,13 @@ void zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
   int fd;
 #endif
 
-  if (!buf || !bytes)
+  if (unlikely(!bytes))
     return;
 
 #ifdef _WIN32
   _win32_sys_rand(buf, bytes);
 #elif defined(HAVE_DEV_URANDOM)
-  if ((fd = open("/dev/random", O_RDONLY)) < 0)
+  if ((fd = open("/dev/urandom", O_RDONLY)) < 0)
     zt_log_fatal("system RNG failure (%s)", strerror(errno));
 
   if (read(fd, buf, bytes) != (ssize_t)bytes)
@@ -82,7 +87,7 @@ void zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
  * `zt_systemrand_bytes()`.
  */
 void zt_systemrand_4bytes(uint32_t *buf, size_t bytes4) {
-  if (!buf || !bytes4)
+  if (unlikely(!bytes4))
     return;
 
   if (HasRDRAND()) {
@@ -100,7 +105,7 @@ fallback:
  * to use this function over `zt_systemrand_bytes()` on an x86 machine.
  */
 void zt_systemrand_8bytes(uint64_t *buf, size_t bytes8) {
-  if (!buf || !bytes8)
+  if (unlikely(!bytes8))
     return;
 
   if (HasRDRAND()) {
@@ -115,26 +120,21 @@ fallback:
 
 inline uint8_t zt_rand_u8(void) {
   uint8_t rand;
-#if defined(HAVE_ARC4RANDOM)
-  rand = arc4random_uniform(UINT8_MAX + 1);
-#else
+
   zt_systemrand_bytes(&rand, 1);
-#endif
   return rand;
 }
 
 inline uint16_t zt_rand_u16(void) {
   uint16_t rand;
-#if defined(HAVE_ARC4RANDOM)
-  rand = arc4random_uniform(UINT16_MAX + 1);
-#else
+
   zt_systemrand_bytes(PTR8(&rand), 2);
-#endif
   return rand;
 }
 
 inline uint32_t zt_rand_u32(void) {
   uint32_t rand;
+
 #if defined(HAVE_ARC4RANDOM)
   rand = arc4random();
 #else
@@ -145,23 +145,38 @@ inline uint32_t zt_rand_u32(void) {
 
 inline uint64_t zt_rand_u64(void) {
   uint64_t rand;
+
+#if defined(HAVE_ARC4RANDOM)
+  uint32_t hi, lo;
+  hi = arc4random();
+  lo = arc4random();
+  rand = U64_FROM_2_U32(hi, lo);
+#else
   zt_systemrand_8bytes(&rand, 1);
+#endif
   return rand;
 }
 
 #if defined(_MSC_VER)
 #include <intrin.h> // _BitScanReverse64
+#pragma intrinsic(_BitScanReverse64)
+#else
+#include <limits.h> // UINT64_MAX, LONG_MAX, LONGLONG_MAX
 #endif
 
-/* number of bits in x */
+/** Number of bits in x */
 static inline int nbits(uint64_t x) {
   ASSERT(x > 0);
 #if defined(_MSC_VER)
   int lz;
   _BitScanReverse64(&lz, x);
   return lz + 1;
-#elif defined(__has_builtin) && __has_builtin(__builtin_clzll)
-  return 64U - __builtin_clzll(x);
+#elif ULONG_MAX == UINT64_MAX && defined(__has_builtin) &&                      \
+    __has_builtin(__builtin_clzl)
+  return 64 - __builtin_clzl(x);
+#elif ULONGLONG_MAX == UINT64_MAX && defined(__has_builtin) &&                  \
+    __has_builtin(__builtin_clzll)
+  return 64 - __builtin_clzll(x);
 #else
   int n = 0;
   for (; x; x >>= 1, n++)
@@ -174,7 +189,8 @@ inline int64_t zt_rand_ranged(int64_t max) {
   uint64_t r;
   int nbitsv;
 
-  ASSERT(max > 0);
+  if (unlikely(max <= 0))
+    return -1;
 
   nbitsv = nbits(max);
   do {
@@ -188,13 +204,10 @@ int zt_rand_charset(char *rstr, size_t rstr_len, const char *charset,
                     size_t charset_len) {
   const char *p;
 
-  if (!charset && (charset_len > 1))
+  if (unlikely(!rstr || rstr_len < 2))
     return -1;
 
-  if (rstr_len < 2)
-    return -1;
-
-  if (!charset || (charset_len == 1)) {
+  if (!charset_len) {
     p = RAND_DEFAULT_CHARSET;
     charset_len = sizeof(RAND_DEFAULT_CHARSET) - 2;
   } else {

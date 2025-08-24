@@ -41,7 +41,7 @@ uint32_t zt_rand_u32(void);
 uint64_t zt_rand_u64(void);
 
 /**
- * Returns a random integer in [0, max], max > 0.
+ * Returns a random integer in the range [0, max], max > 0.
  */
 int64_t zt_rand_ranged(int64_t max);
 
@@ -57,8 +57,8 @@ static const char RAND_DEFAULT_CHARSET[] = "abcdefghijklmnopqrstuvwxyz"
  * \param rstr_len Length of \p rstr INCLUDING the null terminator.
  * \param charset A null-terminated string containing the UTF-8 character set.
  * If null is passed, then RAND_DEFAULT_CHARSET is used as the character set.
- * \param charset_len Length of \p charset EXCLUDING the null terminator (can be
- * zero if \p charset is null). If 1 is passed, the default char set is used.
+ * \param charset_len Length of \p charset EXCLUDING the null terminator (must
+ * be zero if \p charset is null).
  *
  * \return 0 on success, -1 on error.
  */
