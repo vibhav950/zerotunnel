@@ -4,7 +4,7 @@
 **Authored by Vibhav Tiwari**
 
 > [!CAUTION]
->  This protocol and all its derivatives are still under development and are not recommended for use in a production environment or for securing sensitive data. Additionally, please be aware that the protocol and this document are subject to change.
+>  This protocol and all its derivatives are still under development and not recommended for use in a production environment or for securing sensitive data. Additionally, please be aware that the protocol and this document are subject to change.
 >
 >  If you have any relevant concerns or feedback for the developers, please [contact us via email]().
 
@@ -98,7 +98,7 @@ The following notation is used in this document:
 - _**KDF(KM, N)**_ represents N bytes of output from a memory-hard [[6]](#9-references) key derivation function with the following input key material:
 
   - KDF Key = a low-entropy ASCII password or raw key bytes.
-  - KDF salt = a randomly generated salt attached along with the KDF output.
+  - KDF salt = a randomly generated salt attached to the KDF output.
   - KDF constant = an ASCII string distinct for each stage where this KDF is used.
 
 - _**Cipher-Enc(PT, K, iv)**_ represents a byte sequence that is the output of an encryption operation on the plaintext byte sequence PT using the block cipher encryption algorithm with key K and a random initialization vector.
@@ -113,7 +113,7 @@ The following notation is used in this document:
 
 - _**len(data)**_ is the length of data in bytes, represented as an unsigned integer.
 
-- _**data[a:b]**_ represents the byte sequence that is the 'substring' of the byte sequence data, spanning indices a through b-1. Thus, len(data[a:b]) = len(data) - (b-a).
+- _**data[a:b]**_ represents the byte sequence that is the 'substring' of the byte sequence data, spanning indices a through b-1. Thus, len(data[a:b]) = b-a.
 
 ### 2.3. Roles
 
@@ -157,7 +157,7 @@ The Module-LWE problem generalizes the standard Learning-with-Errors (LWE) probl
 
  $$t = A \cdot s + e$$
 
- The challenge is to distinguish the pair $(A, t)$ from a uniformly random pair $(A', t') \in R_q^{k \times k} \times R_q^k$. This problem is assumed to be hard under worst-case lattice assumptions, even on quantum computers.
+ The challenge is to distinguish the pair $(A, t)$ from a uniformly random pair $(A, t') \in R_q^{k \times k} \times R_q^k$. This problem is assumed to be hard under worst-case lattice assumptions, even on quantum computers.
 
 #### 3.1.2. Hardness assumption
 
@@ -189,8 +189,8 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
 2. **Challenge:**
 
    - The challenger picks a random bit $b \in \{0,1\}$.
-   - If $b = 0$, it sends $(A, t)$ (a real MLWE instance).
-   - If $b = 1$, it sends $(A, t')$ (a random instance).
+   - If $b = 0$, then $(A, t)$ is chosen (a real MLWE instance).
+   - If $b = 1$, then $(A, t')$ is chosen (a random instance).
 
 3. **Required:**
    - The adversary must guess whether $b = 0$ or $b = 1$.
@@ -205,11 +205,15 @@ The Decisional Module-LWE (DMLWE) problem is related to the MLWE problem and ask
 
     $$(A, t) = key \textunderscore gen(A, s, e) = A \cdot s + e$$
 
-    This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly including $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $`\rho \in \{ 0, 1 \} ^{256}`$ is a randomly generated seed used to deterministically form the public matrix $A$ in the NTT domain via rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.
+    This public tuple enables message encapsulation (in Kyber's case, a random shared secret) that can only be decapsulated using the corresponding private key. However, instead of directly presenting $A$, Kyber represents the public key as the tuple $(\rho, t)$, where $`\rho \in \{ 0, 1 \} ^{256}`$ is a randomly generated seed used to deterministically form the public matrix $A$ in the NTT domain via rejection-sampling, denoted below as $\text{SampleMatrixNTT}$. This approach significantly improves space efficiency when transmitting the encapsulation key over a network.
 
     Therefore, the encapsulation key is given by:
 
-    $$(\rho, t) = key \textunderscore gen(A, s, e), \text{where } A = \text{SampleMatrixNTT}(\rho)$$
+    $$(\rho, t) = key \textunderscore gen(\rho, s, e) \text{, where } A = \text{SampleMatrixNTT}(\rho) \text{ and } t=A \cdot s+e$$
+
+    Henceforth, we use the following shorthand notation for the above expression:
+
+    $$(\rho,t)=key \textunderscore gen(A,s,e)$$
 
 2. **Indistinguishability argument:**
   - If $(A, t)$ is an MLWE instance, then $t$ has been derived from the secret vector $s$ and error vector $e$, making its structure non-random but masked by small noise.
@@ -224,7 +228,7 @@ Thus, the MLWE-based public key in Kyber is computationally indistinguishable fr
 
 We define a keyed function $T_{pass}$ which transforms a valid MLWE instance $(A,t)$ into a random tuple $(A,t')$ represented as $(A,t) \xrightarrow[]{T_{pass}} (A,t')$. We also define the inverse transform $(A,t') \xrightarrow[]{T_{pass}^{-1}} (A,t)$ on the random data that yields back the original MLWE tuple when operated with the same $pass$. It is imperative that $T_{pass}$ has strong pseudorandom properties.
 
-1. **Alice** and **Bob** decide on a shared password $pass$ securely out-of-band and intend to use this password to authenticate each other preceding bidirectional encrypted data transfer.
+1. **Alice** and **Bob** decide on a shared password $pass$ securely out-of-band and intend to use this password to achieve mutual authentication preceding bidirectional encrypted data transfer.
 
 2. **Alice** generates her public key using the Kyber key generation step $(A,t)=key \textunderscore gen(A,s,e)$. She then applies the transform $T_{pass}[(A,t)]$ and sends over the resulting tuple $(A,t')$ to **Bob** over an insecure network.
 
@@ -266,7 +270,7 @@ Therefore, **Charlie** is forced to verify his guess online, i.e., to verify eac
 The following section describes the KAPPA handshake procedure as implemented in practice. The handshake altogether accomplishes three things: mutual authentication of peers, session key establishment, and session key verification to prevent replay attacks. The handshake plays out across the following phases:
 
 - Alice (the initiator) sends Bob (the responder) an initial message.
-- Bob responds with the response message.
+- Bob responds with a response message.
 - Alice and Bob derive the session key.
 - Alice and Bob exchange verification messages.
 - Alice and Bob verify each other's verification messages.
@@ -277,7 +281,7 @@ The following section describes the KAPPA handshake procedure as implemented in 
 
 This is the first state in the initiator state machine.
 
-- Alice generates her one-time PQ-KEM key _OTPQK_, an ephemeral Elliptic Curve Diffie-Hellman key _DHEK<sub>A</sub>_, and a 76-byte _salt_.
+- Alice generates her one-time PQ-KEM key _OTPQK_, an ephemeral Elliptic Curve Diffie-Hellman key _DHEK<sub>A</sub>_, and an 80-byte _salt_.
 
 - Alice derives the master key from the master password using a key derivation function:\
   &nbsp;&nbsp;&nbsp;&nbsp;_K<sub>pass</sub>_ = KDF(_Password_ || salt[:32] || _"Derive the master key (K_pass)"_, 32)
