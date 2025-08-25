@@ -115,8 +115,8 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   }
 
   /**
-   * Build the list of zt_addrinfo while respecting the preferred_family if the
-   * address family is AF_UNSPEC
+   * Build the list of zt_addrinfo while respecting the preferred family if the
+   * chosen address family is AF_UNSPEC
    */
   *ai_list = NULL;
   for (cur = res; cur != NULL; cur = cur->ai_next) {
@@ -224,10 +224,13 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
                      ai_cur->ai_protocol));
 
     if (sockfd < 0)
-      continue; /* failed -- try next candidate */
+      continue; /* try next candidate */
 
     if (SOCK_CLOEXEC == 0) {
-      /* SOCK_CLOEXEC isn't supported, set O_CLOEXEC using fcntl */
+      /**
+       * SOCK_CLOEXEC isn't supported, set O_CLOEXEC using fcntl
+       * Otherwise the compiler will optimize this block away
+       */
       int flags = fcntl(sockfd, F_GETFD);
       if (flags < 0) {
         log_error(NULL, "fcntl: Failed to get socket flags (%s)", strerror(errno));
@@ -291,7 +294,7 @@ static err_t server_tcp_listen(zt_server_connection_t *conn,
               conn->self.port, sizeof(conn->self.port), NI_NUMERICHOST | NI_NUMERICSERV);
   log_info(NULL, "Bound to '%s:%s'", conn->self.ip, conn->self.port);
 
-  /* make this socket nonblocking */
+  /* Make the listening socket non-blocking */
   conn->sockfd_flags = fcntl(sockfd, F_GETFL, 0);
   fcntl(sockfd, F_SETFL, conn->sockfd_flags | O_NONBLOCK);
 
@@ -354,7 +357,6 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
     return ERR_TCP_ACCEPT; // TODO: better error code?
   }
 
-  /* Keep this if block separate since the compiler can optimize it away */
   if (SOCK_CLOEXEC == 0) {
     flags = fcntl(clientfd, F_GETFD);
     if (flags < 0) {
@@ -366,7 +368,7 @@ static err_t server_tcp_accept(zt_server_connection_t *conn) {
       log_error(NULL, "fcntl: Failed to set O_CLOEXEC (%s)", strerror(errno));
   }
 
-  /* make this socket non-blocking */
+  /* Make the client socket non-blocking */
   conn->peer.fd_flags = flags = fcntl(clientfd, F_GETFL, 0);
   fcntl(clientfd, F_SETFL, flags | O_NONBLOCK);
 
@@ -505,6 +507,7 @@ static err_t server_recv(zt_server_connection_t *conn, zt_msg_type_t expected_ty
   }
 
   if (MSG_DATA_LEN(conn->msgbuf) == 0) {
+    /* Empty payload (header-only) message */
     nread = 1;
     goto out;
   }
@@ -515,12 +518,12 @@ static err_t server_recv(zt_server_connection_t *conn, zt_msg_type_t expected_ty
   taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
   datalen = MSG_DATA_LEN(conn->msgbuf) + taglen;
 
-  /** If the msg is compressed, read the payload into `msgbuf._xbuf[]` */
+  /* If the msg is compressed, read the payload into `msgbuf._xbuf[]` */
   datap = MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION
               ? MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE
               : MSG_DATA_PTR(conn->msgbuf);
 
-  /** Read msg payload */
+  /* Read msg payload */
   nread = zt_server_tcp_recv(conn, datap, datalen, NULL);
   if (nread < 0) {
     log_error(NULL, "Failed to read TCP data (%s)", strerror(errno));
@@ -534,11 +537,15 @@ static err_t server_recv(zt_server_connection_t *conn, zt_msg_type_t expected_ty
     goto out;
   }
 
-  /** Decrypt encrypted payload */
   if (is_encrypted) {
+    /* Decrypt payload into the suitable buffer based on whether it is compressed */
     nread = (MSG_FLAGS(conn->msgbuf) & MSG_FL_COMPRESSION ? ZT_MSG_XBUF_SIZE
-                                                          : ZT_MSG_MAX_RAW_SIZE) -
-            (ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE);
+                                                          : ZT_MSG_MAX_RAW_SIZE);
+    /**
+     * We want the max payload size including the end marker
+     * (with or without the compression bound)
+     */
+    nread -= ZT_MSG_HEADER_SIZE + ZT_MSG_SUFFIX_SIZE;
 
     if ((ret = vcry_aead_decrypt(datap, datalen, p, ZT_MSG_HEADER_SIZE, datap, &nread)) !=
         ERR_SUCCESS) {
@@ -647,7 +654,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
   *done = false;
 
-  /* main message loop */
+  /* Message loop */
   while (1) {
     switch (conn->state) {
     case SERVER_CONN_INIT: {
@@ -739,16 +746,18 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->expected_passwd.expect && (conn->expected_passwd.id != passwd_id)) {
         /**
          * The client has responded to a password renegotiation request, but
-         * the password Id does not match the expected one
+         * the password Id does not match the expected one.
+         * This is technically protocol violation but we have to handle it anyway.
          */
         log_error(NULL, "Could not negotiate a usable password -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       } else if (passwd_id < 0 && GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
         /**
-         * KAPPA1 authentication failure -- this can happen due to the passwddb
-         * files becoming out-of-sync so we ask the user if we may renegotiate a
-         * new password
+         * KAPPA1 authentication failure -- this can happen due to the passwdDB
+         * files becoming out-of-sync or we have caught a MITM attack and this
+         * happened due to an incorrect password guess by the attacker.
+         * Warn the user and ask whether to renegotiate a new password.
          */
         log_error(NULL, "Authentication failed: bad password identifier");
 
@@ -816,11 +825,20 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       int vcry_algs[6];
       const char *csname;
       // clang-format off
+
+      /**
+       * Get the identifiers for all VCRY algorithms for the ciphersuite Id
+       * offered by the client
+       */
       csname = zt_cipher_suite_info(conn->ciphersuite,
                                     &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
                                     &vcry_algs[3], &vcry_algs[4], &vcry_algs[5]);
       if (!csname) {
-        ret = ERR_INVALID;
+        /**
+         * Got an unsupported ciphersuite Id from client -- the ciphersuite could have
+         * been deprecated or is not supported at runtime
+         */
+        ret = ERR_NOT_SUPPORTED;
         goto cleanup2;
       }
       log_info(NULL, "Using ciphersuite %s", csname);
@@ -878,6 +896,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       uint8_t *rcvbuf;
       size_t rcvlen;
 
+      /**
+       * We anticipate one of two messages here:
+       * - MSG_HANDSHAKE: initiator verification failed and the client chose to
+       *                  retry authentication
+       * - MSG_HANDSHAKE_FIN: final auth message from the client and we can proceed
+       *                      sending our auth message after responder verification
+       */
       if ((ret = server_recv(conn, MSG_HANDSHAKE | MSG_HANDSHAKE_FIN)) != ERR_SUCCESS) {
         goto cleanup2;
       }
@@ -920,11 +945,11 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     retryhandshake:
       /**
        * @warning Failed to verify the established session key -- this could
-       * be due to an incorrect password attempt or a possible
-       * Man-In-The-Middle and the attacker guessed wrong! Alert the user of
-       * this and ask whether to retry the handshake -- which would give the
-       * user and his correspondent another password attempt and a would-be
-       * attacker another chance to guess the password!
+       * be due to an incorrect password attempt or a possible Man-In-The-Middle
+       * and the attacker guessed wrong! Alert the user of and ask whether to
+       * retry the handshake -- which would give the user and his correspondent
+       * another password attempt and a would-be attacker another chance to guess
+       * the password!
        */
 
       if (++conn->auth_retries > ZT_MAX_AUTH_RETRY_COUNT) {
@@ -1003,6 +1028,11 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
+      /**
+       * For live reads, our max write size is capped by the config option so we allocate
+       * as much as the limit and trim the file after the transfer is done
+       * Otherwise, allocate exactly the size of the incoming file advertised by the peer
+       */
       size = conn->fl_live_read ? GlobalConfig.maxFileRecvSize : conn->fileinfo.size;
 
       if ((ret = zt_fio_write_allocate(&fio, size)) != ERR_SUCCESS) {
@@ -1028,7 +1058,12 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         }
 
         if (MSG_TYPE(conn->msgbuf) == MSG_DONE) {
-          conn->fl_pending = true;
+          /**
+           * The client has indicated an end of the live read stream.
+           * For normal reads, we should only receive this message when
+           * this loop completes.
+           */
+          conn->fl_pending = true; /* don't expect this msg in SERVER_DONE */
           break;
         }
 
@@ -1044,6 +1079,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_progressbar_destroy();
 
       if (!conn->fl_live_read && remaining) {
+        /* We prematurely break-ed out of the loop */
         log_error(NULL, "Failed to write file to disk (%s)", zt_error_str(rv));
         ret = rv;
         goto cleanupfile;
