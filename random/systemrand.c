@@ -3,6 +3,22 @@
 #include "common/x86_cpuid.h"
 #include "rdrand.h"
 
+// clang-format off
+#if defined(HAVE_GETENTROPY)
+#include <sys/random.h>
+#endif
+#if defined(HAVE_GETRANDOM)
+#if __GLIBC_PREREQ(2, 25)
+/* getentropy was added in glibc 2.25
+ * See https://sourceware.org/legacy-ml/libc-alpha/2017-02/msg00079.html */
+#include <sys/random.h>
+#else /* older glibc */
+#undef HAVE_GETRANDOM
+#include <linux/random.h>
+#include <sys/syscall.h>
+#endif
+#endif
+
 #if defined(_WIN32)
 #include <windows.h>
 #include <ntstatus.h>
@@ -20,62 +36,117 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#define HAVE_DEV_URANDOM 1
+#define HAVE_DEV_URANDOM
+#define URANDOM_DEVICE "/dev/urandom"
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 /* FreeBSD, NetBSD, OpenBSD */
 #include <stdlib.h>
-#define HAVE_ARC4RANDOM 1
+#define HAVE_ARC4RANDOM
 #elif defined(__APPLE__) && defined(__MACH__)
 #include <TargetConditionals.h>
 #if TARGET_OS_MAC == 1
-/* OSX */
-#include <fnctl.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
-#define HAVE_DEV_URANDOM 1
+/* macOS */
+#include <stdlib.h>
+#define HAVE_ARC4RANDOM
 #endif
 #else
 #error "unknown platform"
 #endif
+// clang-format on
 
 #define U64_FROM_2_U32(hi, lo) (((uint64_t)(hi) << 32) + (lo))
 
 #if defined(_WIN32)
-static inline void _win32_sys_rand(uint8_t *buf, size_t bytes) {
-  if (BCryptGenRandom(NULL, (PUCHAR)buf, (ULONG)bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) !=
-      STATUS_SUCCESS) {
-    // better to fail than return bad random data
-    zt_log_fatal("system RNG failure");
-  }
+static inline int _win32_sys_rand(uint8_t *buf, size_t bytes) {
+  return (BCryptGenRandom(NULL, (PUCHAR)buf, (ULONG)bytes,
+                          BCRYPT_USE_SYSTEM_PREFERRED_RNG) == STATUS_SUCCESS);
 }
-#endif // _WIN32
+#endif /* _WIN32 */
+
+#if defined(HAVE_DEV_URANDOM)
+static inline int _dev_urandom_rand(uint8_t *buf, size_t bytes) {
+  int fd = -1, rc = 0;
+#if defined(O_CLOEXEC)
+  fd = open(URANDOM_DEVICE, O_RDONLY | O_CLOEXEC);
+#else
+  fd = open(URANDOM_DEVICE, O_RDONLY);
+#if defined(FD_CLOEXEC)
+  if (unlikely(fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)) {
+    close(fd);
+    fd = -1;
+  }
+#endif
+#endif
+  if (likely(fd > 0)) {
+    rc = read(fd, buf, bytes);
+    close(fd);
+  }
+  return rc == bytes;
+}
+#endif /* HAVE_DEV_URANDOM */
+
+#if defined(HAVE_GETENTROPY)
+static inline int _getentropy_rand(uint8_t *buf, size_t bytes) {
+  while (bytes > 256) {
+    if (likely(getentropy(buf, 256) != -1)) {
+      buf += 256;
+      bytes -= 256;
+    } else
+      return 0;
+  }
+  return getentropy(buf, bytes) != -1;
+}
+#endif /* HAVE_GETENTROPY */
+
+#if defined(HAVE_GETRANDOM) || defined(SYS_getrandom)
+/* Ref: lighttpd1.4/src/rand.c */
+static inline int _getrandom_rand(uint8_t *buf, size_t bytes) {
+  int num;
+
+#if defined(HAVE_GETRANDOM)
+  num = getrandom(buf, bytes, 0);
+#else
+  /* https://lwn.net/Articles/605828/ */
+  /* https://bbs.archlinux.org/viewtopic.php?id=200039 */
+  num = (int)syscall(SYS_getrandom, buf, bytes, 0);
+#endif
+  return num == (int)bytes;
+}
+#endif /* HAVE_GETRANDOM || SYS_getrandom */
 
 /**
  * Get \p bytes random bytes into \p buf using the platform-dependent
  * random number generator which is chosen at compile-time.
  */
 void zt_systemrand_bytes(uint8_t *buf, size_t bytes) {
-#if defined(HAVE_DEV_URANDOM)
-  int fd;
-#endif
+  int rv = 1;
 
   if (unlikely(!bytes))
     return;
 
-#ifdef _WIN32
-  _win32_sys_rand(buf, bytes);
-#elif defined(HAVE_DEV_URANDOM)
-  if ((fd = open("/dev/urandom", O_RDONLY)) < 0)
-    zt_log_fatal("system RNG failure (%s)", strerror(errno));
-
-  if (read(fd, buf, bytes) != (ssize_t)bytes)
-    zt_log_fatal("system RNG failure (%s)", strerror(errno));
-
-  close(fd);
+#if defined(_WIN32)
+  rv = _win32_sys_rand(buf, bytes);
 #elif defined(HAVE_ARC4RANDOM)
   arc4random_buf(buf, bytes);
+#else
+  /* On Linux, try to use the getrandom(2) system call and fallback to
+   * directly reading from the urandom device if the former is missing */
+  int errno_save;
+  errno_save = errno;
+  errno = 0;
+#if defined(HAVE_GETENTROPY)
+  if (!(rv = _getentropy_rand(buf, bytes)) && errno == ENOSYS)
+#elif defined(HAVE_GETRANDOM) || defined(SYS_getrandom)
+  if (!(rv = _getrandom_rand(buf, bytes)) && errno == ENOSYS)
+#else
+  if (1) /* read from the urandom device as the last resort */
 #endif
+    rv = _dev_urandom_rand(buf, bytes);
+  errno = errno_save;
+#endif
+
+  if (!rv)
+    log_fatal("Failed to fetch random bytes"); /* error and exit */
 }
 
 /**
@@ -171,10 +242,10 @@ static inline int nbits(uint64_t x) {
   int lz;
   _BitScanReverse64(&lz, x);
   return lz + 1;
-#elif ULONG_MAX == UINT64_MAX && defined(__has_builtin) &&                      \
+#elif ULONG_MAX == UINT64_MAX && defined(__has_builtin) &&                               \
     __has_builtin(__builtin_clzl)
   return 64 - __builtin_clzl(x);
-#elif ULONGLONG_MAX == UINT64_MAX && defined(__has_builtin) &&                  \
+#elif ULONGLONG_MAX == UINT64_MAX && defined(__has_builtin) &&                           \
     __has_builtin(__builtin_clzll)
   return 64 - __builtin_clzll(x);
 #else
