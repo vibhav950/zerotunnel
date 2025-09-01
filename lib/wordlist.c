@@ -128,7 +128,8 @@ cleanup:
 }
 #else
 char *auth_passwd_from_wordlist(const char *wordlistpath ATTRIBUTE_UNUSED,
-                                unsigned short count ATTRIBUTE_UNUSED, char sep,
+                                unsigned short count ATTRIBUTE_UNUSED,
+                                char sep ATTRIBUTE_UNUSED,
                                 bool have_digit ATTRIBUTE_UNUSED) {
   return NULL;
 }

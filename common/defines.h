@@ -196,10 +196,14 @@ typedef enum {
 
 /**
  * Log an error message using the global logger and exit with failure.
- * This function will bypass any logging callbacks installed on the root logger.
+ *
+ * Although technically part of the logging module, this function is
+ * not associated with any log handler (logger). No hooks are invoked.
  */
 extern void zt_log_fatal(const char *fmt, ...)
     ATTRIBUTE_FORMAT_PRINTF(1, 2) ATTRIBUTE_NORETURN;
+
+#define log_fatal(fmt, ...) zt_log_fatal((fmt), ##__VA_ARGS__)
 
 #ifdef ASSERT
 #undef ASSERT

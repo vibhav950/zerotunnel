@@ -195,7 +195,6 @@ extern void zt_log_fatal(const char *fmt, ...)
 
 #define log_error(logger, fmt, ...) zt_log_error(logger, fmt, ##__VA_ARGS__)
 
-#define log_fatal(fmt, ...) zt_log_fatal(fmt, ##__VA_ARGS__)
 #endif /* DEBUG */
 
 /** Get a string representation of an error code. */
