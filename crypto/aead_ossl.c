@@ -101,7 +101,7 @@ static err_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
  *
  */
 static void ossl_aead_dealloc(cipher_t *c) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
     aead_ossl_ctx *aead = (aead_ossl_ctx *)c->ctx;

@@ -3,7 +3,6 @@
 
 #include "kex.h"
 
-#define OPENSSL
 #if defined(OPENSSL)
 
 #include <openssl/evp.h>

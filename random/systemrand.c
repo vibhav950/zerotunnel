@@ -242,8 +242,7 @@ static inline int nbits(uint64_t x) {
   int lz;
   _BitScanReverse64(&lz, x);
   return lz + 1;
-#elif ULONG_MAX == UINT64_MAX && defined(__has_builtin) &&                               \
-    __has_builtin(__builtin_clzl)
+#elif ULONG_MAX == UINT64_MAX && defined(__has_builtin) && __has_builtin(__builtin_clzl)
   return 64 - __builtin_clzl(x);
 #elif ULONGLONG_MAX == UINT64_MAX && defined(__has_builtin) &&                           \
     __has_builtin(__builtin_clzll)

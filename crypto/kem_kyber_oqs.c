@@ -74,7 +74,7 @@ static err_t liboqs_kem_alloc(kem_t **kem, kem_alg_t alg) {
  *
  */
 static void liboqs_kem_dealloc(kem_t *kem) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (KEM_FLAG_GET(kem, KEM_FLAG_ALLOC)) {
     kem_oqs_ctx *oqs_ctx = (kem_oqs_ctx *)kem->ctx;
@@ -97,7 +97,7 @@ static void liboqs_kem_dealloc(kem_t *kem) {
  *
  */
 static void liboqs_kem_mem_free(void *ptr, size_t len) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   OQS_MEM_secure_free(ptr, len);
 }
@@ -111,7 +111,7 @@ static err_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
   OQS_KEM *oqs_kem;
   uint8_t *privkey;
 
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (!pubkey || !pubkey_len)
     return ERR_NULL_PTR;

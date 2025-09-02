@@ -117,7 +117,8 @@ static ssize_t auth_sha256_idhash_hex(const char *id, uint8_t **idhash) {
  *
  * @param[in] passwdfile Path to the password file.
  * @param[in] bundle_id The Id of the bundle to be loaded from the file.
- * @param[in] pwid The Id of the password to be loaded.
+ * @param[in] pwid The Id of the password to be loaded. If -1, the password
+ * (if one exists) with the lowest Id will be loaded.
  * @param[out] passwd Pointer to the loaded password structure.
  * @return The positive Id of the loaded password or -1 on failure.
  *
@@ -144,7 +145,7 @@ passwd_id_t zt_auth_passwd_load(const char *passwdfile, const char *bundle_id,
   passwd_id_t pwid_cmp = -1;
   bool found = false;
 
-  if (passwdfile == NULL || bundle_id == NULL || passwd == NULL || pwid <= 0)
+  if (passwdfile == NULL || bundle_id == NULL || passwd == NULL || pwid == 0)
     return -1;
 
   if ((fd = open(passwdfile, O_RDWR)) < 0) {
@@ -617,6 +618,9 @@ passwd_id_t zt_auth_passwd_get(const char *passwdfile, auth_type_t auth_type,
 
     return 0;
   } else {
+    if (pwid <= 0)
+      return -1;
+
     if (zt_auth_passwd_load(passwdfile, bundle_id, pwid, passwd) < 0) {
       log_error(NULL, "Found no matching entries (bundleId=%s, pwId=%d)", bundle_id,
                 pwid);

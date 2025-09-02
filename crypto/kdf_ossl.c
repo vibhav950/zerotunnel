@@ -94,7 +94,7 @@ static err_t ossl_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
  * @return Void.
  */
 static void ossl_kdf_dealloc(kdf_t *kdf) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (KDF_FLAG_GET(kdf, KDF_FLAG_ALLOC)) {
     kdf_ossl_ctx *kdf_ctx = kdf->ctx;

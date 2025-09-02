@@ -29,7 +29,6 @@
 #define HMAC_SHA3_512_MAX_OUT_LEN     HMAC_SHA3_512_KEY_LEN
 #define HMAC_MAX_OUT_LEN              HMAC_MAX_KEY_LEN
 
-#define OPENSSL
 #if defined(OPENSSL)
 
 #include <openssl/evp.h>

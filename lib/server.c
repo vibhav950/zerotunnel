@@ -994,6 +994,9 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       memcpy(PTRV(&conn->fileinfo), MSG_DATA_PTR(conn->msgbuf), sizeof(zt_fileinfo_t));
 
+      conn->fileinfo.size = ntoh64(conn->fileinfo.size);
+      conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
+
       if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ) {
         size = zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize);
         unit = zt_filesize_unit_str(GlobalConfig.maxFileRecvSize);
@@ -1011,9 +1014,6 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ)
         conn->fl_live_read = true;
-
-      conn->fileinfo.size = ntoh64(conn->fileinfo.size);
-      conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
 
       SERVERSTATE_CHANGE(conn->state, SERVER_TRANSFER);
       ATTRIBUTE_FALLTHROUGH;

@@ -209,7 +209,7 @@ int main(int argc, char **argv) {
     goto out;
 
 #ifndef DEBUG
-  zt_logger_set_level(NULL, LOG_LEVEL_ERROR);
+  zt_logger_set_level(NULL, LOG_LEVEL_INFO);
 #endif
 
   switch (command) {

@@ -98,7 +98,7 @@ static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
  *
  */
 static void ossl_hmac_dealloc(hmac_t *h) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (HMAC_FLAG_GET(h, HMAC_FLAG_ALLOC)) {
     hmac_ossl_ctx *hmac = h->ctx;

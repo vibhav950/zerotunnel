@@ -87,7 +87,7 @@ static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
  *
  */
 static void ossl_cipher_dealloc(cipher_t *c) {
-  log_debug(NULL, "");
+  log_debug(NULL, "-");
 
   if (CIPHER_FLAG_GET(c, CIPHER_FLAG_ALLOC)) {
     cipher_ossl_ctx *cipher = (cipher_ossl_ctx *)c->ctx;
