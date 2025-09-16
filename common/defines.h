@@ -276,6 +276,7 @@ typedef void(free_func)(void *);
 void *zt_malloc(size_t size);
 void *zt_calloc(size_t nmemb, size_t size);
 void zt_free(void *ptr);
+void zt_clr_free(void *ptr, size_t len);
 void *zt_realloc(void *ptr, size_t size);
 
 err_t zt_secure_mem_init(size_t n);

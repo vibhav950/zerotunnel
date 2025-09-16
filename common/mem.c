@@ -97,6 +97,11 @@ void zt_free(void *p) { zt_free_func(p); }
 
 void *zt_realloc(void *p, size_t n) { return zt_realloc_func(p, n); }
 
+void zt_clr_free(void *p, size_t n) {
+  memzero(p, n);
+  zt_free(p);
+}
+
 /**************************************************************
  *                   Secure heap allocation                   *
  **************************************************************/
