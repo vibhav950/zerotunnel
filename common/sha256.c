@@ -1,6 +1,11 @@
 /**
- * @file sha256.c
- * Functions for the SHA-256 digest.
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * sha256.c - SHA-256 hash algorithm
  */
 
 #include "sha256.h"

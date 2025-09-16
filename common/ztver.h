@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * ztver.h - zerotunnel version definitions
+ */
+
 #ifndef __ZTVER_H__
 #define __ZTVER_H__
 

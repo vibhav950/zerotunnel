@@ -1,4 +1,14 @@
 /**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * hex.c - Hex encoding/decoding utilities
+ */
+
+/**
  * hex.c
  *
  * Original file: https://github.com/zbjornson/fast-hex

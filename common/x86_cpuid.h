@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * x86_cpuid.h - x86 CPU feature detection
+ */
+
 #pragma once
 #ifndef __X86_CPUID_H__
 #define __X86_CPUID_H__

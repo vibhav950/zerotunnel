@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * tty_io.h - TTY i/o functions
+ */
+
 #ifndef __TTY_IO_H__
 #define __TTY_IO_H__
 

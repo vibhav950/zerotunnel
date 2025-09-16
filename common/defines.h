@@ -1,6 +1,11 @@
 /**
- * @file defines.h
- * @brief Common macros and definitions.
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * defines.h - Common macros and definitions
  */
 
 #ifndef __DEFINES_H__

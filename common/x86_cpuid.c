@@ -1,9 +1,11 @@
-
 /**
- * x86_cpuid.c
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * This file is part of the zerotunnel library.
- * Written and placed in the public domain by vibhav950.
+ * ==============================================
+ *
+ * x86_cpuid.c - x86 CPU feature detection
  */
 
 #include "x86_cpuid.h"

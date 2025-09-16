@@ -1,24 +1,11 @@
 /**
- * b64.c - RFC 4648 Base-64 encoding and decoding
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Based on https://github.com/torvalds/linux/blob/master/lib/base64.c
+ * ==============================================
  *
- * =================================================================
- *
- * // SPDX-License-Identifier: GPL-2.0
- *
- * base64.c - RFC4648-compliant base64 encoding
- *
- * Copyright (c) 2020 Hannes Reinecke, SUSE
- *
- * Based on the base64url routines from fs/crypto/fname.c
- * (which are using the URL-safe base64 encoding),
- * modified to use the standard coding table from RFC4648 section 4.
- *
- * =================================================================
- *
- * CHANGELOG:
- * [2-19-25] Modified by vibhav950 for zerotunnel
+ * b64.c - Base64 encoding/decoding utilities
  */
 
 #include "b64.h"

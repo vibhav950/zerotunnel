@@ -1,6 +1,11 @@
 /**
- * @file tty_io.c
- * @brief TTY i/o functions
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * tty_io.c - TTY i/o functions
  *
  * Based on the implementation from GnuPG (https://github.com/gpg/gnupg/)
  */

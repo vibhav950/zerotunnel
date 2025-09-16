@@ -1,6 +1,11 @@
 /**
- * @file mem.c
- * Wrapper for LIBC memory functions.
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * mem.c - Memory interface
  */
 
 #include "defines.h"

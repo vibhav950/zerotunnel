@@ -1,4 +1,12 @@
 /**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * map.c
+ *
  * Original implementation by Mashpoe [GitHub]
  * https://github.com/Mashpoe/c-hashmap/blob/main/map.c
  *

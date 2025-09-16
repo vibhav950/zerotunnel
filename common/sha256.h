@@ -1,7 +1,11 @@
 /**
- * sha256.h
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * SHA-256 hash function.
+ * ==============================================
+ *
+ * sha256.h - SHA-256 hash algorithm
  */
 
 #ifndef __SHA256_H__

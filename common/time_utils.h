@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * time_utils.h
+ */
+
 #ifndef __TIMEDEFS_H__
 #define __TIMEDEFS_H__
 

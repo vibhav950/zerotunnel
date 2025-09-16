@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * b64.h - Base64 encoding/decoding utilities
+ */
+
 #ifndef __B64_H__
 #define __B64_H__
 
