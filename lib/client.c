@@ -64,13 +64,10 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   bool use_ipv6 = false;
   void *addr_ptr;
   char ipstr[INET6_ADDRSTRLEN];
-
-#if 1 // USE_SIGACT_TIMEOUT
   struct sigaction sigact, sigact_old;
   volatile bool have_old_sigact = false;
   volatile long timeout;
   volatile unsigned int prev_alarm = 0;
-#endif
 
   ASSERT(conn);
   ASSERT(conn->state == CLIENT_CONN_INIT);
@@ -78,7 +75,6 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
   conn->created_at = zt_time_now();
 
-#if 1 // USE_SIGACT_TIMEOUT
   if (atomic_flag_test_and_set(&jmpenv_lock))
     return ERR_ALREADY;
 
@@ -105,9 +101,8 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
      */
     prev_alarm = alarm(zt_sltoui((timeout_msec + 999) / 1000));
   }
-#endif
 
-#ifdef USE_IPV6
+#ifdef AF_INET6
   /* Check if the system has IPv6 enabled and the config allows it */
   if (!GlobalConfig.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
@@ -162,7 +157,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
-#ifdef USE_IPV6
+#ifdef AF_INET6
     else if (cur->ai_family == AF_INET6) {
       saddr_len = sizeof(struct sockaddr_in6);
     }
@@ -222,7 +217,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
     if (cur->ai_family == AF_INET)
       addr_ptr = &((struct sockaddr_in *)cur->ai_addr)->sin_addr;
-#ifdef USE_IPV6
+#ifdef AF_INET6
     else if (cur->ai_family == AF_INET6) {
       addr_ptr = &((struct sockaddr_in6 *)cur->ai_addr)->sin6_addr;
     }
@@ -243,7 +238,6 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 
 out:
-#if 1 // USE_SIGACT_TIMEOUT
   /* Deactivate a possibly active timeout before uninstalling the handler */
   if (!prev_alarm)
     alarm(0);
@@ -277,7 +271,6 @@ out:
       alarm((unsigned int)alarm_runout); /* set the previous alarm back */
     }
   }
-#endif
 
   /* If there was an error, free the zt_addrinfo list */
   if (ret) {

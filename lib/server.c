@@ -51,7 +51,7 @@ static inline const char *get_serverstate_name(ZT_SERVER_STATE state) {
 static inline ATTRIBUTE_NONNULL(1, 2) const
     char *get_ip_str(const struct sockaddr *sa, char *buf, size_t buflen) {
   switch (sa->sa_family) {
-#ifdef USE_IPV6
+#ifdef AF_INET6
   case AF_INET6:
     return inet_ntop(AF_INET6, &((struct sockaddr_in6 *)sa)->sin6_addr, buf, buflen);
 #endif
@@ -78,7 +78,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   ASSERT(conn);
   ASSERT(conn->state == SERVER_CONN_INIT);
 
-#ifdef USE_IPV6
+#ifdef AF_INET6
   /* Check for IPv6 availability */
   if (!GlobalConfig.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
@@ -125,7 +125,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
     if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
-#ifdef USE_IPV6
+#ifdef AF_INET6
     else if (cur->ai_family == AF_INET6) {
       saddr_len = sizeof(struct sockaddr_in6);
     }
@@ -179,7 +179,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
 
     if (cur->ai_family == AF_INET)
       addr_ptr = &((struct sockaddr_in *)cur->ai_addr)->sin_addr;
-#ifdef USE_IPV6
+#ifdef AF_INET6
     else if (cur->ai_family == AF_INET6) {
       addr_ptr = &((struct sockaddr_in6 *)cur->ai_addr)->sin6_addr;
     }

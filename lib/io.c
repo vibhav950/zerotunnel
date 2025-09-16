@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef USE_EPOLL
+#ifdef HAVE_EPOLL
 #include <sys/epoll.h>
 #endif
 
@@ -47,7 +47,7 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
   return rc;
 }
 
-#ifdef USE_EPOLL
+#ifdef HAVE_EPOLL
 static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
   struct epoll_event ev, events[1];
   int epfd, rc = -1;
@@ -88,7 +88,7 @@ cleanup:
   close(epfd);
   return rc;
 }
-#endif /* USE_EPOLL */
+#endif /* HAVE_EPOLL */
 
 /**
  * @param[in] fd The file descriptor to wait for.
@@ -105,7 +105,7 @@ cleanup:
  * If `-1`, the function will wait indefinitely.
  */
 int zt_io_waitfor(int fd, timediff_t timeout_msec, int mode) {
-#ifdef USE_EPOLL
+#ifdef HAVE_EPOLL
   return zt_io_waitfor2(fd, timeout_msec, mode);
 #else
   return zt_io_waitfor1(fd, timeout_msec, mode);
@@ -521,7 +521,7 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
   if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN | FIO_FL_READ)))
     return ERR_INVALID;
 
-#if 1 // def USE_POSIX_FADVISE
+#if defined(HAVE_POSIX_FADVISE)
   (void)posix_fadvise(fio->fd, fio->offset, bufsize, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -567,7 +567,7 @@ err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
   if (fio->fd < 3)
     return ERR_SUCCESS;
 
-#if 1 // def USE_POSIX_FALLOCATE
+#if defined(HAVE_POSIX_FALLOCATE)
   if ((rv = posix_fallocate(fio->fd, 0, total_size)) != 0) {
     switch (rv) {
     case EOPNOTSUPP:

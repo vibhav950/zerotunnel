@@ -21,10 +21,8 @@ typedef struct _zt_client_connection_st {
     state;                /* current client state */
   struct zt_addrinfo
     *ai_estab;            /* established address info */
-#if 1 //def USE_SIGACT_TIMEOUT
   zt_timeval_t
     created_at;           /* connection creation time */
-#endif
   zt_msg_t
     *msgbuf;              /* message buffer */
   const char

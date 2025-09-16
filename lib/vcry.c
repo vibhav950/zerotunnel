@@ -5,7 +5,7 @@
 #include "crypto/kdf.h"
 #include "crypto/kem.h"
 #include "crypto/kem_kyber_defs.h"
-#include "crypto/kex_ecc.h"
+#include "crypto/kex.h"
 #include "crypto/types.h"
 #include "random/systemrand.h"
 
