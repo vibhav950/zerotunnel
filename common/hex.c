@@ -10,8 +10,8 @@
  */
 
 #include "hex.h"
-#include "common/defines.h"
-#include "common/x86_cpuid.h"
+#include "defines.h"
+#include "x86_cpuid.h"
 
 #if defined(__GNUC__) // GCC, clang
 #ifdef __clang__

@@ -184,8 +184,6 @@ extern void zt_log_fatal(const char *fmt, ...)
 
 #define log_error(logger, fmt, ...)                                                      \
   zt_log_error(logger, "%s:%d: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-
-#define log_fatal(fmt, ...) zt_log_fatal("%s:%d: " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 #else /* DEBUG */
 #define log_debug(logger, fmt, ...) zt_log_debug(logger, fmt, ##__VA_ARGS__)
 

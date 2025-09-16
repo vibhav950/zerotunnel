@@ -22,7 +22,7 @@
  */
 
 #include "b64.h"
-#include "common/defines.h"
+#include "defines.h"
 
 #include <string.h>
 
