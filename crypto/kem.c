@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * kem.c
+ */
+
 #include "kem.h"
 
 const char *kem_alg_to_string(kem_alg_t alg) {

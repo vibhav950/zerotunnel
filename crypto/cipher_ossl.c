@@ -1,9 +1,11 @@
 /**
- * cipher_ossl.c
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * OpenSSL implementation of symmetric block ciphers
+ * ==============================================
  *
- * vibhav950 on GitHub
+ * cipher_ossl.c - OpenSSL implementation of symmetric block ciphers
  */
 
 #include "cipher.h"

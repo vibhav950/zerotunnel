@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * hmac_defs.h
+ */
+
 #ifndef __HMAC_OSSL_H__
 #define __HMAC_OSSL_H__
 

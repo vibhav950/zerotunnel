@@ -1,9 +1,11 @@
 /**
- * aead_ossl.h
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * OpenSSL implementation of AEAD ciphers
+ * ==============================================
  *
- * vibhav950 on GitHub
+ * aead_ossl.c - OpenSSL implementation of AEAD ciphers
  */
 
 #include "cipher.h"

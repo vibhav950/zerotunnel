@@ -1,5 +1,11 @@
 /**
- * ML-KEM (Kyber) using liboqs.
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * kem_kyber_oqs.c - liboqs implementation of KEM-Kyber
  */
 
 #include "common/defines.h"

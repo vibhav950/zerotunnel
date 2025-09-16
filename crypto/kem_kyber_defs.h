@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * kem_kyber_defs.h
+ */
+
 #ifndef __KEM_KYBER_OQS_H__
 #define __KEM_KYBER_OQS_H__
 

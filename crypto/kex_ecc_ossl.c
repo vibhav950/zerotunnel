@@ -1,6 +1,11 @@
 /**
- * @file kex_ecc_ossl.c
- * Key exchange using Elliptic Curve Cryptography (ECC) with OpenSSL
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * kex_ecc_ossl.c - Elliptic Curve Key exchange using OpenSSL
  */
 
 #include "common/defines.h"

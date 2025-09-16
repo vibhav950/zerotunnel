@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * kex.h
+ */
+
 #ifndef __KEX_H__
 #define __KEX_H__
 

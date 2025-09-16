@@ -1,9 +1,11 @@
 /**
- * kem_kyber_ossl.c
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * OpenSSL implementation of the KEM-Kyber interface
+ * ==============================================
  *
- * vibhav950 on GitHub
+ * kem_kyber_ossl.c - OpenSSL implementation of KEM-Kyber
  */
 
 #include "common/defines.h"

@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * hmac.c
+ */
+
 #include "hmac.h"
 
 const char *hmac_alg_to_string(hmac_alg_t alg) {

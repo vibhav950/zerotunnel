@@ -1,9 +1,11 @@
 /**
- * @file kdf_gtls.c
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * @brief KDF implementation using GnuTLS
+ * ==============================================
  *
- * @author vibhav950 on GitHub
+ * kdf_gtls.c - GnuTLS implementation of key derivation functions
  */
 
 #include "common/defines.h"
