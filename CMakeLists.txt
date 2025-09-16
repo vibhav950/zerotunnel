@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(zerotunnel VERSION 0.1.0 LANGUAGES C)
 
+set(HANDSHAKE_PROTOCOL_VERSION 1)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_MINIMAL_GCC_VERSION "7.1.0")
@@ -43,6 +45,7 @@ endif()
 
 include_directories(
   ${PROJECT_SOURCE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}/lib
 )
 
 if(NOT SYS_WIN32)
@@ -159,6 +162,12 @@ set(ALL_SOURCES ${C_SOURCES} ${CRYPTO_SOURCES} ${CRYPTO_BACKEND_SOURCES})
 
 file(GLOB_RECURSE TEST_FILES "tests/*.c")
 list(REMOVE_ITEM ALL_SOURCES ${TEST_FILES})
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/lib/protocol.in.h
+  ${CMAKE_CURRENT_BINARY_DIR}/lib/protocol.h
+  @ONLY
+)
 
 add_executable(zerotunnel ${ALL_SOURCES})
 

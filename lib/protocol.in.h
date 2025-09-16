@@ -9,6 +9,9 @@
  *
  * Enumeration of handshake protocol versions (stable/unstable).
  * Must be listed in increasing chronological order.
+ *
+ * WARNING: Do not edit this enum, the build system will use
+ *          protocol versions in numeric form.
  */
 typedef enum {
   KAPPAv1_unstable        = 1,
