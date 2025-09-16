@@ -1,7 +1,9 @@
-# Dotfiles
+# dotfiles
 .env
+.vscode/
 
-# Sensitive data
+# config, build and local directories
 keys/
 files/
 logs/
+build/
