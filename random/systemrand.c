@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * systemrand.c - System-dependent random number generator
+ */
+
 #include "systemrand.h"
 #include "common/defines.h"
 #include "common/x86_cpuid.h"
