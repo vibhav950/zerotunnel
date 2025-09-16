@@ -23,7 +23,13 @@ typedef struct kdf_gtls_ctx_st {
 #define KDF_FLAG_GET(kdf, flag) ((kdf)->flags & flag)
 #define KDF_FLAG_UNSET(kdf, flag) (void)((kdf)->flags &= ~flag)
 
-/**  */
+/**
+ * Allocate resources for a key derivation function (KDF) context.
+ *
+ * @param[out] kdf Pointer to allocated KDF context
+ * @param[in] alg KDF algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
+ */
 static err_t gtls_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   extern const kdf_intf_t kdf_intf;
   kdf_gtls_ctx *kdf_ctx;
@@ -59,6 +65,12 @@ static err_t gtls_kdf_alloc(kdf_t **kdf, kdf_alg_t alg) {
   return ERR_SUCCESS;
 }
 
+/**
+ * Deallocate and securely erase a KDF context.
+ *
+ * @param[in] kdf KDF context to deallocate
+ * @return Void
+ */
 static void gtls_kdf_free(kdf_t *kdf) {
   kdf_gtls_ctx *kdf_ctx;
 
@@ -80,7 +92,16 @@ static void gtls_kdf_free(kdf_t *kdf) {
   kdf = NULL;
 }
 
-/**  */
+/**
+ * Initialize the KDF context with the provided password and salt.
+ *
+ * @param[in] kdf KDF context
+ * @param[in] password Password string
+ * @param[in] password_len Length of the password string
+ * @param[in] salt Random salt
+ * @param[in] salt_len Length of the salt
+ * @return ERR_SUCCESS on success, error code otherwise
+ */
 static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
                            const uint8_t *salt, size_t salt_len) {
   uint8_t *pw, *slt;
@@ -125,7 +146,16 @@ static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_
   return ERR_SUCCESS;
 }
 
-/**  */
+/**
+ * Derive a key using the KDF context, additional data, and output buffer.
+ *
+ * @param[in] kdf KDF context
+ * @param[in] additional_data Additional data (can be NULL)
+ * @param[in] additional_data_len Length of the additional data
+ * @param[out] key Output buffer for the derived key
+ * @param[in] key_len Length of the output buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ */
 static err_t gtls_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
                              size_t additional_data_len, uint8_t *key, size_t key_len) {
   kdf_gtls_ctx *kdf_ctx;

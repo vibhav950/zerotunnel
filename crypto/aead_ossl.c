@@ -32,7 +32,13 @@ typedef struct _aead_ossl_ctx_st {
 // clang-format on
 
 /**
+ * Allocate resources for an AEAD cipher context.
  *
+ * @param[out] c Pointer to allocated cipher context
+ * @param[in] key_len Length of encryption/decryption key
+ * @param[in] tag_len Length of authentication tag
+ * @param[in] alg AEAD algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
                              cipher_alg_t alg) {
@@ -105,7 +111,9 @@ static err_t ossl_aead_alloc(cipher_t **c, size_t key_len, size_t tag_len,
 }
 
 /**
- *
+ * Deallocate an AEAD cipher context.
+ * @param[in] c Cipher context
+ * @return Void
  */
 static void ossl_aead_dealloc(cipher_t *c) {
   log_debug(NULL, "-");
@@ -124,7 +132,13 @@ static void ossl_aead_dealloc(cipher_t *c) {
 }
 
 /**
+ * Initialize an AEAD cipher context for encryption/decryption.
  *
+ * @param[in] c Cipher context
+ * @param[in] key Encryption/decryption key
+ * @param[in] key_len Length of encryption/decryption key
+ * @param[in] oper Operation: CIPHER_OPERATION_ENCRYPT or CIPHER_OPERATION_DECRYPT
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
                             cipher_operation_t oper) {
@@ -175,8 +189,8 @@ static err_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
    * so we directly pass the IV of required length in ossl_aead_set_iv()
    */
   if (alg != AEAD_CHACHA20_POLY1305) {
-    if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN,
-                            AES_GCM_IV_LEN, NULL) != 1) {
+    if (EVP_CIPHER_CTX_ctrl(ctx->ossl_ctx, EVP_CTRL_GCM_SET_IVLEN, AES_GCM_IV_LEN,
+                            NULL) != 1) {
       return ERR_INTERNAL;
     }
   }
@@ -189,7 +203,12 @@ static err_t ossl_aead_init(cipher_t *c, const uint8_t *key, size_t key_len,
 }
 
 /**
+ * Set the IV/nonce for an AEAD cipher context.
  *
+ * @param[in] c Cipher context
+ * @param[in] iv IV/nonce buffer
+ * @param[in] iv_len Length of IV/nonce buffer
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_aead_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   aead_ossl_ctx *ctx;
@@ -223,10 +242,16 @@ static err_t ossl_aead_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
 }
 
 /**
+ * Set the additional authenticated data (AAD) for an AEAD cipher context.
  *
+ * @param[in] c Cipher context
+ * @param[in] aad Additional authenticated data buffer
+ * @param[in] aad_len Length of additional authenticated data buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * The AAD can only be set once per call to ossl_aead_init().
  */
-static err_t ossl_aead_set_aad(cipher_t *c, const uint8_t *aad,
-                               size_t aad_len) {
+static err_t ossl_aead_set_aad(cipher_t *c, const uint8_t *aad, size_t aad_len) {
   int len;
   aead_ossl_ctx *ctx;
 
@@ -262,7 +287,15 @@ static err_t ossl_aead_set_aad(cipher_t *c, const uint8_t *aad,
 }
 
 /**
+ * Encrypt AEAD data.
  *
+ * @param[in] c Cipher context
+ * @param[in] in Input data buffer
+ * @param[in] in_len Length of input data buffer
+ * @param[out] out Output data buffer
+ * @param[in,out] out_len On input, size of output buffer;
+ *                        On output, number of bytes written to output buffer
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
                                uint8_t *out, size_t *out_len) {
@@ -312,7 +345,15 @@ static err_t ossl_aead_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
 }
 
 /**
+ * Decrypt AEAD data.
  *
+ * @param[in] c Cipher context
+ * @param[in] in Input data buffer (ciphertext + tag)
+ * @param[in] in_len Length of input data buffer
+ * @param[out] out Output data buffer (plaintext)
+ * @param[in,out] out_len On input, size of output buffer;
+ *                        On output, number of bytes written to output buffer
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_aead_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
                                uint8_t *out, size_t *out_len) {

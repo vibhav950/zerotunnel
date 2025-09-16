@@ -35,7 +35,14 @@ typedef struct kem_ossl_ctx_st {
   } while (0)
 
 /**
+ * Allocate resources for a KEM context.
  *
+ * @param[out] kem Pointer to pointer to allocated KEM context
+ * @param[in] alg KEM algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The allocated KEM context must be securely deallocated by calling
+ * `ossl_kem_dealloc()` after use to prevent leaking of sensitive data.
  */
 static err_t ossl_kem_alloc(kem_t **kem, kem_alg_t alg) {
   extern const kem_intf_t kem_kyber_intf;
@@ -88,7 +95,10 @@ static err_t ossl_kem_alloc(kem_t **kem, kem_alg_t alg) {
 }
 
 /**
+ * Deallocate and securely erase a KEM context.
  *
+ * @param[in] kem KEM context to deallocate
+ * @return Void
  */
 static void ossl_kem_dealloc(kem_t *kem) {
   log_debug(NULL, "-");
@@ -110,14 +120,26 @@ static void ossl_kem_dealloc(kem_t *kem) {
 }
 
 /**
+ * Free arbitrary memory.
  *
+ * @param[in] ptr Pointer to memory to free
+ * @param[in] len Length of memory to free
+ * @return Void
  */
 static void ossl_kem_mem_free(void *ptr, size_t len) {
   OPENSSL_secure_clear_free(ptr, len);
 }
 
 /**
+ * Generate a public/private (encapsulation/decapsulation) key pair.
  *
+ * @param[in] kem KEM context
+ * @param[out] pubkey Pointer to public key buffer (allocated by the function)
+ * @param[out] pubkey_len Length of the public key buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p pubkey must be freed by calling
+ * `ossl_kem_mem_free()` after use.
  */
 static err_t ossl_kem_keypair_gen(kem_t *kem, uint8_t **pubkey, size_t *pubkey_len) {
   err_t ret = ERR_SUCCESS;
@@ -168,7 +190,19 @@ cleanup:
 }
 
 /**
+ * Encapsulate a shared secret using the peer's public key.
  *
+ * @param[in] kem KEM context
+ * @param[in] peer_pubkey Peer public key
+ * @param[in] peer_pubkey_len Length of the peer public key
+ * @param[out] ct Pointer to ciphertext buffer (allocated by the function)
+ * @param[out] ct_len Length of the ciphertext buffer
+ * @param[out] ss Pointer to shared secret buffer (allocated by the function)
+ * @param[out] ss_len Length of the shared secret buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p ct and @p ss must be freed by calling
+ * `ossl_kem_mem_free()` after use.
  */
 static err_t ossl_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
                                   size_t peer_pubkey_len, uint8_t **ct, size_t *ct_len,
@@ -268,7 +302,17 @@ cleanup:
 }
 
 /**
+ * Decapsulate a shared secret using the received ciphertext.
  *
+ * @param[in] kem KEM context
+ * @param[in] ct Received ciphertext
+ * @param[in] ct_len Length of the received ciphertext
+ * @param[out] ss Pointer to shared secret buffer (allocated by the function)
+ * @param[out] ss_len Length of the shared secret buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p ss must be freed by calling `ossl_kem_mem_free()`
+ * after use.
  */
 static err_t ossl_kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len,
                                   uint8_t **ss, size_t *ss_len) {

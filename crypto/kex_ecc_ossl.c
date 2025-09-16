@@ -35,7 +35,14 @@ typedef struct kex_ossl_ctx_st {
 #define KEX_FLAG_GET(kex, flag) ((kex)->flags & flag)
 
 /**
+ * Allocate resources for an ECC key exchange context.
  *
+ * @param[out] kex Pointer to allocated KEX context
+ * @param[in] curve Curve identifier
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The allocated KEX context must be securely deallocated by calling
+ * `ossl_kex_ecc_dealloc()` after use to prevent leaking of sensitive data.
  */
 static err_t ossl_kex_ecc_alloc(kex_t **kex, kex_curve_t curve) {
   err_t ret = ERR_SUCCESS;
@@ -121,7 +128,10 @@ cleanup:
 }
 
 /**
+ * Deallocate and securely erase an ECC KEX context.
  *
+ * @param[in] kex KEX context to deallocate
+ * @return Void
  */
 static void ossl_kex_ecc_dealloc(kex_t *kex) {
   log_debug(NULL, "-");
@@ -141,7 +151,10 @@ static void ossl_kex_ecc_dealloc(kex_t *kex) {
 }
 
 /**
+ * Generate an ECC public/private key pair.
  *
+ * @param[in] kex KEX context
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_kex_ecc_key_gen(kex_t *kex) {
   err_t ret = ERR_SUCCESS;
@@ -171,7 +184,16 @@ cleanup:
 }
 
 /**
+ * Extract the public key and curve name to share with the peer.
+ * @param[in] kex KEX context
+ * @param[out] peer_data Pointer to peer data structure to populate
+ * @return ERR_SUCCESS on success, error code otherwise
  *
+ * @note The memory allocated in @p peer_data must be freed by calling
+ * `ossl_kex_ecc_free_peer_data()` after use.
+ *
+ * @note This function may only be called after a successful call to
+ * `ossl_kex_ecc_key_gen()`.
  */
 static err_t ossl_kex_ecc_get_peer_data(kex_t *kex, kex_peer_share_t *peer_data) {
   err_t ret = ERR_SUCCESS;
@@ -259,6 +281,18 @@ cleanup:
   return ret;
 }
 
+/**
+ * Create a new peer data structure by copying the provided public key and curve name.
+ * @param[out] peer_data Pointer to peer data structure to populate
+ * @param[in] ec_pub Pointer to the peer's public key
+ * @param[in] ec_pub_len Length of the peer's public key
+ * @param[in] ec_curvename Pointer to the peer's curve name (optional,
+ * @param[in] ec_curvename_len Length of the peer's curve name
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p peer_data must be freed by calling
+ * `ossl_kex_ecc_free_peer_data()` after use.
+ */
 static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
                                         const uint8_t *ec_pub, size_t ec_pub_len,
                                         const uint8_t *ec_curvename,
@@ -295,6 +329,12 @@ static err_t ossl_kex_ecc_new_peer_data(kex_peer_share_t *peer_data,
   return ERR_SUCCESS;
 }
 
+/**
+ * Free the memory allocated in a peer data structure.
+ *
+ * @param[in] peer_data Pointer to peer data structure to free
+ * @return Void
+ */
 static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
   log_debug(NULL, "-");
 
@@ -306,6 +346,20 @@ static void ossl_kex_ecc_free_peer_data(kex_peer_share_t *peer_data) {
 }
 
 /**
+ * Derive the shared secret using the peer's public key.
+ *
+ * @param[in] kex KEX context
+ * @param[in] peer_data Pointer to peer data structure containing the peer's public key
+ * @param[out] shared_key Pointer to buffer to hold the derived shared key (allocated by
+ * the function)
+ * @param[out] shared_key_len Length of the derived shared key buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p shared_key must be securely freed by calling
+ * `zt_clr_free()` after use.
+ *
+ * @note This function may only be called after a successful call to
+ * `ossl_kex_ecc_key_gen()`.
  *
  */
 static err_t ossl_kex_ecc_derive_shared_key(kex_t *kex, kex_peer_share_t *peer_data,
@@ -401,7 +455,15 @@ cleanup:
 }
 
 /**
+ * Get the public key bytes to share with the peer.
  *
+ * @param[in] kex KEX context
+ * @param[out] pubkey Pointer to buffer to hold the public key (allocated by the function)
+ * @param[out] pubkey_len Length of the public key buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The memory allocated in @p pubkey must be freed by calling
+ * `zt_clr_free()` after use.
  */
 static err_t ossl_kex_ecc_get_public_key_bytes(kex_t *kex, uint8_t **pubkey,
                                                size_t *pubkey_len) {

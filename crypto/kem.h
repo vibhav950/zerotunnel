@@ -5,7 +5,7 @@
  *
  * ==============================================
  *
- * kem.h
+ * kem.h - Key Encapsulation Mechanisms (KEMs)
  */
 
 #ifndef __KEM_H__
@@ -40,18 +40,14 @@ typedef void (*kem_dealloc_func_t)(kem_ptr_t kem);
 
 typedef void (*kem_mem_free_func_t)(void *ptr, size_t len);
 
-typedef err_t (*kem_keygen_func_t)(kem_ptr_t kem, uint8_t **pubkey,
-                                   size_t *pubkey_len);
+typedef err_t (*kem_keygen_func_t)(kem_ptr_t kem, uint8_t **pubkey, size_t *pubkey_len);
 
-typedef err_t (*kem_encapsulate_func_t)(kem_ptr_t kem,
-                                        const uint8_t *peer_pubkey,
+typedef err_t (*kem_encapsulate_func_t)(kem_ptr_t kem, const uint8_t *peer_pubkey,
                                         size_t peer_pubkey_len, uint8_t **ct,
-                                        size_t *ct_len, uint8_t **ss,
-                                        size_t *ss_len);
+                                        size_t *ct_len, uint8_t **ss, size_t *ss_len);
 
-typedef err_t (*kem_decapsulate_func_t)(kem_ptr_t kem, const uint8_t *ct,
-                                        size_t ct_len, uint8_t **ss,
-                                        size_t *ss_len);
+typedef err_t (*kem_decapsulate_func_t)(kem_ptr_t kem, const uint8_t *ct, size_t ct_len,
+                                        uint8_t **ss, size_t *ss_len);
 
 typedef struct kem_intf_st {
   kem_alloc_func_t alloc;
@@ -72,25 +68,104 @@ typedef struct kem_st {
   kem_flag_t flags;
 } kem_t;
 
+/**
+ * Convert a KEM algorithm enum to a string name.
+ *
+ * @param[in] alg KEM algorithm
+ * @return String representation of the KEM algorithm
+ */
 const char *kem_alg_to_string(kem_alg_t alg);
 
+/**
+ * Check if a KEM algorithm is supported by the given KEM interface.
+ *
+ * @param[in] intf KEM interface
+ * @param[in] alg  KEM algorithm to check
+ * @return Non-zero if supported, zero otherwise
+ */
 int kem_intf_alg_is_supported(const kem_intf_t *intf, kem_alg_t alg);
 
+/**
+ * Get the status of a specific flag in the KEM context.
+ *
+ * @param[in] kem    KEM context
+ * @param[in] flag KEM flag to check
+ * @return Non-zero if the flag is set, zero otherwise
+ */
 int kem_flag_get(kem_t *kem, kem_flag_t flag);
 
+/**
+ * Allocate a KEM context using the specified KEM interface.
+ *
+ * @param[in] intf    KEM interface
+ * @param[out] kem    Pointer to the allocated KEM context
+ * @param[in] alg     KEM algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The allocated KEM context must be deallocated using `kem_dealloc()`.
+ */
 err_t kem_intf_alloc(const kem_intf_t *intf, kem_t **kem, kem_alg_t alg);
 
+/**
+ * Deallocate and securely erase a KEM context.
+ *
+ * @param[in] kem KEM context to deallocate
+ * @return Void
+ */
 void kem_dealloc(kem_t *kem);
 
+/**
+ * Free memory allocated by the KEM interface.
+ *
+ * @param[in] intf KEM interface
+ * @param[in] ptr Pointer to memory to free
+ * @param[in] len Length of memory to free
+ * @return Void
+ */
 void kem_mem_free(const kem_intf_t *intf, void *ptr, size_t len);
 
+/**
+ * Generate a KEM key pair.
+ *
+ * @param[in] kem KEM context
+ * @param[out] pubkey Pointer to the generated public key (allocated by the function)
+ * @param[out] pubkey_len Length of the generated public key
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The generated @p pubkey must be freed using `kem_mem_free()`.
+ */
 err_t kem_keygen(kem_t *kem, uint8_t **pubkey, size_t *pubkey_len);
 
-err_t kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
-                      size_t peer_pubkey_len, uint8_t **ct, size_t *ct_len,
-                      uint8_t **ss, size_t *ss_len);
+/**
+ * Encapsulate a shared secret using the peer's public key.
+ *
+ * @param[in] kem KEM context
+ * @param[in] peer_pubkey Peer public key
+ * @param[in] peer_pubkey_len Length of the peer public key
+ * @param[out] ct Pointer to the generated ciphertext (allocated by the function)
+ * @param[out] ct_len Length of the generated ciphertext
+ * @param[out] ss Pointer to the derived shared secret (allocated by the function)
+ * @param[out] ss_len Length of the derived shared secret
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The generated @p ct and @p ss must be freed using `kem_mem_free()`.
+ */
+err_t kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey, size_t peer_pubkey_len,
+                      uint8_t **ct, size_t *ct_len, uint8_t **ss, size_t *ss_len);
 
-err_t kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len,
-                      uint8_t **ss, size_t *ss_len);
+/**
+ * Decapsulate a shared secret from the received ciphertext.
+ *
+ * @param[in] kem KEM context
+ * @param[in] ct Received ciphertext
+ * @param[in] ct_len Length of the received ciphertext
+ * @param[out] ss Pointer to the derived shared secret (allocated by the function)
+ * @param[out] ss_len Length of the derived shared secret
+ * @return ERR_SUCCESS on success, error code otherwise
+ *
+ * @note The secret in @p ss must be freed using `kem_mem_free()`.
+ */
+err_t kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len, uint8_t **ss,
+                      size_t *ss_len);
 
 #endif /* __KEM_H__ */

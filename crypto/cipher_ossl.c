@@ -31,7 +31,13 @@ typedef struct _cipher_ossl_ctx_st {
 // clang-format on
 
 /**
+ * Allocate and initialize an cipher context for the specified algorithm and key length.
  *
+ * @param[out] c      Pointer to the allocated cipher context
+ * @param[in]  key_len Length of the encryption/decryption key
+ * @param[in]  tag_len Tag length (unused)
+ * @param[in]  alg     Cipher algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
                                size_t tag_len ATTRIBUTE_UNUSED, cipher_alg_t alg) {
@@ -90,7 +96,10 @@ static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
 }
 
 /**
+ * Deallocate and securely erase an cipher context.
  *
+ * @param[in] c Cipher context to deallocate
+ * @return Void
  */
 static void ossl_cipher_dealloc(cipher_t *c) {
   log_debug(NULL, "-");
@@ -109,7 +118,13 @@ static void ossl_cipher_dealloc(cipher_t *c) {
 }
 
 /**
+ * Initialize the cipher context with the provided key and operation mode.
  *
+ * @param[in] c        Cipher context
+ * @param[in] key      Key buffer
+ * @param[in] key_len  Length of the key
+ * @param[in] oper     Operation (encrypt or decrypt)
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
                               cipher_operation_t oper) {
@@ -160,7 +175,12 @@ static err_t ossl_cipher_init(cipher_t *c, const uint8_t *key, size_t key_len,
 }
 
 /**
+ * Set the initialization vector (IV) for the cipher context.
  *
+ * @param[in] c      Cipher context
+ * @param[in] iv     IV buffer
+ * @param[in] iv_len Length of the IV
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
   cipher_ossl_ctx *ctx;
@@ -194,7 +214,13 @@ static err_t ossl_cipher_set_iv(cipher_t *c, const uint8_t *iv, size_t iv_len) {
 }
 
 /**
+ * Set the Additional Authenticated Data (AAD) for the cipher context.
+ * @warning Not supported for such ciphers.
  *
+ * @param[in] c      Cipher context (unused)
+ * @param[in] aad    AAD buffer (unused)
+ * @param[in] aad_len Length of the AAD (unused)
+ * @return ERR_INVALID always (not supported)
  */
 static err_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
                                  const uint8_t *aad ATTRIBUTE_UNUSED,
@@ -205,7 +231,14 @@ static err_t ossl_cipher_set_aad(cipher_t *c ATTRIBUTE_UNUSED,
 }
 
 /**
+ * Encrypt data.
  *
+ * @param[in]  c       Cipher context
+ * @param[in]  in      Input buffer to encrypt
+ * @param[in]  in_len  Length of input buffer
+ * @param[out] out     Output buffer for encrypted data
+ * @param[in,out] out_len On input: size of output buffer; on output: actual bytes written
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
                                  uint8_t *out, size_t *out_len) {
@@ -242,7 +275,14 @@ static err_t ossl_cipher_encrypt(cipher_t *c, const uint8_t *in, size_t in_len,
 }
 
 /**
+ * Decrypt data.
  *
+ * @param[in]  c       Cipher context
+ * @param[in]  in      Input buffer to decrypt
+ * @param[in]  in_len  Length of input buffer
+ * @param[out] out     Output buffer for decrypted data
+ * @param[in,out] out_len On input: size of output buffer; on output: actual bytes written
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_cipher_decrypt(cipher_t *c, const uint8_t *in, size_t in_len,
                                  uint8_t *out, size_t *out_len) {

@@ -29,7 +29,13 @@ typedef struct hmac_ossl_ctx_st {
 // clang-format on
 
 /**
+ * Allocate resources for an HMAC context.
  *
+ * @param[out] h Pointer to allocated HMAC context
+ * @param[in] key_len Length of the HMAC key
+ * @param[in] out_len Length of the HMAC output
+ * @param[in] alg HMAC algorithm
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len, hmac_alg_t alg) {
   extern const hmac_intf_t hmac_intf;
@@ -101,7 +107,10 @@ static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len, hmac_al
 }
 
 /**
+ * Deallocate and securely erase an HMAC context.
  *
+ * @param[in] h HMAC context to deallocate
+ * @return Void
  */
 static void ossl_hmac_dealloc(hmac_t *h) {
   log_debug(NULL, "-");
@@ -120,7 +129,12 @@ static void ossl_hmac_dealloc(hmac_t *h) {
 }
 
 /**
+ * Initialize an HMAC context with the specified key.
  *
+ * @param[in] h HMAC context
+ * @param[in] key HMAC key
+ * @param[in] key_len Length of the HMAC key
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
   hmac_ossl_ctx *ctx;
@@ -173,7 +187,12 @@ static err_t ossl_hmac_init(hmac_t *h, const uint8_t *key, size_t key_len) {
 }
 
 /**
+ * Update the HMAC context with the provided message data.
  *
+ * @param[in] h HMAC context
+ * @param[in] msg Message data
+ * @param[in] msg_len Length of the message data
+ * @return ERR_SUCCESS on success, error code otherwise
  */
 static err_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   hmac_ossl_ctx *ctx;
@@ -197,6 +216,16 @@ static err_t ossl_hmac_update(hmac_t *h, const uint8_t *msg, size_t msg_len) {
   return ERR_SUCCESS;
 }
 
+/**
+ * Compute/finalize the HMAC digest.
+ *
+ * @param[in] h HMAC context
+ * @param[in] msg Message data (can be NULL)
+ * @param[in] msg_len Length of the message data
+ * @param[out] digest Output buffer for the HMAC digest
+ * @param[in] digest_len Length of the output buffer
+ * @return ERR_SUCCESS on success, error code otherwise
+ */
 static err_t ossl_hmac_compute(hmac_t *h, const uint8_t *msg, size_t msg_len,
                                uint8_t *digest, size_t digest_len) {
   hmac_ossl_ctx *ctx;
