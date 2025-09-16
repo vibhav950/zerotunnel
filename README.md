@@ -4,6 +4,16 @@ Secure P2P file transfer tool.
 
 zerotunnel uses the KAPPA protocol to establish ephemeral session keys using a PQ-hardened cryptographic handshake. Read the KAPPA specification (WIP) [here](docs/specifications/KAPPA.md).
 
+## Directions to install
+
+```bash
+git clone https://github.com/vibhav950/zerotunnel.git
+cd zerotunnel
+mkdir build && cd build
+cmake ..
+make
+```
+
 ## TODO
 
 - [X] Complete the crypto API.
