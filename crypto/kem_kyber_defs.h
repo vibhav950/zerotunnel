@@ -1,6 +1,8 @@
 #ifndef __KEM_KYBER_OQS_H__
 #define __KEM_KYBER_OQS_H__
 
+// clang-format off
+
 /**
  * ML-KEM/Kyber approved parameter sets (FIPS 203).
  *
@@ -24,20 +26,5 @@
 
 // 32-byte random public rho
 #define KEM_KYBER_PUBLIC_SEED_SIZE      32
-
-#if 1 /* defined(LIBOQS) */
-
-#include <oqs/oqs.h>
-
-#if !defined(OQS_ENABLE_KEM_kyber_512) ||                                      \
-    !defined(OQS_ENABLE_KEM_kyber_768) || !defined(OQS_ENABLE_KEM_kyber_1024)
-#error                                                                         \
-    "liboqs must be configured with OQS_ENABLE_KEM_kyber_512, OQS_ENABLE_KEM_kyber_768, and OQS_ENABLE_KEM_kyber_1024"
-#endif
-
-typedef struct kem_oqs_ctx_st {
-  OQS_KEM *kem;
-} kem_oqs_ctx;
-#endif
 
 #endif /* __KEM_KYBER_OQS_H__ */

@@ -9,6 +9,16 @@
 
 #include <oqs/oqs.h>
 
+#if !defined(OQS_ENABLE_KEM_kyber_512) || !defined(OQS_ENABLE_KEM_kyber_768) ||          \
+    !defined(OQS_ENABLE_KEM_kyber_1024)
+#error                                                                                   \
+    "liboqs must be configured with OQS_ENABLE_KEM_kyber_512, OQS_ENABLE_KEM_kyber_768, and OQS_ENABLE_KEM_kyber_1024"
+#endif
+
+typedef struct kem_oqs_ctx_st {
+  OQS_KEM *kem;
+} kem_oqs_ctx;
+
 #define KEM_FLAG_SET(kem, flag) ((void)((kem)->flags |= flag))
 #define KEM_FLAG_GET(kem, flag) ((kem)->flags & flag)
 
@@ -96,17 +106,12 @@ static void liboqs_kem_dealloc(kem_t *kem) {
 /**
  *
  */
-static void liboqs_kem_mem_free(void *ptr, size_t len) {
-  log_debug(NULL, "-");
-
-  OQS_MEM_secure_free(ptr, len);
-}
+static void liboqs_kem_mem_free(void *ptr, size_t len) { OQS_MEM_secure_free(ptr, len); }
 
 /**
  *
  */
-static err_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
-                                    size_t *pubkey_len) {
+static err_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey, size_t *pubkey_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
   uint8_t *privkey;
@@ -152,9 +157,8 @@ static err_t liboqs_kem_keypair_gen(kem_t *kem, uint8_t **pubkey,
  *
  */
 static err_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
-                                    size_t peer_pubkey_len, uint8_t **ct,
-                                    size_t *ct_len, uint8_t **ss,
-                                    size_t *ss_len) {
+                                    size_t peer_pubkey_len, uint8_t **ct, size_t *ct_len,
+                                    uint8_t **ss, size_t *ss_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
   kem_alg_t alg;
@@ -214,9 +218,8 @@ static err_t liboqs_kem_encapsulate(kem_t *kem, const uint8_t *peer_pubkey,
 /**
  *
  */
-static err_t liboqs_kem_decapsulate(kem_t *kem, const uint8_t *ct,
-                                    size_t ct_len, uint8_t **ss,
-                                    size_t *ss_len) {
+static err_t liboqs_kem_decapsulate(kem_t *kem, const uint8_t *ct, size_t ct_len,
+                                    uint8_t **ss, size_t *ss_len) {
   kem_oqs_ctx *oqs_ctx;
   OQS_KEM *oqs_kem;
 

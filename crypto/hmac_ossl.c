@@ -14,6 +14,11 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
+typedef struct hmac_ossl_ctx_st {
+  const EVP_MD *md;
+  EVP_MD_CTX *md_ctx;
+} hmac_ossl_ctx;
+
 // clang-format off
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 
@@ -24,8 +29,7 @@
 /**
  *
  */
-static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len,
-                             hmac_alg_t alg) {
+static err_t ossl_hmac_alloc(hmac_t **h, size_t key_len, size_t out_len, hmac_alg_t alg) {
   extern const hmac_intf_t hmac_intf;
   hmac_ossl_ctx *hmac;
   const EVP_MD *md;

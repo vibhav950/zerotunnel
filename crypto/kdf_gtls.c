@@ -11,6 +11,12 @@
 #include "kdf.h"
 #include "kdf_defs.h"
 
+#include <gnutls/crypto.h>
+
+typedef struct kdf_gtls_ctx_st {
+  gnutls_mac_algorithm_t mac_alg;
+} kdf_gtls_ctx;
+
 #define KDF_FLAG_SET(kdf, flag) (void)((kdf)->flags |= flag)
 #define KDF_FLAG_GET(kdf, flag) ((kdf)->flags & flag)
 #define KDF_FLAG_UNSET(kdf, flag) (void)((kdf)->flags &= ~flag)
@@ -73,9 +79,8 @@ static void gtls_kdf_free(kdf_t *kdf) {
 }
 
 /**  */
-static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password,
-                           size_t password_len, const uint8_t *salt,
-                           size_t salt_len) {
+static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password, size_t password_len,
+                           const uint8_t *salt, size_t salt_len) {
   uint8_t *pw, *slt;
 
   log_debug(NULL, "password_len=%zu, salt_len=%zu", password_len, salt_len);
@@ -120,8 +125,7 @@ static err_t gtls_kdf_init(kdf_t *kdf, const uint8_t *password,
 
 /**  */
 static err_t gtls_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
-                             size_t additional_data_len, uint8_t *key,
-                             size_t key_len) {
+                             size_t additional_data_len, uint8_t *key, size_t key_len) {
   kdf_gtls_ctx *kdf_ctx;
   gnutls_mac_algorithm_t mac_alg;
   gnutls_datum_t dkey, dsalt;
@@ -151,16 +155,15 @@ static err_t gtls_kdf_derive(kdf_t *kdf, const uint8_t *additional_data,
   if (!(buf = zt_malloc(buf_len)))
     return ERR_MEM_FAIL;
 
-  zt_memcpy(buf, kdf->salt, kdf->saltlen);
-  zt_memcpy(buf + kdf->saltlen, additional_data, additional_data_len);
+  memcpy(buf, kdf->salt, kdf->saltlen);
+  memcpy(buf + kdf->saltlen, additional_data, additional_data_len);
   dsalt.data = buf;
   dsalt.size = buf_len;
 
   dkey.data = kdf->pw;
   dkey.size = kdf->pwlen;
 
-  if (gnutls_pbkdf2(mac_alg, &dkey, &dsalt, KDF_PBKDF2_CFABLE_ITER, key,
-                    key_len) < 0) {
+  if (gnutls_pbkdf2(mac_alg, &dkey, &dsalt, KDF_PBKDF2_CFABLE_ITER, key, key_len) < 0) {
     ret = ERR_INTERNAL;
   }
 

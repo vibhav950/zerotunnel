@@ -13,6 +13,11 @@
 
 #include <openssl/evp.h>
 
+typedef struct _cipher_ossl_ctx_st {
+  const EVP_CIPHER *ossl_evp;
+  EVP_CIPHER_CTX *ossl_ctx;
+} cipher_ossl_ctx;
+
 // clang-format off
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 
@@ -27,8 +32,7 @@
  *
  */
 static err_t ossl_cipher_alloc(cipher_t **c, size_t key_len,
-                               size_t tag_len ATTRIBUTE_UNUSED,
-                               cipher_alg_t alg) {
+                               size_t tag_len ATTRIBUTE_UNUSED, cipher_alg_t alg) {
   extern const cipher_intf_t cipher_intf;
   cipher_ossl_ctx *cipher_ctx;
   const EVP_CIPHER *evp;
@@ -282,6 +286,6 @@ const cipher_intf_t cipher_intf = {
     .set_aad = ossl_cipher_set_aad,
     .encrypt = ossl_cipher_encrypt,
     .decrypt = ossl_cipher_decrypt,
-    .supported_algs = CIPHER_AES_CTR_128 | CIPHER_AES_CTR_192 |
-                      CIPHER_AES_CTR_256 | CIPHER_CHACHA20,
+    .supported_algs =
+        CIPHER_AES_CTR_128 | CIPHER_AES_CTR_192 | CIPHER_AES_CTR_256 | CIPHER_CHACHA20,
 };

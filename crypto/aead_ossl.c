@@ -13,6 +13,11 @@
 
 #include <openssl/evp.h>
 
+typedef struct _aead_ossl_ctx_st {
+  const EVP_CIPHER *ossl_evp;
+  EVP_CIPHER_CTX *ossl_ctx;
+} aead_ossl_ctx;
+
 // clang-format off
 #define CHECK(cond) { if (!(cond)) return ERR_BAD_ARGS; }
 

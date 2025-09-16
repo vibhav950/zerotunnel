@@ -1,9 +1,6 @@
 #ifndef __KDF_DEFS_H__
 #define __KDF_DEFS_H__
 
-#include "common/endianness.h"
-#include "kdf.h"
-
 /** Max password length in bytes */
 #define KDF_MAX_PASSWORD_LEN 1024
 /** Max salt length in bytes */
@@ -54,25 +51,5 @@
  */
 
 #define KDF_PBKDF2_CFABLE_ITER 8192
-
-
-#if defined(OPENSSL)
-
-#include <openssl/evp.h>
-
-typedef struct kdf_ossl_ctx_st {
-  EVP_KDF *kdf;
-  EVP_KDF_CTX *kctx;
-} kdf_ossl_ctx;
-
-#elif defined(GNUTLS)
-
-#include <gnutls/crypto.h>
-
-typedef struct kdf_gtls_ctx_st {
-  gnutls_mac_algorithm_t mac_alg;
-} kdf_gtls_ctx;
-
-#endif
 
 #endif /* __KDF_DEFS_H__ */
