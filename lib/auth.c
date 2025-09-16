@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * auth.c - Authentication and password management
+ */
+
 #include "auth.h"
 #include "common/b64.h"
 #include "common/defines.h"

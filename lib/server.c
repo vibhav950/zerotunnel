@@ -1,3 +1,12 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * server.c
+ */
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE

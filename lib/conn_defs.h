@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * conn_defs.h
+ */
+
 #ifndef __CONN_DEFS_H__
 #define __CONN_DEFS_H__
 

@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * vcry.c - Virtual cryptography interface
+ */
+
 #include "vcry.h"
 #include "common/log.h"
 #include "crypto/cipher_defs.h"

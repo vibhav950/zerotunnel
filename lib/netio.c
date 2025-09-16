@@ -1,3 +1,13 @@
+/**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
+ * netio.c - Network I/O utilities
+ */
+
 #include "client.h"
 #include "common/log.h"
 #include "common/timeout.h"
