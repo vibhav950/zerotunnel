@@ -1,4 +1,10 @@
 /**
+ * zerotunnel - Secure P2P file tunneling project
+ * Copyright (C) 2025 zerotunnel contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * ==============================================
+ *
  * options.c -- parse command line arguments and initialize the library config.
  *
  * The argument parser is a bare-bones version of the one used for wget2,
