@@ -7,13 +7,16 @@
 #include "log.h"
 
 #include <errno.h>
-#include <gcrypt.h>
 #include <malloc.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#ifdef HAVE_LIBGCRYPT
+#include <gcrypt.h>
+#endif
 
 /* Forward declarations */
 static void *zt_mem_malloc(size_t);
@@ -108,7 +111,7 @@ void *zt_realloc(void *p, size_t n) { return zt_realloc_func(p, n); }
  * be helpful to explore other API's like OpenSSL's secure_malloc().
  */
 err_t zt_secure_mem_init(size_t n) {
-#if defined(HAVE_LIBGCRYPT)
+#ifdef HAVE_LIBGCRYPT
   gcry_error_t e;
 
   if (!gcry_check_version(GCRYPT_VERSION))
@@ -136,7 +139,7 @@ err:
 }
 
 void *zt_secure_mem_alloc(size_t n) {
-#if defined(HAVE_LIBGCRYPT)
+#ifdef HAVE_LIBGCRYPT
   void *p;
 
   if (unlikely(!(p = gcry_xcalloc_secure(1, n))))
@@ -148,7 +151,7 @@ void *zt_secure_mem_alloc(size_t n) {
 }
 
 void zt_secure_mem_free(void *p) {
-#if defined(HAVE_LIBGCRYPT)
+#ifdef HAVE_LIBGCRYPT
   if (likely(p))
     gcry_free(p);
 #endif /* HAVE_LIBGCRYPT */
@@ -160,7 +163,7 @@ void zt_secure_mem_free(void *p) {
  * May be called from atexit() hooks and/or signal handlers.
  */
 void zt_secure_mem_cleanup(void) {
-#if defined(HAVE_LIBGCRYPT)
+#ifdef HAVE_LIBGCRYPT
   gcry_control(GCRYCTL_TERM_SECMEM, 0, 0);
 #endif /* HAVE_LIBGCRYPT */
 }

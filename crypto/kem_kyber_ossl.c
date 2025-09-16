@@ -332,4 +332,5 @@ const kem_intf_t kem_kyber_intf = {
     .keygen = ossl_kem_keypair_gen,
     .encapsulate = ossl_kem_encapsulate,
     .decapsulate = ossl_kem_decapsulate,
+    .supported_algs = KEM_Kyber_512 | KEM_Kyber_768 | KEM_Kyber_1024,
 };

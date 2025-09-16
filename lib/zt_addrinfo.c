@@ -15,7 +15,7 @@ void zt_addrinfo_free(struct zt_addrinfo *ai) {
 void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port) {
   struct zt_addrinfo *ai_cur;
   struct sockaddr_in *addr;
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
   struct sockaddr_in6 *addr6;
 #endif
 
@@ -28,7 +28,7 @@ void zt_addrinfo_set_port(struct zt_addrinfo *ai, int port) {
       addr = (struct sockaddr_in *)ai_cur->ai_addr;
       addr->sin_port = htons((unsigned short)port);
       break;
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
     case AF_INET6:
       addr6 = (struct sockaddr_in6 *)ai_cur->ai_addr;
       addr6->sin6_port = htons((unsigned short)port);

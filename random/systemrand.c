@@ -3,6 +3,8 @@
 #include "common/x86_cpuid.h"
 #include "rdrand.h"
 
+#include <features.h>
+
 // clang-format off
 #if defined(HAVE_GETENTROPY)
 #include <sys/random.h>

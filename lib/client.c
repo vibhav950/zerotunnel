@@ -102,7 +102,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     prev_alarm = alarm(zt_sltoui((timeout_msec + 999) / 1000));
   }
 
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
   /* Check if the system has IPv6 enabled and the config allows it */
   if (!GlobalConfig.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
@@ -157,7 +157,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
     if (cur->ai_family == AF_INET) {
       saddr_len = sizeof(struct sockaddr_in);
     }
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
     else if (cur->ai_family == AF_INET6) {
       saddr_len = sizeof(struct sockaddr_in6);
     }
@@ -217,7 +217,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
     if (cur->ai_family == AF_INET)
       addr_ptr = &((struct sockaddr_in *)cur->ai_addr)->sin_addr;
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
     else if (cur->ai_family == AF_INET6) {
       addr_ptr = &((struct sockaddr_in6 *)cur->ai_addr)->sin6_addr;
     }

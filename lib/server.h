@@ -25,7 +25,7 @@ typedef struct _zt_server_connection_st {
   ZT_SERVER_STATE
     state;
   struct {
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
     char ip[INET6_ADDRSTRLEN];      /* server address */
 #else
     char ip[INET_ADDRSTRLEN];       /* server address */
@@ -36,7 +36,7 @@ typedef struct _zt_server_connection_st {
   struct {
     socklen_t addrlen;
     struct sockaddr_storage addr;
-#ifdef AF_INET6
+#ifdef HAVE_IPV6
     char ip[INET6_ADDRSTRLEN];      /* client address */
 #else
     char ip[INET_ADDRSTRLEN];       /* client address */
