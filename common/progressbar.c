@@ -17,25 +17,11 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-
-/* =================== Defines for time estimation =================== */
-
-/* Number of historic samples for throughput estimation */
-#define PB_SAMPLE_HISTORY_SIZE 10
-/* Minimum samples before estimating */
-#define PB_MIN_SAMPLES_FOR_ESTIMATE 3
-/* Exponential smoothing factor */
-#define PB_SMOOTHING_FACTOR 0.25
-/* Minimum elapsed time (in seconds) before providing an estimate */
-#define PB_MIN_ELAPSED_FOR_ESTIMATE 2
-/* Interval (in seconds) between estimate updates */
-#define PB_UPDATE_INTERVAL_SEC 1
 
 /** Fixed progressbar element sizes */
 enum PB_ELEMENT_SIZES {
@@ -45,7 +31,7 @@ enum PB_ELEMENT_SIZES {
   PB_PERCENT_SIZE = 4 + 1,
   // xxx.xxX, space
   PB_DATA_SIZE = (3 + 1 + 2 + 1 + 1),
-  PB_THROUGHPUT_SIZE = (3 + 1 + 2 + 3 + 1),
+  PB_SPEED_SIZE = (3 + 1 + 2 + 3 + 1),
   PB_ETA_SIZE = (2 + 1 + 2 + 1 + 2 + 1), // hh:mm:ss, space
   PB_METER_SIZE = 44 + 1,
 };
@@ -53,12 +39,13 @@ enum PB_ELEMENT_SIZES {
 enum PB_SCREEN_WIDTH {
   PB_MIN_SCREEN_WIDTH = 80,
   PB_MIN_LINE1_WIDTH = (PB_FILE_NAME_SIZE + PB_DATA_SIZE + PB_RECIPIENT_NAME_SIZE + 1),
-  PB_MIN_LINE2_WIDTH = (PB_DATA_SIZE + PB_PERCENT_SIZE + PB_THROUGHPUT_SIZE +
-                        PB_ETA_SIZE + PB_METER_SIZE + 1),
+  PB_MIN_LINE2_WIDTH =
+      (PB_DATA_SIZE + PB_PERCENT_SIZE + PB_SPEED_SIZE + PB_ETA_SIZE + PB_METER_SIZE + 1),
 };
 
-enum {
+enum PB_SETTINGS {
   PB_THREAD_REFRESH_INTERVAL = 500000UL, // 500ms (in us)
+  PB_SPEED_RING_SIZE = 30,
 };
 
 typedef struct _progressbar_st {
@@ -72,30 +59,22 @@ typedef struct _progressbar_st {
   char recipient_name[PB_RECIPIENT_NAME_SIZE];
   size_t total_size;
   volatile size_t xferd_size;
-  zt_timeval_t start_time;
-
-  /* Time estimation */
-  zt_timeval_t last_update_time;
-  size_t last_xferd_size;
-  double throughput_samples[PB_SAMPLE_HISTORY_SIZE];
-  double rolling_sum; /* sum of all samples */
-  int sample_count;
-  int sample_index;
-  double smoothed_throughput;
-  bool estimation_initialized;
+  timeval_t start_time;
+  timediff_t time_ring[PB_SPEED_RING_SIZE];
+  size_t bytes_ring[PB_SPEED_RING_SIZE];
+  int ring_idx, ring_used;
 } progressbar_t;
 
 static progressbar_t *progressbar;
 static pthread_t pb_thread;
-static volatile atomic_bool terminate_thread;
+static volatile bool dont_update;
 static volatile sig_atomic_t winsize_changed;
-static volatile atomic_bool dont_update;
 
 /**
  * Get a readable representation of the data size in bytes.
  * The displayed format is `aaa.bb{B,K,M,G}`.
  */
-static const char *pb_datavalue_readable(size_t bytes) {
+static const char *pb_size2str(size_t bytes) {
   static char buf[PB_DATA_SIZE];
 
   if (bytes > 0 && bytes <= 999)
@@ -115,19 +94,19 @@ static const char *pb_datavalue_readable(size_t bytes) {
  * Get a readable representation of the data transfer rate given in B/s.
  * The displayed format is `aaa.bb{B,K,M,G}/s`.
  */
-static const char *pb_throughput_readable(size_t rate) {
-  static char buf[PB_THROUGHPUT_SIZE];
+static const char *pb_speed2str(size_t rate) {
+  static char buf[PB_SPEED_SIZE];
 
   if (rate > 0 && rate <= 999)
-    snprintf(buf, PB_THROUGHPUT_SIZE, "%6.2fB/s", (double)rate);
+    snprintf(buf, PB_SPEED_SIZE, "%6.2fB/s", (double)rate);
   else if (rate <= 999 * SIZE_KB)
-    snprintf(buf, PB_THROUGHPUT_SIZE, "%6.2fK/s", (double)rate / SIZE_KB);
+    snprintf(buf, PB_SPEED_SIZE, "%6.2fK/s", (double)rate / SIZE_KB);
   else if (rate <= 999 * SIZE_MB)
-    snprintf(buf, PB_THROUGHPUT_SIZE, "%6.2fM/s", (double)rate / SIZE_MB);
+    snprintf(buf, PB_SPEED_SIZE, "%6.2fM/s", (double)rate / SIZE_MB);
   else if (rate <= 999 * SIZE_GB)
-    snprintf(buf, PB_THROUGHPUT_SIZE, "%6.2fG/s", (double)rate / SIZE_GB);
+    snprintf(buf, PB_SPEED_SIZE, "%6.2fG/s", (double)rate / SIZE_GB);
   else
-    snprintf(buf, PB_THROUGHPUT_SIZE, "---.--B/s");
+    snprintf(buf, PB_SPEED_SIZE, "---.--B/s");
   return (const char *)buf;
 }
 
@@ -138,7 +117,7 @@ static const char *pb_throughput_readable(size_t rate) {
  * Get a readable representation of the time, given the time value in seconds.
  * The displayed time is of the format `hh:mm:ss`.
  */
-static const char *pb_eta_readable(timediff_t seconds) {
+static const char *pb_time2str(timediff_t seconds) {
   static char buf[PB_ETA_SIZE];
   int hh, mm, ss;
 
@@ -211,12 +190,11 @@ static inline ATTRIBUTE_ALWAYS_INLINE void pb_clear_progressbar(void) {
   ASSERT(progressbar);
   /* We are currently (during updates / completion) at the end of the second
      progress bar line. We want to:
-     1. Clear first line (file/recipient info)
+     1. Clear first* line (file/recipient info)
      2. Clear second line (meter)
      3. Delete the (now empty) second line so all following output scrolls up
         by one line
-     4. Leave cursor at start of the (former) first line so normal printing
-        continues there. */
+     4. Leave cursor at start of the first* line */
   /* Sequence explanation:
      ESC [1A : move cursor up 1 line (to first line)
      ESC [1G : move to column 1
@@ -225,81 +203,68 @@ static inline ATTRIBUTE_ALWAYS_INLINE void pb_clear_progressbar(void) {
      ESC [1G : column 1
      ESC [2K : clear entire line
      ESC [1M : delete this line (pull lines below up)
-     ESC [1A : move cursor up to the cleared first line position
-     ESC [1G : ensure column 1 */
+     ESC [1A : move cursor up to the first line
+     ESC [1G : move to column 1 */
   fputs("\x1B[1A\x1B[1G\x1B[2K\x1B[1B\x1B[1G\x1B[2K\x1B[1M\x1B[1A\x1B[1G", stdout);
   fflush(stdout);
 }
 
 /**
- * Calculate an ETA estimate every PB_UPDATE_INTERVAL_SEC seconds based on the
- * exponentially smoothed rolling window average of recent throughput samples.
+ * Calculate an estimate for the current transfer speed and update the ring buffer stats.
+ *
+ * @param[in] progressbar The progressbar instance.
+ * @return The estimated transfer speed in B/s or SIZE_MAX if there isn't enough data.
+ *
+ * Transfer speed is computed as the smoothened average of the previous PB_SPEED_RING_SIZE
+ * samples stored in the progressbar's ring buffers.
+ *
+ * This approach is based on wget2's progress bar speed estimation written by Tim Ruehsen.
+ * Ref: wget2/libwget/bar.c
  */
-static timediff_t pb_calculate_eta(progressbar_t *pb, size_t current_bytes) {
-  zt_timeval_t now = zt_time_now();
-  timediff_t total_elapsed = zt_timediff_msec(now, pb->start_time) / 1000;
+static size_t pb_calculate_speed(progressbar_t *progressbar) {
+  int ring_idx = progressbar->ring_idx;
+  int ring_used = progressbar->ring_used;
+  int next_idx;
 
-  if (total_elapsed < PB_MIN_ELAPSED_FOR_ESTIMATE)
-    return 0;
+  /* Return early if no new data transferred since last sample */
+  if (progressbar->xferd_size == progressbar->bytes_ring[ring_idx])
+    return SIZE_MAX;
 
-  /* Time since last estimate update */
-  timediff_t delta_time = zt_timediff_msec(now, pb->last_update_time) / 1000;
+  if (ring_idx == PB_SPEED_RING_SIZE)
+    ring_idx = 0;
 
-  if (delta_time >= PB_UPDATE_INTERVAL_SEC && current_bytes > pb->last_xferd_size) {
-    size_t delta_bytes = current_bytes - pb->last_xferd_size;
-    double current_throughput = (double)delta_bytes / delta_time;
+  progressbar->time_ring[ring_idx] =
+      zt_timediff_msec(zt_time_now(), progressbar->start_time);
+  progressbar->bytes_ring[ring_idx] = progressbar->xferd_size;
 
-    /* Remove old sample from rolling sum if buffer is full */
-    if (pb->sample_count == PB_SAMPLE_HISTORY_SIZE)
-      pb->rolling_sum -= pb->throughput_samples[pb->sample_index];
-    else if (pb->sample_count < PB_SAMPLE_HISTORY_SIZE)
-      pb->sample_count += 1;
-
-    /* Add new sample */
-    pb->throughput_samples[pb->sample_index] = current_throughput;
-    pb->rolling_sum += current_throughput;
-    pb->sample_index = (pb->sample_index + 1) % PB_SAMPLE_HISTORY_SIZE;
-
-    /* Calculate recent average */
-    double recent_avg = pb->rolling_sum / pb->sample_count;
-
-    if (!pb->estimation_initialized) {
-      pb->smoothed_throughput = recent_avg;
-      pb->estimation_initialized = true;
-    } else {
-      pb->smoothed_throughput = recent_avg * PB_SMOOTHING_FACTOR +
-                                pb->smoothed_throughput * (1.0 - PB_SMOOTHING_FACTOR);
-    }
-
-    pb->last_update_time = now;
-    pb->last_xferd_size = current_bytes;
+  if (ring_used < PB_SPEED_RING_SIZE) {
+    ring_used++;
+    next_idx = 1;
+  } else {
+    next_idx = ring_idx + 1 == PB_SPEED_RING_SIZE ? 0 : ring_idx + 1;
   }
 
-  /* Need minimum samples for reliable estimate */
-  if (pb->sample_count < PB_MIN_SAMPLES_FOR_ESTIMATE || !pb->estimation_initialized) {
-    /* Fall back to simple average for the initial period */
-    double avg_throughput =
-        (total_elapsed > 0) ? (double)current_bytes / total_elapsed : 0.0;
-    if (avg_throughput > 0)
-      return (timediff_t)((pb->total_size - current_bytes) / avg_throughput);
-    return 0;
-  }
+  progressbar->ring_idx = ring_idx;
+  progressbar->ring_used = ring_used;
 
-  return pb->smoothed_throughput > 0
-             ? (timediff_t)((pb->total_size - current_bytes) / pb->smoothed_throughput)
-             : 0;
+  if (ring_used < 2) /* Not enough data to calculate speed */
+    return SIZE_MAX;
+
+  size_t bytes = progressbar->bytes_ring[ring_idx] - progressbar->bytes_ring[next_idx];
+  timediff_t time = progressbar->time_ring[ring_idx] - progressbar->time_ring[next_idx];
+  return (bytes * 1000) / (time ? time : 1);
 }
 
 static void pb_progressbar_update(void) {
   char *spaces;
   float perc;
-  size_t nbytes, throughput, estimate;
+  size_t nbytes, speed;
   int nslots, empty, width;
-  timediff_t elapsed;
+  timediff_t elapsed, remaining;
 
   ASSERT(progressbar);
 
-  if (unlikely(atomic_load_explicit(&dont_update, memory_order_acquire)))
+  if (unlikely(dont_update))
     return;
 
   pthread_mutex_lock(&progressbar->lock);
@@ -326,7 +291,7 @@ static void pb_progressbar_update(void) {
       // clang-format off
       fprintf(stdout, " %s %s %.*s %s \n",
               filename,
-              pb_datavalue_readable(progressbar->total_size),
+              pb_size2str(progressbar->total_size),
               empty,
               spaces,
               recipient
@@ -343,14 +308,16 @@ static void pb_progressbar_update(void) {
   empty = PB_METER_SIZE - 3 - nslots;
 
   elapsed = zt_timediff_msec(zt_time_now(), progressbar->start_time) / 1000;
-  throughput = (elapsed != 0) ? nbytes / elapsed : 0;
-
-  estimate = pb_calculate_eta(progressbar, nbytes);
+  speed = pb_calculate_speed(progressbar);
+  if (speed == SIZE_MAX)
+    remaining = TIMEDIFF_T_MAX;
+  else
+    remaining = (timediff_t)((progressbar->total_size - nbytes) / (speed ? speed : 1));
 
   // clang-format off
   /* Print the second line with progress bar */
   fprintf(stdout, "\x1B[1G %s %3d%% %.*s [%.*s%.*s] %s %s",
-          pb_datavalue_readable(nbytes),
+          pb_size2str(nbytes),
           (int)(perc * 100),
           MAX(0, width - PB_MIN_LINE2_WIDTH - 1),
           spaces,
@@ -358,8 +325,8 @@ static void pb_progressbar_update(void) {
           progressbar->progress,
           empty,
           spaces,
-          pb_throughput_readable(throughput),
-          pb_eta_readable(estimate)
+          pb_speed2str(speed),
+          pb_time2str(remaining)
   );
   // clang-format on
   fflush(stdout);
@@ -367,7 +334,7 @@ static void pb_progressbar_update(void) {
 }
 
 static void *pb_update_thread(void *args ATTRIBUTE_UNUSED) {
-  while (!atomic_load_explicit(&terminate_thread, memory_order_relaxed)) {
+  while (!dont_update) {
     pb_progressbar_update();
     usleep(PB_THREAD_REFRESH_INTERVAL);
   }
@@ -375,8 +342,8 @@ static void *pb_update_thread(void *args ATTRIBUTE_UNUSED) {
 }
 
 static void pb_log_before_cb(void *args ATTRIBUTE_UNUSED) {
-  /* Pause updates and clear progress bar so logs print at former first line */
-  atomic_store_explicit(&dont_update, true, memory_order_release);
+  /* Pause progressbar updates and clear both lines before printing logs */
+  dont_update = true;
   if (!progressbar)
     return;
   pthread_mutex_lock(&progressbar->lock);
@@ -386,7 +353,7 @@ static void pb_log_before_cb(void *args ATTRIBUTE_UNUSED) {
 
 static void pb_log_after_cb(void *args ATTRIBUTE_UNUSED) {
   if (!progressbar) {
-    atomic_store_explicit(&dont_update, false, memory_order_release);
+    dont_update = false;
     return;
   }
   /* Move to a new line, mark for redraw below logs, then resume updates */
@@ -395,7 +362,7 @@ static void pb_log_after_cb(void *args ATTRIBUTE_UNUSED) {
   progressbar->redraw = true;
   progressbar->after_log = true;
   pthread_mutex_unlock(&progressbar->lock);
-  atomic_store_explicit(&dont_update, false, memory_order_release);
+  dont_update = false;
 }
 
 int zt_progressbar_init(void) {
@@ -406,7 +373,7 @@ int zt_progressbar_init(void) {
   if (!progressbar)
     return -1;
 
-  atomic_store(&terminate_thread, false);
+  dont_update = false;
 
   if (pthread_mutex_init(&progressbar->lock, NULL)) {
     free(progressbar);
@@ -435,7 +402,6 @@ int zt_progressbar_init(void) {
   (void)zt_logger_append_before_cb(NULL, pb_log_before_cb, NULL);
   (void)zt_logger_append_after_cb(NULL, pb_log_after_cb, NULL);
 
-  atomic_store(&dont_update, true);
   if (pthread_create(&pb_thread, NULL, pb_update_thread, NULL)) {
     pthread_mutex_destroy(&progressbar->lock);
     free(progressbar->spaces);
@@ -449,16 +415,17 @@ int zt_progressbar_init(void) {
 void zt_progressbar_destroy(void) {
   if (progressbar) {
     pthread_mutex_lock(&progressbar->lock);
-    atomic_store_explicit(&terminate_thread, true, memory_order_release);
+    dont_update = true;
     pthread_mutex_unlock(&progressbar->lock);
+
     pthread_join(pb_thread, NULL);
     pthread_mutex_destroy(&progressbar->lock);
+
     zt_logger_remove_before_cb(NULL, pb_log_before_cb);
     zt_logger_remove_after_cb(NULL, pb_log_after_cb);
     free(progressbar->spaces);
     free(progressbar);
     progressbar = NULL;
-    atomic_store(&terminate_thread, false);
   }
 }
 
@@ -482,17 +449,7 @@ void zt_progressbar_begin(const char *recipient, const char *filename, size_t fi
     progressbar->redraw = true;     /* redraw on next update */
     progressbar->after_log = false; /* start fresh */
 
-    /* Init fields for ETA logic */
-    progressbar->last_update_time = progressbar->start_time;
-    progressbar->last_xferd_size = 0;
-    progressbar->sample_count = 0;
-    progressbar->sample_index = 0;
-    progressbar->rolling_sum = 0.0;
-    progressbar->smoothed_throughput = 0.0;
-    progressbar->estimation_initialized = false;
-    memset(progressbar->throughput_samples, 0, sizeof(progressbar->throughput_samples));
-
-    atomic_store_explicit(&dont_update, false, memory_order_release);
+    dont_update = false;
     pthread_mutex_unlock(&progressbar->lock);
   }
 }
@@ -508,7 +465,7 @@ void zt_progressbar_complete(void) {
   if (likely(progressbar)) {
     pthread_mutex_lock(&progressbar->lock);
     pb_clear_progressbar();
-    atomic_store_explicit(&dont_update, true, memory_order_release);
+    dont_update = true;
     pthread_mutex_unlock(&progressbar->lock);
   }
 }
