@@ -31,7 +31,7 @@ typedef struct _zt_client_connection_st {
     state;                /* current client state */
   struct zt_addrinfo
     *ai_estab;            /* established address info */
-  zt_timeval_t
+  timeval_t
     created_at;           /* connection creation time */
   zt_msg_t
     *msgbuf;              /* message buffer */

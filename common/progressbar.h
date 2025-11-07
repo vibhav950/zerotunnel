@@ -44,7 +44,7 @@ void zt_progressbar_begin(const char *recipient, const char *filename, size_t fi
 
 /**
  * Update the progressbar with the number of bytes transferred since the last
- * call. This function should be called periodically during the file transfer.
+ * call. This function should be called recurrently as the file transfer progresses.
  *
  * @param nbytes The number of bytes transferred since the last call.
  *

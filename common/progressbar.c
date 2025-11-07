@@ -26,15 +26,15 @@
 
 /* =================== Defines for time estimation =================== */
 
-/* Keep last 8 throughput samples (power of 2 for efficiency) */
-#define PB_SAMPLE_HISTORY_SIZE 8
-/* Need at least 3 samples for good estimate */
+/* Number of historic samples for throughput estimation */
+#define PB_SAMPLE_HISTORY_SIZE 10
+/* Minimum samples before estimating */
 #define PB_MIN_SAMPLES_FOR_ESTIMATE 3
-/* Exponential smoothing factor (1/4 for fast bit shifting) */
+/* Exponential smoothing factor */
 #define PB_SMOOTHING_FACTOR 0.25
-/* Wait at least 2 seconds before estimating */
+/* Minimum elapsed time (in seconds) before providing an estimate */
 #define PB_MIN_ELAPSED_FOR_ESTIMATE 2
-/* Only recalculate estimate every 1 second */
+/* Interval (in seconds) between estimate updates */
 #define PB_UPDATE_INTERVAL_SEC 1
 
 /** Fixed progressbar element sizes */
@@ -78,7 +78,7 @@ typedef struct _progressbar_st {
   zt_timeval_t last_update_time;
   size_t last_xferd_size;
   double throughput_samples[PB_SAMPLE_HISTORY_SIZE];
-  double rolling_sum; /* sum of all samples for O(1) average calculation */
+  double rolling_sum; /* sum of all samples */
   int sample_count;
   int sample_index;
   double smoothed_throughput;
@@ -232,79 +232,62 @@ static inline ATTRIBUTE_ALWAYS_INLINE void pb_clear_progressbar(void) {
 }
 
 /**
- * Calculate improved time estimate using optimized sliding window and exponential
- * smoothing. Optimizations:
- * 1. Only recalculate estimate every PB_UPDATE_INTERVAL_SEC seconds
- * 2. Use rolling sum instead of recalculating average each time
- * 3. Power-of-2 buffer size for efficient modulo operation
- * 4. Fractional smoothing factor for bit-shift optimization
+ * Calculate an ETA estimate every PB_UPDATE_INTERVAL_SEC seconds based on the
+ * exponentially smoothed rolling window average of recent throughput samples.
  */
 static timediff_t pb_calculate_eta(progressbar_t *pb, size_t current_bytes) {
   zt_timeval_t now = zt_time_now();
   timediff_t total_elapsed = zt_timediff_msec(now, pb->start_time) / 1000;
 
-  /* Wait for minimum elapsed time before providing estimates */
-  if (total_elapsed < PB_MIN_ELAPSED_FOR_ESTIMATE) {
+  if (total_elapsed < PB_MIN_ELAPSED_FOR_ESTIMATE)
     return 0;
-  }
 
-  /* Calculate time since last estimate update */
+  /* Time since last estimate update */
   timediff_t delta_time = zt_timediff_msec(now, pb->last_update_time) / 1000;
 
-  /* Only update estimate periodically to reduce overhead */
   if (delta_time >= PB_UPDATE_INTERVAL_SEC && current_bytes > pb->last_xferd_size) {
     size_t delta_bytes = current_bytes - pb->last_xferd_size;
     double current_throughput = (double)delta_bytes / delta_time;
 
     /* Remove old sample from rolling sum if buffer is full */
-    if (pb->sample_count == PB_SAMPLE_HISTORY_SIZE) {
+    if (pb->sample_count == PB_SAMPLE_HISTORY_SIZE)
       pb->rolling_sum -= pb->throughput_samples[pb->sample_index];
-    }
+    else if (pb->sample_count < PB_SAMPLE_HISTORY_SIZE)
+      pb->sample_count += 1;
 
     /* Add new sample */
     pb->throughput_samples[pb->sample_index] = current_throughput;
     pb->rolling_sum += current_throughput;
-    pb->sample_index =
-        (pb->sample_index + 1) & (PB_SAMPLE_HISTORY_SIZE - 1); // Power-of-2 modulo
+    pb->sample_index = (pb->sample_index + 1) % PB_SAMPLE_HISTORY_SIZE;
 
-    if (pb->sample_count < PB_SAMPLE_HISTORY_SIZE) {
-      pb->sample_count++;
-    }
-
-    /* Calculate average from rolling sum (O(1) instead of O(n)) */
+    /* Calculate recent average */
     double recent_avg = pb->rolling_sum / pb->sample_count;
 
-    /* Apply exponential smoothing with bit-shift optimization */
     if (!pb->estimation_initialized) {
       pb->smoothed_throughput = recent_avg;
       pb->estimation_initialized = true;
     } else {
-      /* 0.25 * recent + 0.75 * smoothed = (recent + 3*smoothed) / 4 */
-      pb->smoothed_throughput = (recent_avg + 3.0 * pb->smoothed_throughput) * 0.25;
+      pb->smoothed_throughput = recent_avg * PB_SMOOTHING_FACTOR +
+                                pb->smoothed_throughput * (1.0 - PB_SMOOTHING_FACTOR);
     }
 
-    /* Update tracking variables */
     pb->last_update_time = now;
     pb->last_xferd_size = current_bytes;
   }
 
   /* Need minimum samples for reliable estimate */
   if (pb->sample_count < PB_MIN_SAMPLES_FOR_ESTIMATE || !pb->estimation_initialized) {
-    /* Fall back to simple average for initial period */
+    /* Fall back to simple average for the initial period */
     double avg_throughput =
         (total_elapsed > 0) ? (double)current_bytes / total_elapsed : 0.0;
-    if (avg_throughput > 0) {
+    if (avg_throughput > 0)
       return (timediff_t)((pb->total_size - current_bytes) / avg_throughput);
-    }
     return 0;
   }
 
-  /* Use smoothed throughput for estimate */
-  if (pb->smoothed_throughput > 0) {
-    return (timediff_t)((pb->total_size - current_bytes) / pb->smoothed_throughput);
-  }
-
-  return 0;
+  return pb->smoothed_throughput > 0
+             ? (timediff_t)((pb->total_size - current_bytes) / pb->smoothed_throughput)
+             : 0;
 }
 
 static void pb_progressbar_update(void) {

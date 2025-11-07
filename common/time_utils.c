@@ -11,8 +11,8 @@
 #include "time_utils.h"
 
 /** Get current time. */
-zt_timeval_t zt_time_now() {
-  zt_timeval_t rv;
+timeval_t zt_time_now() {
+  timeval_t rv;
   struct timespec ts;
   struct timeval tv;
   /**
@@ -35,7 +35,7 @@ zt_timeval_t zt_time_now() {
  *
  * For differences too large/small, it returns the maximum/minimum value.
  */
-timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older) {
+timediff_t zt_timediff_msec(timeval_t newer, timeval_t older) {
   timediff_t diff = (timediff_t)newer.tv_sec - older.tv_sec;
   if (diff >= TIMEDIFF_T_MAX / 1000)
     return TIMEDIFF_T_MAX;
@@ -50,7 +50,7 @@ timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older) {
  *
  * For differences too large/small, it returns the maximum/minimum value.
  */
-timediff_t zt_timediff_msec_ceil(zt_timeval_t newer, zt_timeval_t older) {
+timediff_t zt_timediff_msec_ceil(timeval_t newer, timeval_t older) {
   timediff_t diff = (timediff_t)newer.tv_sec - older.tv_sec;
   if (diff >= TIMEDIFF_T_MAX / 1000)
     return TIMEDIFF_T_MAX;
@@ -64,7 +64,7 @@ timediff_t zt_timediff_msec_ceil(zt_timeval_t newer, zt_timeval_t older) {
  *
  * For differences too large/small, it returns the maximum/minimum value.
  */
-timediff_t zt_timediff_usec(zt_timeval_t newer, zt_timeval_t older) {
+timediff_t zt_timediff_usec(timeval_t newer, timeval_t older) {
   timediff_t diff = (timediff_t)newer.tv_sec - older.tv_sec;
   if (diff >= (TIMEDIFF_T_MAX / 1000000))
     return TIMEDIFF_T_MAX;

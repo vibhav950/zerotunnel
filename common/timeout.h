@@ -105,7 +105,7 @@
 typedef void (*timeout_cb)(void *args);
 
 typedef struct _zt_timeout_st {
-  zt_timeval_t begin;
+  timeval_t begin;
   timediff_t expire_in_usec;
   timeout_cb handler;
 } zt_timeout_t;

@@ -16,10 +16,10 @@
 #include <sys/time.h>
 #include <time.h>
 
-typedef struct _zt_timeval_st {
+typedef struct _timeval_st {
   time_t tv_sec; /* seconds */
   int tv_usec;   /* microseconds */
-} zt_timeval_t;
+} timeval_t;
 
 #define TYPEOF_TIMEDIFF_T long
 #define SIZEOF_TIMEDIFF_T sizeof(TYPEOF_TIMEDIFF_T)
@@ -33,7 +33,7 @@ typedef TYPEOF_TIMEDIFF_T timediff_t;
  *
  * @return the current time.
  */
-zt_timeval_t zt_time_now();
+timeval_t zt_time_now();
 
 /**
  * Returns the time in milliseconds.
@@ -42,7 +42,7 @@ zt_timeval_t zt_time_now();
  * @param older the older time.
  * @return the time difference in milliseconds.
  */
-timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older);
+timediff_t zt_timediff_msec(timeval_t newer, timeval_t older);
 
 /**
  * Returns the time in milliseconds, rounded up to the nearest millisecond.
@@ -51,7 +51,7 @@ timediff_t zt_timediff_msec(zt_timeval_t newer, zt_timeval_t older);
  * @param older the older time.
  * @return the time difference in milliseconds.
  */
-timediff_t zt_timediff_msec_ceil(zt_timeval_t newer, zt_timeval_t older);
+timediff_t zt_timediff_msec_ceil(timeval_t newer, timeval_t older);
 
 /**
  * Returns the time in microseconds.
@@ -60,6 +60,6 @@ timediff_t zt_timediff_msec_ceil(zt_timeval_t newer, zt_timeval_t older);
  * @param older the older time.
  * @return the time difference in microseconds.
  */
-timediff_t zt_timediff_usec(zt_timeval_t newer, zt_timeval_t older);
+timediff_t zt_timediff_usec(timeval_t newer, timeval_t older);
 
 #endif /* __TIMEDEFS_H__ */

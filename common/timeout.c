@@ -23,7 +23,7 @@
  * Note: If `usec < 0`, the timeout never expires.
  */
 void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler) {
-  zt_timeval_t tnow = zt_time_now();
+  timeval_t tnow = zt_time_now();
   if (likely(timeout)) {
     timeout->begin = tnow;
     timeout->expire_in_usec = usec;
@@ -39,7 +39,7 @@ void zt_timeout_begin(zt_timeout_t *timeout, timediff_t usec, timeout_cb handler
  * `zt_timeout_begin()`.
  */
 void zt_timeout_reset(zt_timeout_t *timeout) {
-  zt_timeval_t tnow = zt_time_now();
+  timeval_t tnow = zt_time_now();
   if (likely(timeout))
     timeout->begin = tnow;
 }
@@ -53,7 +53,7 @@ void zt_timeout_reset(zt_timeout_t *timeout) {
  * Check if a timeout has expired.
  */
 int zt_timeout_expired(zt_timeout_t *timeout, void *args) {
-  zt_timeval_t tnow = zt_time_now();
+  timeval_t tnow = zt_time_now();
   if (likely(timeout)) {
     if (timeout->expire_in_usec < 0)
       return 0;
