@@ -1042,11 +1042,13 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     case CLIENT_TRANSFER: {
       size_t nread;
       err_t rv;
+      progressbar_t *pb;
 
-      if (zt_progressbar_init() != 0)
+      if (!(pb = zt_progressbar_init(NULL, 1, NULL)))
         log_error(NULL, "Failed to create progress bar");
 
-      zt_progressbar_begin(GlobalConfig.hostname, fileinfo.name, fileinfo.size);
+      zt_progressbar_slot_begin(pb, 0, fileinfo.name, GlobalConfig.hostname,
+                                fileinfo.size, true);
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {
@@ -1059,15 +1061,15 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         if ((ret = client_send(conn)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
-          zt_progressbar_complete();
-          zt_progressbar_destroy();
+          zt_progressbar_slot_complete(pb, 0);
+          zt_progressbar_free(pb);
           goto cleanup2;
         }
-        zt_progressbar_update(nread);
+        zt_progressbar_update(pb, 0, nread);
       }
       zt_fio_close(&fileptr);
-      zt_progressbar_complete();
-      zt_progressbar_destroy();
+      zt_progressbar_slot_complete(pb, 0);
+      zt_progressbar_free(pb);
 
       if (rv != ERR_EOF) {
         ret = rv;

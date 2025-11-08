@@ -1031,6 +1031,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     case SERVER_TRANSFER: {
       err_t rv;
       off_t size, remaining;
+      progressbar_t *pb;
 
       if ((ret = zt_fio_open(&fio, GlobalConfig.filePath, FIO_WRONLY)) != ERR_SUCCESS) {
         log_error(NULL, "Failed to open file '%s' for writing", GlobalConfig.filePath);
@@ -1050,19 +1051,19 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      if (zt_progressbar_init() != 0)
+      if (!(pb = zt_progressbar_init(NULL, 1, NULL)))
         log_error(NULL, "Failed to create progress bar");
 
       remaining = size;
-      zt_progressbar_begin(conn->peer.ip, conn->fileinfo.name, remaining);
+      zt_progressbar_slot_begin(pb, 0, conn->fileinfo.name, conn->peer.ip, size, false);
 
       while (remaining > 0) {
         off_t writelen;
 
         if ((ret = server_recv(conn, MSG_FILEDATA | MSG_DONE)) != ERR_SUCCESS) {
           zt_fio_close(&fio);
-          zt_progressbar_complete();
-          zt_progressbar_destroy();
+          zt_progressbar_slot_complete(pb, 0);
+          zt_progressbar_free(pb);
           goto cleanupfile;
         }
 
@@ -1081,11 +1082,11 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         if (rv != ERR_SUCCESS)
           break;
 
-        zt_progressbar_update(writelen);
+        zt_progressbar_update(pb, 0, writelen);
         remaining -= writelen;
       }
-      zt_progressbar_complete();
-      zt_progressbar_destroy();
+      zt_progressbar_slot_complete(pb, 0);
+      zt_progressbar_free(pb);
 
       if (!conn->fl_live_read && remaining) {
         /* We prematurely break-ed out of the loop */
