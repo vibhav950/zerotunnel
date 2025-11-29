@@ -20,6 +20,7 @@
 #include "random/systemrand.h"
 
 #include <string.h>
+#include <threads.h>
 
 // clang-format off
 
@@ -118,6 +119,14 @@ enum {
   vcry_hs_done              = (1U << 5)
 };
 
+/**
+ * The internal context for the VCRY module.
+ *
+ * Although the encryption/decryption functions can be called from multiple
+ * threads, the module maintains a single instance of this struct since the
+ * handshake must be completed by a single thread and all threads that
+ * subsequently perform encryption concurrently will share the session key material.
+ */
 struct vcry_ctx_st {
   /**
    * handles for the crypto engine
@@ -147,10 +156,6 @@ struct vcry_ctx_st {
     pqk_len, /** len(pqk) for initiator and len(pqk_peer) for responder */
     ss_len;
 
-  uint64_t
-    seqno_ini, /** initiator's sequence number */
-    seqno_res;      /** responder's sequence number */
-
   int
     role,  /** role in handshake */
     state, /** most recent state marked 'complete' */
@@ -159,7 +164,7 @@ struct vcry_ctx_st {
 
 static struct vcry_ctx_st *vctx;
 static int initialized;
-static err_t __vcry_err_val;
+static thread_local err_t __vcry_err_val;
 
 #define VCRY_EXPECT(retval, expectval, jmp)                                    \
   do { if ((ret = (retval)) != (expectval))                                    \
@@ -207,31 +212,6 @@ static err_t __vcry_err_val;
   (vctx->skey + (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator              \
                      ? VCRY_IV_ENCR_RES_OFFSET                                 \
                      : VCRY_IV_ENCR_INI_OFFSET))
-
-/** Self sequence number (ini/res) */
-#define _vcry_seqno_self()                                                     \
-  (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator ? vctx->seqno_ini          \
-                                                    : vctx->seqno_res)
-/** Peer sequence number (ini/res) */
-#define _vcry_seqno_peer()                                                     \
-  (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator ? vctx->seqno_res          \
-                                                    : vctx->seqno_ini)
-
-#define _vcry_seqno_self_incr64()                                              \
-  do {                                                                         \
-    if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator)                      \
-      vctx->seqno_ini++;                                                       \
-    else                                                                       \
-      vctx->seqno_res++;                                                       \
-  } while (0)
-
-#define _vcry_seqno_peer_incr64()                                              \
-  do {                                                                         \
-    if (VCRY_HSHAKE_ROLE() == vcry_hshake_role_initiator)                      \
-      vctx->seqno_res++;                                                       \
-    else                                                                       \
-      vctx->seqno_ini++;                                                       \
-  } while (0)
 
 #define VCRY_ALG_LOOP(arr, stmts)                                              \
   const struct _vcry_alg_entry_st *p;                                          \
@@ -287,41 +267,61 @@ err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
   return ERR_SUCCESS;
 }
 
+/** Add a 64-bit value to V in Big-Endian format */
+static inline void _add64_be(uint8_t *V, uint64_t n) {
+  uint64_t *p = (uint64_t *)V;
+
+#ifdef __LITTLE_ENDIAN__
+  p[0] = BSWAP64(BSWAP64(p[0]) + n);
+#else
+  p[0] += n;
+#endif
+}
+
 /** The encryption nonce (ini/res) */
-static const uint8_t *vcry_encr_nonce(void) {
-  static uint8_t iv[16];
-  uint64_t sn;
+static const uint8_t *vcry_encr_nonce(vcry_crypto_hdr_t *hdr) {
+  // Allocate a buffer for the IV on the thread-local stack
+  static thread_local uint8_t iv[16];
+  uint64_t sid, offs;
 
   memcpy(iv, _vcry_encr_iv(), VCRY_IV_ENCR_LEN);
 
+  /* XXX: the following part of this function was written when the stream Id
+   * and offset were 8 bytes long.
+   * If these lengths are modified, the following code will cause a bug. */
 #ifdef __LITTLE_ENDIAN__
-  sn = BSWAP64(_vcry_seqno_self());
+  sid = BSWAP64(*((uint64_t *)hdr->sid));
+  offs = BSWAP64(*((uint64_t *)hdr->offs));
 #else
-  sn = _vcry_seqno_self();
+  sid = ((uint64_t *)hdr->sid)[0];
+  offs = ((uint64_t *)hdr->offs)[0];
 #endif
 
-  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sn;
+  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sid;
+  ((uint64_t *)iv)[1] = ((uint64_t *)iv)[1] ^ offs;
 
-  _vcry_seqno_self_incr64();
   return iv;
 }
 
 /** The decryption nonce (ini/res) */
-static const uint8_t *vcry_decr_nonce(void) {
-  static uint8_t iv[16];
-  uint64_t sn;
+static const uint8_t *vcry_decr_nonce(vcry_crypto_hdr_t *hdr) {
+  static thread_local uint8_t iv[16];
+  uint64_t sid, offs;
 
   memcpy(iv, _vcry_decr_iv(), VCRY_IV_ENCR_LEN);
 
+  /* Read the stream Id and offset as 64-bit big-endian integers */
 #ifdef __LITTLE_ENDIAN__
-  sn = BSWAP64(_vcry_seqno_peer());
+  sid = BSWAP64(*((uint64_t *)hdr->sid));
+  offs = BSWAP64(*((uint64_t *)hdr->offs));
 #else
-  sn = _vcry_seqno_peer();
+  sid = ((uint64_t *)hdr->sid)[0];
+  offs = ((uint64_t *)hdr->offs)[0];
 #endif
 
-  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sn;
+  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sid;
+  ((uint64_t *)iv)[1] = ((uint64_t *)iv)[1] ^ offs;
 
-  _vcry_seqno_peer_incr64();
   return iv;
 }
 
@@ -703,7 +703,9 @@ err_t vcry_set_crypto_params_from_names(const char *cipher_name, const char *aea
  *
  * The caller is responsible for freeing the `peerdata` buffer.
  *
- * Note: This function is called by the initiator of the handshake process.
+ * NOTE: This function is called by the handshake initiator.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -839,7 +841,9 @@ clean2:
  *
  * The caller is responsible for freeing the `peerdata_mine` buffer.
  *
- * Note: This function is called by the responder of the handshake process.
+ * NOTE: This function is called by the handshake responder.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -1003,9 +1007,11 @@ clean1:
  * This stage synchronizes the client and server and both parties have
  * everything they need to generate the session key.
  *
- * Note: This function is called by the initiator of the handshake process.
- *
  * Returns an `err_t` status code.
+ *
+ * NOTE: This function is called by the handshake initiator.
+ *
+ * NOTE: This function is not thread-safe.
  */
 err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
   err_t ret;
@@ -1071,6 +1077,10 @@ err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len) {
  * where DH_SS is the shared secret derived from the DHE key exchange, SS is
  * the shared secret derived from the PQ-KEM key encapsultion, PQK is the PQ-KEM
  * public key, and DHEK_A and DHEK_B are the DHE public keys of Alice and Bob.
+ *
+ * NOTE: This function is called by both the initiator and responder.
+ *
+ * NOTE: This function is not thread-safe.
  */
 err_t vcry_derive_session_key(void) {
   err_t ret = ERR_SUCCESS;
@@ -1180,7 +1190,9 @@ clean2:
  * NOTE: This function performs a non-constant-time comparison of
  * ID_A and ID_B so these strings must not contain sensitive data.
  *
- * NOTE: This function is called by the initiator of the handshake process.
+ * NOTE: This function is called by the handshake initiator.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -1244,7 +1256,9 @@ err_t vcry_initiator_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_le
  * NOTE: This function performs a non-constant-time comparison of
  * ID_A and ID_B so these strings must not contain sensitive data.
  *
- * NOTE: This function is called by the responder of the handshake process.
+ * NOTE: This function is called by the handshake responder.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -1303,7 +1317,9 @@ err_t vcry_responder_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_le
  * Verify(ProofB, (HMAC(K_mac_res, MAX(ID_A, ID_B) || MIN(ID_A, ID_B) ||
  *                "Second proof message (Proof_B)")))
  *
- * NOTE: This function is called by the initiator of the handshake process.
+ * NOTE: This function is called by the handshake initiator.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -1356,7 +1372,9 @@ err_t vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LE
  * Verify(ProofA, (HMAC(K_mac_ini, MIN(ID_A, ID_B) || MAX(ID_A, ID_B) ||
  *                "First proof message (Proof_A)")))
  *
- * NOTE: This function is called by the responder of the handshake process.
+ * NOTE: This function is called by the handshake responder.
+ *
+ * NOTE: This function is not thread-safe.
  *
  * Returns an `err_t` status code.
  */
@@ -1408,6 +1426,8 @@ err_t vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LE
  * Release all the resources allocated by the crypto module. This involves
  * securely freeing heap allocations, resetting status flags, and freeing
  * the context for each crypto engine.
+ *
+ * NOTE: This function is not thread-safe.
  */
 void vcry_module_release(void) {
   uint8_t *pqpub;
@@ -1456,6 +1476,41 @@ void vcry_module_release(void) {
 }
 
 /**
+ * Allocate and initialize a new crypto header object for a byte stream
+ * with the given \p stream_id of byte length `VCRY_STREAM_ID_LEN`.
+ *
+ * The \p stream_id must be generated randomly and uniquely for each stream
+ * using a cryptographically secure RNG function.
+ *
+ * Returns a pointer to the newly allocated `vcry_crypto_hdr_t` object,
+ * or `NULL` on failure.
+ *
+ * The pointer must be freed using `vcry_crypto_hdr_free()` when no longer needed.
+ */
+vcry_crypto_hdr_t *vcry_crypto_hdr_new(uint8_t stream_id[VCRY_STREAM_ID_LEN]) {
+  vcry_crypto_hdr_t *hdr;
+
+  if (!stream_id)
+    return NULL;
+
+  hdr = zt_calloc(1, sizeof(vcry_crypto_hdr_t));
+  if (!hdr)
+    return NULL;
+
+  memcpy(hdr->sid, stream_id, VCRY_STREAM_ID_LEN);
+
+  return hdr;
+}
+
+/**
+ * Free a previously allocated `vcry_crypto_hdr_t` object pointed to by \p hdr.
+ */
+void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr) {
+  if (hdr)
+    zt_clr_free(hdr, sizeof(vcry_crypto_hdr_t));
+}
+
+/**
  * Encrypt data in \p in of size \p in_len using the selected AEAD cipher
  * algorithm with the key material derived for this session, and store the
  * result in \p out.
@@ -1463,6 +1518,8 @@ void vcry_module_release(void) {
  * sufficient to store the encrypted data and the authentication tag.
  *
  * \p in and \p out can overlap.
+ *
+ * \p hdr must contain the crypto headers for the calling thread's stream.
  *
  * A successful encryption will result in \p out_len being set to the total
  * length of the encrypted and authenticated payload.
@@ -1475,9 +1532,10 @@ void vcry_module_release(void) {
  * out[in_len] = AEAD-Enc(in[in_len], k=K_encr_self, iv=nonce, aad=ad[ad_len])
  * and returns out[in_len] || tag[Tag_len]
  *
- * Here, `nonce` = 'sequence_number_self` XOR `IV_self`
+ * where, `nonce` = `IV_self` xor `stream_id` xor (`stream_offset` << 8)
  *
- * This function may only be called after the handshake is complete.
+ * NOTE: This function may only be called after the handshake is complete
+ * and is thread-safe provided that a single thread is used per stream.
  *
  * Returns an `err_t` status code.
  *
@@ -1485,11 +1543,11 @@ void vcry_module_release(void) {
  * and the tag, the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        uint8_t *out, size_t *out_len) {
+                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len) {
   err_t ret;
   size_t tag_len;
 
-  if (!in || !out || !out_len)
+  if (!in || !hdr || !out || !out_len)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
   if (VCRY_STATE() != vcry_hs_done)
@@ -1507,7 +1565,7 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_iv(vctx->aead, vcry_encr_nonce(), VCRY_IV_ENCR_LEN)) !=
+  if ((ret = cipher_set_iv(vctx->aead, vcry_encr_nonce(hdr), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -1518,6 +1576,8 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
   if ((ret = cipher_encrypt(vctx->aead, in, in_len, out, out_len)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
+
+  _add64_be(hdr->offs, in_len - 1);
 
   return ERR_SUCCESS;
 }
@@ -1531,15 +1591,18 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
  *
  * \p in and \p out can overlap.
  *
+ * \p hdr must contain the crypto headers for the calling thread's stream.
+ *
  * A successful decryption will result in \p out_len being set to the length of
  * the plaintext data.
  *
  * Performs
  * out[in_len] = AEAD-Dec(in[in_len], k=K_encr_peer, iv=nonce, aad=ad[ad_len])
  *
- * Here, `nonce` = `sequence_number_peer` XOR `IV_peer`
+ * where, `nonce` = `IV_peer` xor `stream_id` xor (`stream_offset` << 8)
  *
- * This function may only be called after the handshake is complete.
+ * NOTE: This function may only be called after the handshake is complete
+ * and is thread-safe provided that a single thread is used per stream.
  *
  * Returns an `err_t` status code.
  *
@@ -1547,11 +1610,11 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
  * the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        uint8_t *out, size_t *out_len) {
+                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len) {
   err_t ret;
   size_t tag_len;
 
-  if (!in || !out || !out_len)
+  if (!in || !hdr || !out || !out_len)
     return VCRY_ERR_SET(ERR_NULL_PTR);
 
   if (VCRY_STATE() != vcry_hs_done)
@@ -1574,7 +1637,7 @@ err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
     return VCRY_ERR_SET(ret);
   }
 
-  if ((ret = cipher_set_iv(vctx->aead, vcry_decr_nonce(), VCRY_IV_ENCR_LEN)) !=
+  if ((ret = cipher_set_iv(vctx->aead, vcry_decr_nonce(hdr), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
@@ -1585,6 +1648,8 @@ err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
   if ((ret = cipher_decrypt(vctx->aead, in, in_len, out, out_len)) != ERR_SUCCESS) {
     return VCRY_ERR_SET(ret);
   }
+
+  _add64_be(hdr->offs, out_len - 1);
 
   return ERR_SUCCESS;
 }

@@ -84,7 +84,7 @@
  *  - iv1 = IV_encr_res
 */
 #define VCRY_SESSION_KEY_LEN                                                   \
-  ((VCRY_K_MAC_LEN + VCRY_K_ENCR_LEN + VCRY_IV_ENCR_LEN) << 1)
+  ((VCRY_K_MAC_LEN + VCRY_K_ENCR_LEN + VCRY_IV_ENCR_LEN) * 2)
 
 /** Verification message length */
 #define VCRY_VERIFY_MSG_LEN            32UL
@@ -102,6 +102,14 @@
 
 #define VCRY_VERIFY_CONST0            "First proof message (Proof_A)"
 #define VCRY_VERIFY_CONST1            "Second proof message (Proof_B)"
+
+#define VCRY_STREAM_ID_LEN            8UL
+#define VCRY_STREAM_OFFSET_LEN        8UL
+
+typedef struct _vcry_crypto_hdr_st {
+  uint8_t sid[VCRY_STREAM_ID_LEN];      /* stream Id */
+  uint8_t offs[VCRY_STREAM_OFFSET_LEN]; /* byte offset in stream */
+} vcry_crypto_hdr_t;
 
 // clang-format on
 
@@ -153,9 +161,13 @@ err_t vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LE
                                      const uint8_t *id_a, const uint8_t *id_b,
                                      size_t len_a, size_t len_b);
 
+vcry_crypto_hdr_t *vcry_crypto_hdr_new(uint8_t stream_id[VCRY_STREAM_ID_LEN]);
+
+void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr);
+
 err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        uint8_t *out, size_t *out_len);
+                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len);
 err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        uint8_t *out, size_t *out_len);
+                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len);
 
 #endif // __VCRY_H__
