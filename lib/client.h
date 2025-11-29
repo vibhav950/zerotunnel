@@ -36,7 +36,7 @@ typedef struct _zt_client_connection_st {
   zt_msg_t
     *msgbuf;              /* message buffer */
   const char
-    *hostname,            /* hostname/IPv{4|6} to connect to */
+    *hostname,            /* peer's hostname or IPv4/6 address */
     *port;                /* explicit target service port */
   struct authid
     authid_mine,          /* local AuthId */

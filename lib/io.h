@@ -52,9 +52,9 @@ typedef struct _zt_fio_st {
   int flags;
   off_t size;
   off_t offset;
-  void *_prev;
-  size_t _prevsize;
-  size_t _pa_chunk_size;
+  // void *_prev;
+  // size_t _prevsize;
+  // size_t _pa_chunk_size;
 } zt_fio_t;
 
 typedef struct _zt_fileinfo_st {

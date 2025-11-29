@@ -262,9 +262,9 @@ static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
   fio->flags = 0;
   fio->size = 0;
   fio->offset = 0;
-  fio->_prev = NULL;
-  fio->_prevsize = 0;
-  fio->_pa_chunk_size = 0;
+  // fio->_prev = NULL;
+  // fio->_prevsize = 0;
+  // fio->_pa_chunk_size = 0;
 }
 
 /**

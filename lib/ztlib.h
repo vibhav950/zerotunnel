@@ -22,7 +22,7 @@ struct config {
     *hostname,                  /* peer hostname -- can be a FQDN or IP address */
     *passwdFile,                /* location of the password database file */
     *ciphersuite,               /* ciphersuite cannonical name or alias */
-    *filePath,                  /* complete target file path */
+    *filePath,                  /* complete source/target file/directory path */
     *passwdBundleId,            /* bundle identifier for KAPPA1 auth type */
     *wordlistFile;              /* path to the phonetic wordlist file */
   uint32_t
