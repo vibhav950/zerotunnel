@@ -24,13 +24,13 @@ typedef struct _sha256_ctx_st {
   size_t rem_len;
 } sha256_ctx_t;
 
-int sha256_init(sha256_ctx_t *ctx);
+void sha256_init(sha256_ctx_t *ctx);
 
-int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len);
+void sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len);
 
-int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]);
+void sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]);
 
-int SHA256(const uint8_t data[], size_t len, uint8_t hash[32]);
+void SHA256(const uint8_t data[], size_t len, uint8_t hash[32]);
 
 #if defined(DEBUG)
 /** Built-in KAT self tests */

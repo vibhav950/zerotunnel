@@ -44,10 +44,7 @@ static inline void sha256_process(uint32_t state[8], const uint8_t data[],
 }
 
 /** Initiate the SHA-256 state */
-int sha256_init(sha256_ctx_t *ctx) {
-  if (unlikely(!ctx))
-    return -1;
-
+void ATTRIBUTE_NONNULL(1) ATTRIBUTE_NOTHROW sha256_init(sha256_ctx_t *ctx) {
   ctx->len = ctx->rem_len = 0;
 
   ctx->state[0] = U32(0x6a09e667);
@@ -58,14 +55,11 @@ int sha256_init(sha256_ctx_t *ctx) {
   ctx->state[5] = U32(0x9b05688c);
   ctx->state[6] = U32(0x1f83d9ab);
   ctx->state[7] = U32(0x5be0cd19);
-  return 0;
 }
 
 /** Update SHA-256 state with message blocks  */
-int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
-  if (unlikely(!ctx))
-    return -1;
-
+void ATTRIBUTE_NONNULL(1, 2) ATTRIBUTE_NOTHROW
+    sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
   // Accumulate overall input size
   ctx->len += len;
 
@@ -73,7 +67,7 @@ int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
   if ((ctx->rem_len != 0) && (ctx->rem_len + len < SHA256_BLOCK_LEN)) {
     memcpy(&ctx->rem_data[ctx->rem_len], (void *)data, len);
     ctx->rem_len += len;
-    return 0;
+    return;
   }
 
   // Complete and process a previously stored block
@@ -104,14 +98,11 @@ int sha256_update(sha256_ctx_t *ctx, const uint8_t data[], size_t len) {
   // Store the remaining data
   memcpy(ctx->rem_data, (void *)data, len);
   ctx->rem_len = len;
-  return 0;
 }
 
 /** Finalize the SHA-256 hash and reset the context */
-int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
-  if (unlikely(!ctx || !hash))
-    return -1;
-
+void ATTRIBUTE_NONNULL(1, 2) ATTRIBUTE_NOTHROW
+    sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
   // Sanity check
   ASSERT(ctx->rem_len < SHA256_BLOCK_LEN);
 
@@ -155,17 +146,15 @@ int sha256_finalize(sha256_ctx_t *ctx, uint8_t hash[32]) {
 
   memcpy(hash, ctx->state, SHA256_DIGEST_LEN);
   memzero(ctx, sizeof(sha256_ctx_t));
-  return 0;
 }
 
-int SHA256(const uint8_t data[], size_t len, uint8_t hash[32]) {
-  int ret = 0;
+void ATTRIBUTE_NONNULL(1, 3) ATTRIBUTE_NOTHROW
+    SHA256(const uint8_t data[], size_t len, uint8_t hash[32]) {
   sha256_ctx_t ctx;
 
-  ret += sha256_init(&ctx);
-  ret += sha256_update(&ctx, data, len);
-  ret += sha256_finalize(&ctx, hash);
-  return ret == 0 ? 0 : -1;
+  sha256_init(&ctx);
+  sha256_update(&ctx, data, len);
+  sha256_finalize(&ctx, hash);
 }
 
 #if defined(DEBUG)
@@ -194,20 +183,20 @@ int sha256_self_test(void) {
   int idx;
   int pass = 1;
 
-  ASSERT(sha256_init(&ctx) == 0);
-  ASSERT(sha256_update(&ctx, text1, strlen(text1)) == 0);
-  ASSERT(sha256_finalize(&ctx, buf) == 0);
+  sha256_init(&ctx);
+  sha256_update(&ctx, text1, strlen(text1));
+  sha256_finalize(&ctx, buf);
   pass = pass && !memcmp(hash1, buf, SHA256_DIGEST_LEN);
 
-  ASSERT(sha256_init(&ctx) == 0);
-  ASSERT(sha256_update(&ctx, text2, strlen(text2)) == 0);
-  ASSERT(sha256_finalize(&ctx, buf) == 0);
+  sha256_init(&ctx);
+  sha256_update(&ctx, text2, strlen(text2));
+  sha256_finalize(&ctx, buf);
   pass = pass && !memcmp(hash2, buf, SHA256_DIGEST_LEN);
 
-  ASSERT(sha256_init(&ctx) == 0);
+  sha256_init(&ctx);
   for (idx = 0; idx < 100000; ++idx)
-    ASSERT(sha256_update(&ctx, text3, strlen(text3)) == 0);
-  ASSERT(sha256_finalize(&ctx, buf) == 0);
+    sha256_update(&ctx, text3, strlen(text3));
+  sha256_finalize(&ctx, buf);
   pass = pass && !memcmp(hash3, buf, SHA256_DIGEST_LEN);
 
   return pass;
