@@ -109,14 +109,14 @@ static inline int line_read_uint(const char *line, uint32_t *val, const char *fm
   return (sscanf(line, fmt, val) != 1) ? -1 : 1;
 }
 
-static ssize_t auth_sha256_idhash_hex(const char *id, uint8_t **idhash) {
+static ssize_t ATTRIBUTE_NONNULL(1) auth_sha256_idhash_hex(const char *id, uint8_t **idhash) {
   ssize_t len;
   uint8_t hashbuf[SHA256_DIGEST_LEN];
 
   ASSERT(id != NULL);
   ASSERT(idhash != NULL);
 
-  (void)SHA256(id, strlen(id), hashbuf);
+  SHA256(id, strlen(id), hashbuf);
 
   len = zt_hex_encode(hashbuf, SHA256_DIGEST_LEN, idhash);
   return len ? (ssize_t)len : -1;
@@ -674,7 +674,7 @@ int zt_auth_passwd_db_new(int fd, const char *bundle_id, unsigned short password
     return -1;
   }
 
-  (void)SHA256(bundle_id, strlen(bundle_id), idhash);
+  SHA256(bundle_id, strlen(bundle_id), idhash);
 
   idhash_hex_len = zt_hex_encode(idhash, SHA256_DIGEST_LEN, &idhash_hex);
   if (idhash_hex_len == 0) {
