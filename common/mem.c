@@ -26,16 +26,21 @@
 /* Forward declarations */
 static void *zt_mem_malloc(size_t);
 static void *zt_mem_calloc(size_t, size_t);
+static void *zt_mem_aligned_alloc(size_t, size_t);
 static void zt_mem_free(void *);
 static void *zt_mem_realloc(void *, size_t);
 
-static malloc_func *zt_malloc_func = zt_mem_malloc;
-static calloc_func *zt_calloc_func = zt_mem_calloc;
-static realloc_func *zt_realloc_func = zt_mem_realloc;
-static free_func *zt_free_func = zt_mem_free;
+static malloc_func_t *zt_malloc_func = zt_mem_malloc;
+static calloc_func_t *zt_calloc_func = zt_mem_calloc;
+static realloc_func_t *zt_realloc_func = zt_mem_realloc;
+static aligned_alloc_func_t *zt_aligned_alloc_func = zt_mem_aligned_alloc;
+static free_func_t *zt_free_func = zt_mem_free;
 
 static inline ATTRIBUTE_ALWAYS_INLINE void out_of_memory(void) {
   log_error(NULL, "could not allocate enough memory: %s", strerror(errno));
+#ifdef DEBUG
+  __FKILL(); // can dump core here
+#endif
 }
 
 /**************************************************************
@@ -68,6 +73,24 @@ static void *zt_mem_calloc(size_t n, size_t m) {
   return p;
 }
 
+/** `size` rounded-up to `align` */
+#define _ALIGNED_SIZE(size, align) ((((size) - 1) | ((align) - 1)) + 1)
+
+static void *zt_mem_aligned_alloc(size_t align, size_t size) {
+  void *p;
+  size_t asz = _ALIGNED_SIZE(size, align);
+
+  ASSERT(align >= sizeof(void *));
+  ASSERT((align & (align - 1)) == 0); // power of two
+  ASSERT(asz >= size);
+
+  if (posix_memalign(&p, align, asz) != 0) {
+    out_of_memory();
+    return NULL;
+  }
+  return p;
+}
+
 static void zt_mem_free(void *p) {
   if (likely(p))
     free(p);
@@ -81,8 +104,8 @@ static void *zt_mem_realloc(void *p, size_t n) {
   return p;
 }
 
-void zt_mem_set_functions(malloc_func *malloc_fn, calloc_func *calloc_fn,
-                          realloc_func *realloc_fn, free_func *free_fn) {
+void zt_mem_set_functions(malloc_func_t *malloc_fn, calloc_func_t *calloc_fn,
+                          realloc_func_t *realloc_fn, free_func_t *free_fn) {
   zt_malloc_func = malloc_fn ? malloc_fn : zt_mem_malloc;
   zt_calloc_func = calloc_fn ? calloc_fn : zt_mem_calloc;
   zt_realloc_func = realloc_fn ? realloc_fn : zt_mem_realloc;
@@ -242,10 +265,23 @@ void *zt_memdup(const void *m, size_t n) {
   void *p = zt_malloc(n);
   if (unlikely(!p))
     return NULL;
-  return (void *)memcpy(p, (void *)m, n);
+  return memcpy(p, m, n);
 }
 
 char *zt_strdup(const char *s) { return s ? zt_memdup(s, strlen(s) + 1) : NULL; }
+
+char *zt_strndup(const char *s, size_t n) {
+  if (unlikely(!s))
+    return NULL;
+
+  size_t slen = strnlen(s, n);
+  char *p = zt_malloc(slen + 1);
+  if (unlikely(!p))
+    return NULL;
+  memcpy(p, (const void *)s, slen);
+  p[slen] = '\0';
+  return p;
+}
 
 char *zt_vstrdup(const char *fmt, ...) {
   va_list args;
@@ -279,7 +315,7 @@ char *zt_strmemdup(const void *m, size_t n) {
   void *p1 = zt_malloc(n + 1);
   if (unlikely(!p1))
     return NULL;
-  char *p2 = (char *)memcpy(p1, (void *)m, n);
+  char *p2 = (char *)memcpy(p1, m, n);
   p2[n] = 0;
   return p2;
 }

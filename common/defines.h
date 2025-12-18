@@ -104,6 +104,10 @@
 #include <sys/types.h>
 #include <time.h>
 
+/**************************************************************
+ *                Integer/Pointer Manipulation                *
+ **************************************************************/
+
 #include "endianness.h"
 
 #define BSWAP16(x) bswap16(x)
@@ -168,6 +172,10 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 #define COUNTOF(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+/**************************************************************
+ *                         Error codes                        *
+ **************************************************************/
 
 typedef enum {
   ERR_SUCCESS,                 /* OK */
@@ -268,16 +276,17 @@ unsigned int zt_cpu_get_processor_count(void);
 
 #include <string.h>
 
-typedef void *(malloc_func)(size_t);
-typedef void *(calloc_func)(size_t, size_t);
-typedef void *(realloc_func)(void *, size_t);
-typedef void(free_func)(void *);
-
+typedef void *(malloc_func_t)(size_t);
+typedef void *(calloc_func_t)(size_t, size_t);
+typedef void *(realloc_func_t)(void *, size_t);
+typedef void *(aligned_alloc_func_t)(size_t, size_t);
+typedef void(free_func_t)(void *);
 void *zt_malloc(size_t size);
 void *zt_calloc(size_t nmemb, size_t size);
 void zt_free(void *ptr);
 void zt_clr_free(void *ptr, size_t len);
 void *zt_realloc(void *ptr, size_t size);
+void *zt_aligned_alloc(size_t align, size_t size);
 
 err_t zt_secure_mem_init(size_t n);
 void *zt_secure_mem_alloc(size_t n);
@@ -292,8 +301,8 @@ void zt_secure_mem_free(void *p);
  * This initializer must be called at the program startup before any of the zt_*
  * memory/string functions can be used.
  */
-void zt_mem_init(malloc_func *malloc_fn, calloc_func *calloc_fn, realloc_func *realloc_fn,
-                 free_func *free_fn);
+void zt_mem_init(malloc_func_t *malloc_fn, calloc_func_t *calloc_fn,
+                 realloc_func_t *realloc_fn, free_func_t *free_fn);
 
 /**
  * Sets the first len bytes of the memory area pointed to by mem to the
@@ -330,8 +339,7 @@ int zt_strcmp(const char *str, const char *x);
  *
  * @param m A pointer to the memory block.
  * @param n The size of the memory block.
- * @return A pointer to the duplicated memory block, or NULL if the duplication
- * fails.
+ * @return A pointer to the duplicated memory block, or NULL on memory error.
  *
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
@@ -341,19 +349,29 @@ void *zt_memdup(const void *m, size_t n);
  * Duplicates a string.
  *
  * @param s The string to duplicate.
- * @return A pointer to the duplicated string, or NULL if the duplication fails.
+ * @return A pointer to the duplicated string, or NULL on memory error.
  *
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
 char *zt_strdup(const char *s);
 
 /**
+ * Duplicates a string up to a maximum length.
+ *
+ * @param s The string to duplicate.
+ * @param slen The maximum length of the string to duplicate.
+ * @return A pointer to the duplicated string, or NULL on memory error.
+ *
+ * @note The returned pointer must be zt_free()'d when no longer needed.
+ */
+char *zt_strndup(const char *s, size_t slen);
+
+/**
  * Duplicates a formatted string.
  *
  * @param fmt The format string.
  * @param ... The values to format.
- * @return A pointer to the nul-terminated duplicated string, or NULL if the
- * duplication fails.
+ * @return A pointer to the nul-terminated duplicated string, or NULL on memory error.
  *
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
@@ -364,7 +382,7 @@ char *zt_vstrdup(const char *fmt, ...);
  *
  * @param m A pointer to the memory block.
  * @param n The size of the memory block.
- * @return A pointer to the duplicated string, or NULL if the duplication fails.
+ * @return A pointer to the duplicated string, or NULL on memory error.
  *
  * @note The returned pointer must be zt_free()'d when no longer needed.
  */
@@ -459,5 +477,9 @@ uint64_t zt_filesize_unit_conv(uint64_t size);
  * Use `zt_filesize_unit_conv()` to get the size in the same unit.
  */
 const char *zt_filesize_unit_str(uint64_t size);
+
+typedef void (secure_random_func_t)(void *buf, size_t len);
+
+typedef void (unsafe_random_func_t)(void *buf, size_t len);
 
 #endif /* __DEFINES_H__ */
