@@ -11,7 +11,7 @@
  * - Recursive directory iteration
  */
 
-#include "dir.h"
+#include "fs.h"
 #include "common/sha256.h"
 #include "common/vec.h"
 
@@ -28,6 +28,8 @@ struct _fs_iter_st {
   zt_vec_t *entries; /* vector of `fs_entry_t` */
   uint32_t nents;    /* number of entries in this iterator */
   uint32_t idx;      /* current iteration index */
+  uv_mutex_t mtx;    /* protects the iteration state */
+  bool mtx_init : 1; /* whether `mtx` has been initialized */
 };
 
 static inline int ATTRIBUTE_ALWAYS_INLINE _is_sep(char c) {
@@ -183,11 +185,12 @@ static int _fsent_cmp_size_dsc(const void *a, const void *b) {
  * `ERR_OPERATION_LIMIT_REACHED`. This could be helpful in memory-constrained environments
  * and ensures that we never use more that `limit * sizeof(fs_entry_t)` bytes plus some
  * additional bytes for bookkeeping info.
+ *
+ * Note: Not thread-safe.
  */
 err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int limit,
                   secure_random_func_t *f_rand) {
   err_t ret = ERR_SUCCESS;
-  fs_iter_t *iter;
   size_t nents;
   int r;
   uv_fs_t st_req;
@@ -200,6 +203,10 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
     return ERR_BAD_ARGS;
 
   memset(iter, 0, sizeof(fs_iter_t));
+
+  if (uv_mutex_init(&iter->mtx) != 0)
+    return ERR_INTERNAL;
+  iter->mtx_init = true;
 
   switch (order) {
   case FS_ITER_ORDER_NAME_ASC:
@@ -222,16 +229,18 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
   }
 
   iter->entries = zt_vec_new(0 /*default capacity*/, cmp);
-  if (!iter->entries)
-    return ERR_MEM_FAIL;
+  if (!iter->entries) {
+    ret = ERR_MEM_FAIL;
+    goto out;
+  }
 
   zt_vec_set_destructor(iter->entries, _entry_destructor);
 
   r = uv_fs_stat(NULL, &st_req, path, NULL); /* sync */
   if (r != 0) {
     uv_fs_req_cleanup(&st_req);
-    zt_vec_free(&iter->entries);
-    return ERR_INTERNAL;
+    ret = ERR_INTERNAL;
+    goto out;
   }
 
   if (S_ISDIR(st_req.statbuf.st_mode)) {
@@ -251,8 +260,8 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
                                     sizeof(fs_entry_t));
     if (idx == -1) {
       uv_fs_req_cleanup(&st_req);
-      zt_vec_free(&iter->entries);
-      return ERR_MEM_FAIL;
+      ret = ERR_MEM_FAIL;
+      goto out;
     }
     iter->nents = 1;
     iter->root = zt_strdup("\0");
@@ -261,9 +270,16 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
   }
   uv_fs_req_cleanup(&st_req);
 
-  if (ret)
+out:
+  if (ret) {
     zt_vec_free(&iter->entries);
-
+    zt_free(iter->root);
+    iter->root = NULL;
+    if (iter->mtx_init) {
+      uv_mutex_destroy(&iter->mtx);
+      iter->mtx_init = false;
+    }
+  }
   return ret;
 }
 
@@ -275,6 +291,8 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
  * Get the next entry from the iterator \p iter into the \p ent pointer.
  *
  * If there are no more entries to return, `ERR_EOF` is returned.
+ *
+ * Note: Thread-safe.
  */
 err_t fs_iter_next(fs_iter_t *iter, fs_entry_t **ent) {
   fs_entry_t *e;
@@ -282,15 +300,26 @@ err_t fs_iter_next(fs_iter_t *iter, fs_entry_t **ent) {
   if (!iter || !ent)
     return ERR_NULL_PTR;
 
-  if (iter->idx >= iter->nents)
+  if (unlikely(!iter->mtx_init))
+    return ERR_INVALID;
+
+  uv_mutex_lock(&iter->mtx);
+
+  if (iter->idx >= iter->nents) {
+    uv_mutex_unlock(&iter->mtx);
     return ERR_EOF;
+  }
 
   e = zt_vec_get(iter->entries, iter->idx);
-  if (!e)
+  if (!e) {
+    uv_mutex_unlock(&iter->mtx);
     return ERR_INVALID;
+  }
 
   iter->idx++;
   *ent = e;
+
+  uv_mutex_unlock(&iter->mtx);
 
   return ERR_SUCCESS;
 }
@@ -301,11 +330,19 @@ err_t fs_iter_next(fs_iter_t *iter, fs_entry_t **ent) {
  *
  * Free all resources associated with the iterator \p iter without freeing
  * the \p iter object itself.
+ *
+ * Note: Not thread-safe.
  */
 void fs_iter_destroy(fs_iter_t *iter) {
   if (iter) {
     zt_vec_free(&iter->entries);
     zt_free(iter->root);
+
+    if (iter->mtx_init) {
+      uv_mutex_destroy(&iter->mtx);
+      iter->mtx_init = false;
+    }
+
     memset(iter, 0, sizeof(fs_iter_t));
   }
 }
@@ -446,6 +483,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2)
 
   memset(iter, 0, sizeof(fs_iter_t));
 
+  if (uv_mutex_init(&iter->mtx) != 0)
+    return ERR_INTERNAL;
+  iter->mtx_init = true;
+
   /* verify checksum */
   SHA256(buf + 16, len - 16, tmp);
   if (memcmp(buf, tmp + 16, 16) != 0) // compare last 16 bytes of SHA256 hash
@@ -536,6 +577,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2)
 err:
   zt_vec_free(&iter->entries);
   zt_free(iter->root);
+  if (iter->mtx_init) {
+    uv_mutex_destroy(&iter->mtx);
+    iter->mtx_init = false;
+  }
   return ret;
 }
 
@@ -546,8 +591,10 @@ err:
  * \return An `err_t` error code.
  *
  * Export the iterator \p iter into a newly allocated buffer \p buf of length \p len.
-
+ *
  * The buffer \p buf must be freed using `zt_free()` after use.
+ *
+ * Note: Not thread-safe.
  */
 err_t fs_iter_export(fs_iter_t *iter, uint8_t **buf, size_t *len) {
   uint8_t *p;
@@ -579,6 +626,8 @@ err_t fs_iter_export(fs_iter_t *iter, uint8_t **buf, size_t *len) {
  * \return An `err_t` error code.
  *
  * Import the iterator \p iter from the buffer \p buf of length \p len.
+ *
+ * Note: Not thread-safe.
  */
 err_t fs_iter_import(fs_iter_t *iter, const uint8_t *buf, size_t len) {
   if (!iter || !buf)
