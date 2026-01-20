@@ -399,6 +399,9 @@ void zt_fio_close(zt_fio_t *fio) {
     // munmap(fio->_prev, fio->_prevsize);
     if (fio->fd >= 3) {
       fl.l_type = F_UNLCK;
+      fl.l_whence = SEEK_SET;
+      fl.l_start = 0;
+      fl.l_len = 0; /* entire file */
       (void)fcntl(fio->fd, F_SETLK, &fl);
       close(fio->fd);
       zt_free(fio->path);
@@ -551,6 +554,7 @@ err_t zt_fio_read(zt_fio_t *fio, void *buf, size_t bufsize, size_t *nread) {
 
   return ERR_SUCCESS;
 }
+
 /**
  * @param[in] fio An open fio. See `zt_fio_open()`.
  * @param[in] total_size The total size of the file to write.

@@ -248,9 +248,9 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
   } else if (S_ISREG(st_req.statbuf.st_mode)) {
     /* single file entry */
     int idx;
-    uint32_t sid;
+    uint64_t sid;
 
-    f_rand(PTR8(&sid), sizeof(uint32_t));
+    f_rand(PTR8(&sid), sizeof(uint64_t));
 
     idx = zt_vec_append_shallowcopy(iter->entries,
                                     &(fs_entry_t){.name = zt_strdup(path),
@@ -351,8 +351,8 @@ void fs_iter_destroy(fs_iter_t *iter) {
 /*
   Encoding format for the directory manifest:
 
-  field         | [ checksum ][ dir-mode ][ nents ][ dirname ] [[ size ][ mode ][ fileId ][ relpath ]...]
-  size (bytes)  |  <---16--->  <----4--->  <--4-->  <--var-->  [ <--8->  <--4->  <---4-->  <--var-->    ] x nents
+  field         | [ checksum ][ dir-mode ][ nents ][ dirname ] [[ size ][ mode ][ streamId ][ relpath  ]...]
+  size (bytes)  |  <---16--->  <----4--->  <--4-->  <--var-->  [ <--8->  <--4->  <---8---->  <---var-->    ] x nents
 
   - Strings must be nul-terminated
   - Multi-byte integers are stored in network byte order
@@ -443,10 +443,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2) _encode_iter(const fs_iter_t *iter, uint8_t
     memcpy(p, PTRV(&t32), sizeof(uint32_t));
     p += sizeof(uint32_t);
 
-    /* copy fileId */
-    t32 = hton32(e->id);
-    memcpy(p, PTRV(&t32), sizeof(uint32_t));
-    p += sizeof(uint32_t);
+    /* copy streamId */
+    t64 = hton64(e->id);
+    memcpy(p, PTRV(&t64), sizeof(uint64_t));
+    p += sizeof(uint64_t);
 
     /* copy entry relpath */
     p += _COPY_STR(p, e->name);
@@ -543,10 +543,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2)
     p += sizeof(uint32_t);
     rem -= sizeof(uint32_t);
 
-    /* read fileId */
-    e.id = ntoh32(*(uint32_t *)p);
-    p += sizeof(uint32_t);
-    rem -= sizeof(uint32_t);
+    /* read streamId */
+    e.id = ntoh64(*(uint64_t *)p);
+    p += sizeof(uint64_t);
+    rem -= sizeof(uint64_t);
 
     name = zt_strndup((char *)p, rem);
     if (!name) {
