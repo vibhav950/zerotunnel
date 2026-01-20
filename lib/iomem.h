@@ -20,26 +20,20 @@ typedef struct _iomem_chunk_st {
   size_t size;
 } iomem_chunk_t;
 
-typedef struct _iomem_pool_st {
-  void const *backing;   /* internal memory backing, passed to free() */
-  iomem_chunk_t *chunks; /* array[capacity] */
-  size_t chunk_size;
-  size_t capacity;
-  void *free_q; /* queue of free chunks */
-} iomem_pool_t;
+typedef struct _iomem_pool_st iomem_pool_t;
 
 /**
- * Initialize an i/o memory pool
+ * Return a new i/o memory pool
  *
  * @param[in] capacity   Number of chunks in the pool (must be power of 2)
  * @param[in] chunk_size Size of each chunk in bytes
  *
  * @return Pointer to the initialized iomem_pool_t structure, or NULL on error.
  */
-iomem_pool_t *iomem_pool_init(size_t capacity, size_t chunk_size);
+iomem_pool_t *iomem_pool_new(size_t capacity, size_t chunk_size);
 
 /** Deinitialize an i/o memory pool */
-void iomem_pool_deinit(iomem_pool_t *pool);
+void iomem_pool_destroy(iomem_pool_t *pool);
 
 /**
  * Get a chunk from the i/o memory pool

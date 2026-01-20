@@ -15,7 +15,15 @@
 #include <errno.h>
 #include <stdlib.h>
 
-iomem_pool_t *iomem_pool_init(size_t capacity, size_t chunk_size) {
+struct _iomem_pool_st {
+  void *backing;         /* internal memory backing, passed to free() */
+  iomem_chunk_t *chunks; /* array[capacity] */
+  size_t chunk_size;     /* size of each chunk in bytes */
+  size_t capacity;       /* total number of chunks */
+  void *const free_q;    /* queue of free chunks */
+};
+
+iomem_pool_t *iomem_pool_new(size_t capacity, size_t chunk_size) {
   iomem_pool_t *pool;
   size_t nmem;
   int rv;
@@ -70,7 +78,7 @@ cleanup0:
   return NULL;
 }
 
-void iomem_pool_deinit(iomem_pool_t *pool) {
+void iomem_pool_destroy(iomem_pool_t *pool) {
   mpmc_queue_deinit(pool->free_q);
   zt_free(pool->chunks);
   zt_free(pool->backing);
@@ -81,7 +89,7 @@ iomem_chunk_t *iomem_pool_get_chunk(iomem_pool_t *pool) {
   iomem_chunk_t *chunk = NULL;
 
   /* dequeue a free chunk from the pool, blocking this thread till we get memory */
-  (void)mpmc_queue_dequeue(pool->free_q, &chunk, MPMC_Q_NONE);
+  (void)mpmc_queue_dequeue(pool->free_q, PTRV(&chunk), MPMC_Q_NONE);
   return chunk;
 }
 
@@ -91,6 +99,4 @@ void iomem_pool_free_chunk(iomem_pool_t *pool, iomem_chunk_t *chunk) {
   ASSERT(rv == 0);
 }
 
-size_t iomem_pool_chunk_size(const iomem_pool_t *pool) {
-  return pool->chunk_size;
-}
+size_t iomem_pool_chunk_size(const iomem_pool_t *pool) { return pool->chunk_size; }
