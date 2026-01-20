@@ -16,13 +16,6 @@ make
 
 ## TODO
 
-- [X] Complete the crypto API.
-- [X] Add support for LZ4 compression.
-- [X] Add signal handlers to cleanup on Ctrl-C, etc.
-- [X] Write the net utils (client and server state machines).
-- [X] Add options parser.
-- [ ] Write tests for all crypto modules.
-- [X] Implement ciphersuites and ciphersuite negotiation.
-- [ ] Add support for sending multiple files and entire folders.
-- [ ] Add the ability to read the input file from stdin.
-- [ ] Multi-threaded file read/send.
+- [ ] Add multi-file transfer ([multio-dev branch](https://github.com/vibhav950/zerotunnel/tree/multio-dev)).
+- [ ] Add recursive directory iteration.
+- [ ] Decouple the client/server and TCP connection utils.
