@@ -280,7 +280,8 @@ typedef void *(malloc_func_t)(size_t);
 typedef void *(calloc_func_t)(size_t, size_t);
 typedef void *(realloc_func_t)(void *, size_t);
 typedef void *(aligned_alloc_func_t)(size_t, size_t);
-typedef void(free_func_t)(void *);
+typedef void (free_func_t)(void *);
+
 void *zt_malloc(size_t size);
 void *zt_calloc(size_t nmemb, size_t size);
 void zt_free(void *ptr);
