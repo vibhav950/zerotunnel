@@ -8,6 +8,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_MINIMAL_GCC_VERSION "7.1.0")
 
 include(CheckCSourceCompiles)
+include(CheckIncludeFile)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
@@ -21,13 +22,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
   set(ARCH "x86_64")
   set(ARCH_X64 ON)
 else()
-  message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}. Only x86_64 is supported.")
+  message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(SYS_LINUX TRUE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  set(SYS_WIN32 TRUE)
 else()
-  message(FATAL_ERROR "Unsupported operating system: ${CMAKE_SYSTEM_NAME}. Only Linux is supported.")
+  message(FATAL_ERROR "Unsupported operating system: ${CMAKE_SYSTEM_NAME}")
 endif()
 
 set(PLATFORM_LIBRARIES "")
@@ -76,6 +79,7 @@ if(LIBGCRYPT_INCLUDE_DIR AND LIBGCRYPT_LIBRARY)
   add_compile_definitions(HAVE_LIBGCRYPT)
 endif()
 
+if(NOT SYS_WIN32)
 check_include_files(sys/random.h HAVE_SYS_RANDOM_H)
 if(HAVE_SYS_RANDOM_H)
   set(CMAKE_EXTRA_INCLUDE_FILES sys/random.h)
@@ -95,9 +99,17 @@ if(HAVE_SYS_EPOLL_H)
   check_function_exists(epoll_create1 HAVE_EPOLL)
 endif()
 
+check_include_files(fcntl.h HAVE_FCNTL_H)
+if(HAVE_FCNTL_H)
+  check_function_exists(fcntl HAVE_FCNTL)
+  check_function_exists(posix_fallocate HAVE_POSIX_FALLOCATE)
+  check_function_exists(fallocate HAVE_FALLOCATE)
+endif()
+endif() # NOT SYS_WIN32
+
 if(SYS_WIN32)
   set(HAVE_IPV6 1)
-else()
+elseif(SYS_LINUX)
   check_c_source_compiles("
     #include <sys/types.h>
     #include <sys/socket.h>
@@ -134,9 +146,6 @@ elseif(WITH_GNUTLS)
   add_compile_definitions(GNUTLS)
 endif()
 
-include(CheckIncludeFile)
-include(CheckLibraryExists)
-
 file(GLOB_RECURSE C_SOURCES
   "common/*.c"
   "lib/*.c"
@@ -169,7 +178,9 @@ configure_file(
   @ONLY
 )
 
-add_executable(zerotunnel ${ALL_SOURCES})
+add_executable(zerotunnel
+  ${ALL_SOURCES}
+)
 
 zt_parse_feature_macros(_feature_macros_list
   HAVE_SQLITE3
@@ -177,6 +188,9 @@ zt_parse_feature_macros(_feature_macros_list
   HAVE_GETENTROPY
   HAVE_GETRANDOM
   HAVE_EPOLL
+  HAVE_FCNTL
+  HAVE_POSIX_FALLOCATE
+  HAVE_POSIX_FADVISE
   HAVE_IPV6
 )
 add_compile_definitions(${_feature_macros_list})
