@@ -229,7 +229,7 @@ static int parse_help(option_t *opt ATTRIBUTE_UNUSED, const char *val ATTRIBUTE_
  * Initialize it here with default values, which may be
  * overridden by command line options or configuration files.
  */
-struct config GlobalConfig = {
+struct config Config = {
     .ciphersuite = "K-01",
     .preferredFamily = '4',
     .maxFileRecvSize = 4 * SIZE_GB,
@@ -247,7 +247,7 @@ static option_t options[] = {
     {
       "auth-type",
       'a',
-      &GlobalConfig.authType,
+      &Config.authType,
       NULL,
       parse_int,
       1,
@@ -260,7 +260,7 @@ static option_t options[] = {
     {
       "bundle-size",
       0,
-      &GlobalConfig.passwordBundleSize,
+      &Config.passwordBundleSize,
       NULL,
       parse_uint,
       1,
@@ -274,7 +274,7 @@ static option_t options[] = {
     {
       "ciphersuite",
       'c',
-      &GlobalConfig.ciphersuite,
+      &Config.ciphersuite,
       NULL,
       parse_string,
       1,
@@ -287,7 +287,7 @@ static option_t options[] = {
     {
       "compress",
       'C',
-      &GlobalConfig.flagLZ4Compression,
+      &Config.flagLZ4Compression,
       NULL,
       parse_boolean,
       -1,
@@ -300,7 +300,7 @@ static option_t options[] = {
     {
       "connect-timeout",
       0,
-      &GlobalConfig.connectTimeout,
+      &Config.connectTimeout,
       NULL,
       parse_uint,
       1,
@@ -325,7 +325,7 @@ static option_t options[] = {
     {
       "hostname",
       'H',
-      &GlobalConfig.hostname,
+      &Config.hostname,
       NULL,
       parse_string,
       1,
@@ -338,7 +338,7 @@ static option_t options[] = {
     {
       "identifier",
       'I',
-      &GlobalConfig.passwdBundleId,
+      &Config.passwdBundleId,
       NULL,
       parse_string,
       1,
@@ -350,7 +350,7 @@ static option_t options[] = {
     {
       "idle-timeout",
       0,
-      &GlobalConfig.idleTimeout,
+      &Config.idleTimeout,
       NULL,
       parse_uint,
       1,
@@ -363,7 +363,7 @@ static option_t options[] = {
     {
       "ipv4-only",
       '4',
-      &GlobalConfig.flagIPv4Only,
+      &Config.flagIPv4Only,
       NULL,
       parse_boolean,
       -1,
@@ -376,7 +376,7 @@ static option_t options[] = {
     {
       "ipv6-only",
       '6',
-      &GlobalConfig.flagIPv6Only,
+      &Config.flagIPv6Only,
       NULL,
       parse_boolean,
       -1,
@@ -389,7 +389,7 @@ static option_t options[] = {
     {
       "keyfile",
       'k',
-      &GlobalConfig.passwdFile,
+      &Config.passwdFile,
       NULL,
       parse_filename,
       1,
@@ -404,7 +404,7 @@ static option_t options[] = {
     {
       "listen",
       'l',
-      &GlobalConfig.hostname,
+      &Config.hostname,
       NULL,
       parse_string,
       1,
@@ -417,7 +417,7 @@ static option_t options[] = {
     {
       "live-read",
       'L',
-      &GlobalConfig.flagLiveRead,
+      &Config.flagLiveRead,
       NULL,
       parse_boolean,
       -1,
@@ -430,8 +430,8 @@ static option_t options[] = {
     {
       "message-padding",
       'P',
-      &GlobalConfig.paddingFactor,
-      &GlobalConfig.flagLengthObfuscation,
+      &Config.paddingFactor,
+      &Config.flagLengthObfuscation,
       parse_padding_factor,
       1,
       cmdSend,
@@ -445,7 +445,7 @@ static option_t options[] = {
     {
       "password-chars",
       0,
-      &GlobalConfig.passwordChars,
+      &Config.passwordChars,
       NULL,
       parse_uint,
       1,
@@ -459,7 +459,7 @@ static option_t options[] = {
     {
       "password-words",
       0,
-      &GlobalConfig.passwordWords,
+      &Config.passwordWords,
       NULL,
       parse_uint,
       1,
@@ -473,8 +473,8 @@ static option_t options[] = {
     {
       "port",
       'p',
-      &GlobalConfig.servicePort,
-      &GlobalConfig.flagExplicitPort,
+      &Config.servicePort,
+      &Config.flagExplicitPort,
       parse_uint16,
       1,
       cmdSend | cmdReceive,
@@ -486,7 +486,7 @@ static option_t options[] = {
     {
       "preferred-family",
       0,
-      &GlobalConfig.preferredFamily,
+      &Config.preferredFamily,
       NULL,
       parse_string,
       1,
@@ -500,7 +500,7 @@ static option_t options[] = {
     {
       "receive-limit",
       'R',
-      &GlobalConfig.maxFileRecvSize,
+      &Config.maxFileRecvSize,
       NULL,
       parse_numbytes,
       1,
@@ -514,7 +514,7 @@ static option_t options[] = {
     {
       "recv-timeout",
       0,
-      &GlobalConfig.recvTimeout,
+      &Config.recvTimeout,
       NULL,
       parse_uint,
       1,
@@ -527,7 +527,7 @@ static option_t options[] = {
     {
       "send-timeout",
       0,
-      &GlobalConfig.sendTimeout,
+      &Config.sendTimeout,
       NULL,
       parse_uint,
       1,
@@ -540,7 +540,7 @@ static option_t options[] = {
     {
       "tcp-fastopen",
       0,
-      &GlobalConfig.flagTCPFastOpen,
+      &Config.flagTCPFastOpen,
       NULL,
       parse_boolean,
       -1,
@@ -553,7 +553,7 @@ static option_t options[] = {
     {
       "tcp-nodelay",
       0,
-      &GlobalConfig.flagTCPNoDelay,
+      &Config.flagTCPNoDelay,
       NULL,
       parse_boolean,
       -1,
@@ -566,7 +566,7 @@ static option_t options[] = {
     {
       "wordlist",
       'W',
-      &GlobalConfig.wordlistFile,
+      &Config.wordlistFile,
       NULL,
       parse_filename,
       1,
@@ -827,13 +827,13 @@ static int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t comm
 
 #define DEFAULT_PASSWORDS_DIR "~/.zerotunnel/passwords/"
 
-static char *get_password_file_location(const char *name, bool check) {
+static char *ATTRIBUTE_NONNULL(1)
+    get_password_file_location(const char *name, bool check) {
   int n;
   char *dir;
   char *fname = NULL;
   unsigned char *hex = NULL;
   wordexp_t wexp;
-  sha256_ctx_t ctx;
   unsigned char hash[SHA256_DIGEST_LEN];
 
   dir = getenv("ZTNL_PASSWORDS_DIR");
@@ -882,7 +882,7 @@ command_t init_config(int argc, char *argv[]) {
   set_exit_status(EXIT_STATUS_BAD_PARSE);
 
   /* These will be freed in deinit_config() */
-  GlobalConfig.ciphersuite = zt_strdup(GlobalConfig.ciphersuite);
+  Config.ciphersuite = zt_strdup(Config.ciphersuite);
 
   if (argc < 2) {
     print_help(cmdNone);
@@ -925,55 +925,55 @@ command_t init_config(int argc, char *argv[]) {
   /* Handle mutually exclusive and otherwise incompatible or incorrect option values,
    * now that all user options have been processed */
 
-  CHECK_RANGE("bundle-size", GlobalConfig.passwordBundleSize, 1, 90);
+  CHECK_RANGE("bundle-size", Config.passwordBundleSize, 1, 90);
 
-  CHECK_RANGE("password-chars", GlobalConfig.passwordChars, 12, 256);
+  CHECK_RANGE("password-chars", Config.passwordChars, 12, 256);
 
-  CHECK_RANGE("password-words", GlobalConfig.passwordWords, 3, 20);
+  CHECK_RANGE("password-words", Config.passwordWords, 3, 20);
 
-  if (GlobalConfig.flagLengthObfuscation && GlobalConfig.flagLZ4Compression) {
+  if (Config.flagLengthObfuscation && Config.flagLZ4Compression) {
     log_error(NULL, "Can't have both --compression and --message-padding on");
     goto err;
   }
 
-  if (command == cmdPassdel || GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
-    if (!GlobalConfig.passwdBundleId) {
+  if (command == cmdPassdel || Config.authType == KAPPA_AUTHTYPE_1) {
+    if (!Config.passwdBundleId) {
       log_error(NULL, "Missing required option --identifier");
       goto err;
     }
-  } else if (GlobalConfig.passwdBundleId) {
+  } else if (Config.passwdBundleId) {
     log_error(NULL, "Option --identifier does not apply for this command");
     goto err;
   }
 
-  if (GlobalConfig.authType != KAPPA_AUTHTYPE_1 && GlobalConfig.passwdFile) {
+  if (Config.authType != KAPPA_AUTHTYPE_1 && Config.passwdFile) {
     log_error(NULL, "Option --keyfile does not apply for KAPPA0 or KAPPA2 auth types");
     goto err;
   }
 
-  if (GlobalConfig.flagIPv4Only && GlobalConfig.flagIPv6Only) {
+  if (Config.flagIPv4Only && Config.flagIPv6Only) {
     log_error(NULL, "Can't have both --ipv4-only and --ipv6-only");
     goto err;
   }
 
   switch (command) {
   case cmdSend: {
-    if (!GlobalConfig.hostname)
+    if (!Config.hostname)
       goto err;
 
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdFile) {
-      char *fname = get_password_file_location(GlobalConfig.hostname, true);
+    if (Config.authType == KAPPA_AUTHTYPE_1 && !Config.passwdFile) {
+      char *fname = get_password_file_location(Config.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdFile = fname;
+      Config.passwdFile = fname;
     }
 
-    if (GlobalConfig.flagLiveRead) {
+    if (Config.flagLiveRead) {
       if (target)
         goto err;
-      GlobalConfig.filePath = zt_strdup("-"); /* read from STDIN */
+      Config.filePath = zt_strdup("-"); /* read from STDIN */
     } else if (target) {
-      GlobalConfig.filePath = zt_strdup(target);
+      Config.filePath = zt_strdup(target);
     } else {
       goto err;
     }
@@ -982,42 +982,42 @@ command_t init_config(int argc, char *argv[]) {
   }
 
   case cmdReceive: {
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1 && !GlobalConfig.passwdFile) {
-      if (!GlobalConfig.hostname)
+    if (Config.authType == KAPPA_AUTHTYPE_1 && !Config.passwdFile) {
+      if (!Config.hostname)
         goto err;
 
-      char *fname = get_password_file_location(GlobalConfig.hostname, true);
+      char *fname = get_password_file_location(Config.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdFile = fname;
+      Config.passwdFile = fname;
     }
 
     if (!target)
-      GlobalConfig.filePath = zt_strdup("-"); /* write to STDOUT */
+      Config.filePath = zt_strdup("-"); /* write to STDOUT */
     else
-      GlobalConfig.filePath = zt_strdup(target);
+      Config.filePath = zt_strdup(target);
 
     break;
   }
 
   case cmdPassgen: {
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_2)
+    if (Config.authType == KAPPA_AUTHTYPE_2)
       goto err;
 
     /* We either need a explicit target file location or a hostname
      * to locate one in the default passwords directory */
-    if (GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
-      if (!target && !GlobalConfig.hostname) {
+    if (Config.authType == KAPPA_AUTHTYPE_1) {
+      if (!target && !Config.hostname) {
         goto err;
       } else if (target) {
-        GlobalConfig.passwdFile = zt_strdup(target);
+        Config.passwdFile = zt_strdup(target);
       } else {
-        char *fname = get_password_file_location(GlobalConfig.hostname, false);
+        char *fname = get_password_file_location(Config.hostname, false);
         if (!fname)
           return cmdNone;
-        GlobalConfig.passwdFile = fname;
+        Config.passwdFile = fname;
       }
-    } else if (target || GlobalConfig.hostname) {
+    } else if (target || Config.hostname) {
       /* K0 does not take these arguments */
       // TODO: can we have a better way of handling these restricted
       // combinations without this messy logic?
@@ -1028,16 +1028,16 @@ command_t init_config(int argc, char *argv[]) {
   }
 
   case cmdPassdel: {
-    if (!target && !GlobalConfig.hostname)
+    if (!target && !Config.hostname)
       goto err; /* no way to locate the K1 password file */
 
     if (target) {
-      GlobalConfig.passwdFile = zt_strdup(target);
+      Config.passwdFile = zt_strdup(target);
     } else {
-      char *fname = get_password_file_location(GlobalConfig.hostname, true);
+      char *fname = get_password_file_location(Config.hostname, true);
       if (!fname)
         return cmdNone;
-      GlobalConfig.passwdFile = fname;
+      Config.passwdFile = fname;
     }
   }
   }
@@ -1054,9 +1054,9 @@ err:
 }
 
 void deinit_config(void) {
-  zt_free(GlobalConfig.hostname);
-  zt_free(GlobalConfig.passwdFile);
-  zt_free(GlobalConfig.ciphersuite);
-  zt_free(GlobalConfig.filePath);
-  zt_free(GlobalConfig.passwdBundleId);
+  zt_free(Config.hostname);
+  zt_free(Config.passwdFile);
+  zt_free(Config.ciphersuite);
+  zt_free(Config.filePath);
+  zt_free(Config.passwdBundleId);
 }

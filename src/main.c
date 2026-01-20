@@ -109,15 +109,15 @@ static int do_send(void) {
   if (e != ERR_SUCCESS)
     return -1;
 
-  zt_client_enable_tcp_fastopen(client, GlobalConfig.flagTCPFastOpen);
-  zt_client_enable_tcp_nodelay(client, GlobalConfig.flagTCPNoDelay);
-  zt_client_enable_explicit_port(client, GlobalConfig.flagExplicitPort);
-  zt_client_enable_live_read(client, GlobalConfig.flagLiveRead);
+  zt_client_enable_tcp_fastopen(client, Config.flagTCPFastOpen);
+  zt_client_enable_tcp_nodelay(client, Config.flagTCPNoDelay);
+  zt_client_enable_explicit_port(client, Config.flagExplicitPort);
+  zt_client_enable_live_read(client, Config.flagLiveRead);
 
   e = zt_client_run(client, NULL, &done);
 
   if (e == ERR_SUCCESS && done)
-    tty_printf(get_cli_prompt(OnSendSuccessful), GlobalConfig.filePath);
+    tty_printf(get_cli_prompt(OnSendSuccessful), Config.filePath);
 
   zt_client_conn_dealloc(client);
 
@@ -133,15 +133,15 @@ static int do_receive(void) {
   if (e != ERR_SUCCESS)
     return -1;
 
-  zt_server_enable_tcp_fastopen(server, GlobalConfig.flagTCPFastOpen);
-  zt_server_enable_tcp_nodelay(server, GlobalConfig.flagTCPNoDelay);
-  zt_server_enable_explicit_port(server, GlobalConfig.flagExplicitPort);
+  zt_server_enable_tcp_fastopen(server, Config.flagTCPFastOpen);
+  zt_server_enable_tcp_nodelay(server, Config.flagTCPNoDelay);
+  zt_server_enable_explicit_port(server, Config.flagExplicitPort);
 
   e = zt_server_run(server, NULL, &done);
 
   if (e == ERR_SUCCESS && done) {
-    if (strcmp(GlobalConfig.filePath, "-"))
-      tty_printf(get_cli_prompt(OnReceiveSuccessful), GlobalConfig.filePath);
+    if (strcmp(Config.filePath, "-"))
+      tty_printf(get_cli_prompt(OnReceiveSuccessful), Config.filePath);
   }
 
   zt_server_conn_dealloc(server);
@@ -150,30 +150,30 @@ static int do_receive(void) {
 }
 
 static int passgen(void) {
-  if (GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
+  if (Config.authType == KAPPA_AUTHTYPE_1) {
     int fd;
 
-    if (access(GlobalConfig.passwdFile, F_OK) == 0) {
+    if (access(Config.passwdFile, F_OK) == 0) {
       if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileExists)))
         return -1;
     }
 
-    fd = open(GlobalConfig.passwdFile, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    fd = open(Config.passwdFile, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     if (fd < 0)
       return -1;
 
-    if (zt_auth_passwd_db_new(fd, GlobalConfig.passwdBundleId, GlobalConfig.passwordChars,
-                              GlobalConfig.passwordBundleSize) < 0) {
+    if (zt_auth_passwd_db_new(fd, Config.passwdBundleId, Config.passwordChars,
+                              Config.passwordBundleSize) < 0) {
       close(fd);
       return -1;
     }
     close(fd);
 
-    tty_printf(get_cli_prompt(OnNewK1PasswordFile), GlobalConfig.passwdFile);
-  } else if (GlobalConfig.authType == KAPPA_AUTHTYPE_0) {
+    tty_printf(get_cli_prompt(OnNewK1PasswordFile), Config.passwdFile);
+  } else if (Config.authType == KAPPA_AUTHTYPE_0) {
     struct passwd *passwd;
 
-    passwd = zt_auth_passwd_single_new(NULL, GlobalConfig.passwordChars, false);
+    passwd = zt_auth_passwd_single_new(NULL, Config.passwordChars, false);
     if (!passwd)
       return -1;
 
@@ -188,13 +188,13 @@ static int passgen(void) {
 static int passdel(void) {
   int rv;
 
-  if (access(GlobalConfig.passwdFile, F_OK))
+  if (access(Config.passwdFile, F_OK))
     return -1;
 
   if (!tty_get_answer_is_yes(get_cli_prompt(OnPasswdFileTryDelete)))
     return 0;
 
-  rv = zt_auth_passwd_delete(GlobalConfig.passwdFile, GlobalConfig.passwdBundleId, -1);
+  rv = zt_auth_passwd_delete(Config.passwdFile, Config.passwdBundleId, -1);
   return rv < 0 ? -1 : 0;
 }
 

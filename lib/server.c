@@ -89,7 +89,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
 
 #ifdef HAVE_IPV6
   /* Check for IPv6 availability */
-  if (!GlobalConfig.flagIPv4Only) {
+  if (!Config.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -98,7 +98,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!GlobalConfig.flagIPv6Only, use_ipv6);
+  af = zt_choose_ip_family(!Config.flagIPv6Only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "Could not pick a suitable address family");
     ret = ERR_BAD_ARGS;
@@ -106,7 +106,7 @@ static err_t server_setup_host(zt_server_connection_t *conn,
   }
 
   if (af == AF_UNSPEC)
-    preferred_family = GlobalConfig.preferredFamily == '4' ? AF_INET : AF_INET6;
+    preferred_family = Config.preferredFamily == '4' ? AF_INET : AF_INET6;
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -643,20 +643,20 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   if (zt_get_hostid(&conn->self.authid) != 0)
     return ERR_INTERNAL;
 
-  conn->hostname = GlobalConfig.hostname ? GlobalConfig.hostname : "0.0.0.0";
+  conn->hostname = Config.hostname ? Config.hostname : "0.0.0.0";
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", GlobalConfig.servicePort);
+    snprintf(port, sizeof(port), "%u", Config.servicePort);
     conn->listen_port = port;
   } else {
     conn->listen_port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->idle_timeout = GlobalConfig.idleTimeout > 0 ? GlobalConfig.idleTimeout
+  conn->idle_timeout = Config.idleTimeout > 0 ? Config.idleTimeout
                                                     : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
-  conn->recv_timeout = GlobalConfig.recvTimeout > 0 ? GlobalConfig.recvTimeout
+  conn->recv_timeout = Config.recvTimeout > 0 ? Config.recvTimeout
                                                     : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = GlobalConfig.sendTimeout > 0 ? GlobalConfig.sendTimeout
+  conn->send_timeout = Config.sendTimeout > 0 ? Config.sendTimeout
                                                     : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
 
   conn->state = SERVER_CONN_INIT;
@@ -739,8 +739,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       rcvlen -= AUTHID_BYTES_LEN + sizeof(passwd_id_t) + sizeof(ciphersuite_t);
 
-      if (auth_type != GlobalConfig.authType) {
-        tty_printf(get_cli_prompt(OnAuthTypeMismatch), auth_type, GlobalConfig.authType);
+      if (auth_type != Config.authType) {
+        tty_printf(get_cli_prompt(OnAuthTypeMismatch), auth_type, Config.authType);
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
       }
@@ -748,8 +748,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /* Load the master password */
       if (!master_pass) {
         passwd_id =
-            zt_auth_passwd_get(GlobalConfig.passwdFile, GlobalConfig.authType,
-                               GlobalConfig.passwdBundleId, passwd_id, &master_pass);
+            zt_auth_passwd_get(Config.passwdFile, Config.authType,
+                               Config.passwdBundleId, passwd_id, &master_pass);
       }
 
       if (conn->expected_passwd.expect && (conn->expected_passwd.id != passwd_id)) {
@@ -761,7 +761,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_error(NULL, "Could not negotiate a usable password -- aborting!");
         ret = ERR_HSHAKE_ABORTED;
         goto cleanup2;
-      } else if (passwd_id < 0 && GlobalConfig.authType == KAPPA_AUTHTYPE_1) {
+      } else if (passwd_id < 0 && Config.authType == KAPPA_AUTHTYPE_1) {
         /**
          * KAPPA1 authentication failure -- this can happen due to the passwdDB
          * files becoming out-of-sync or we have caught a MITM attack and this
@@ -784,7 +784,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         log_info(NULL, "Retrying handshake with a new password...");
 
         passwd_id_t pwid = zt_auth_passwd_load(
-            GlobalConfig.passwdFile, GlobalConfig.passwdBundleId, -1, &master_pass);
+            Config.passwdFile, Config.passwdBundleId, -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "Failed to load a new password");
           ret = ERR_HSHAKE_ABORTED;
@@ -1007,8 +1007,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       conn->fileinfo.reserved = ntoh32(conn->fileinfo.reserved);
 
       if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ) {
-        size = zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize);
-        unit = zt_filesize_unit_str(GlobalConfig.maxFileRecvSize);
+        size = zt_filesize_unit_conv(Config.maxFileRecvSize);
+        unit = zt_filesize_unit_str(Config.maxFileRecvSize);
 
         tty_printf(get_cli_prompt(OnIncomingLiveRead), size, unit);
       } else {
@@ -1033,8 +1033,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       off_t size, remaining;
       progressbar_t *pb;
 
-      if ((ret = zt_fio_open(&fio, GlobalConfig.filePath, FIO_WRONLY)) != ERR_SUCCESS) {
-        log_error(NULL, "Failed to open file '%s' for writing", GlobalConfig.filePath);
+      if ((ret = zt_fio_open(&fio, Config.filePath, FIO_WRONLY)) != ERR_SUCCESS) {
+        log_error(NULL, "Failed to open file '%s' for writing", Config.filePath);
         goto cleanup2;
       }
 
@@ -1043,7 +1043,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * as much as the limit and trim the file after the transfer is done
        * Otherwise, allocate exactly the size of the incoming file advertised by the peer
        */
-      size = conn->fl_live_read ? GlobalConfig.maxFileRecvSize : conn->fileinfo.size;
+      size = conn->fl_live_read ? Config.maxFileRecvSize : conn->fileinfo.size;
 
       if ((ret = zt_fio_write_allocate(&fio, size)) != ERR_SUCCESS) {
         log_error(NULL, "Not enough disk space (need %zu bytes)", size);
@@ -1100,13 +1100,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         if (MSG_TYPE(conn->msgbuf) != MSG_DONE) {
           log_error(NULL, "Transfer was capped at the limit of %lu%s",
-                    zt_filesize_unit_conv(GlobalConfig.maxFileRecvSize),
-                    zt_filesize_unit_str(GlobalConfig.maxFileRecvSize));
+                    zt_filesize_unit_conv(Config.maxFileRecvSize),
+                    zt_filesize_unit_str(Config.maxFileRecvSize));
           goto cleanupfile;
         }
 
         if ((ret = zt_fio_trim(&fio, &size)) != ERR_SUCCESS) {
-          log_error(NULL, "Failed to trim file '%s' (%s)", GlobalConfig.filePath,
+          log_error(NULL, "Failed to trim file '%s' (%s)", Config.filePath,
                     zt_error_str(ret));
           goto cleanupfile;
         }
@@ -1147,8 +1147,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   } /* while(1) */
 
 cleanupfile:
-  if (strcmp(GlobalConfig.filePath, "-"))
-    zt_file_delete(GlobalConfig.filePath);
+  if (strcmp(Config.filePath, "-"))
+    zt_file_delete(Config.filePath);
 
 cleanup2:
   zt_fio_close(&fio);

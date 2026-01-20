@@ -114,7 +114,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
 
 #ifdef HAVE_IPV6
   /* Check if the system has IPv6 enabled and the config allows it */
-  if (!GlobalConfig.flagIPv4Only) {
+  if (!Config.flagIPv4Only) {
     int s = socket(AF_INET6, SOCK_STREAM, 0);
     if (s != -1) {
       use_ipv6 = true;
@@ -123,7 +123,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 #endif
 
-  af = zt_choose_ip_family(!GlobalConfig.flagIPv6Only, use_ipv6);
+  af = zt_choose_ip_family(!Config.flagIPv6Only, use_ipv6);
   if (af < 0) {
     log_error(NULL, "Could not pick a suitable address family");
     ret = ERR_BAD_ARGS;
@@ -131,7 +131,7 @@ static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
   }
 
   if (af == AF_UNSPEC)
-    preferred_family = GlobalConfig.preferredFamily == '4' ? AF_INET : AF_INET6;
+    preferred_family = Config.preferredFamily == '4' ? AF_INET : AF_INET6;
 
   zt_memset(&hints, 0, sizeof(hints));
   hints.ai_family = af;
@@ -502,12 +502,12 @@ static err_t client_send(zt_client_connection_t *conn) {
   p[len++] = MSG_END_BYTE; /* end of data */
 
   if (conn->state == CLIENT_TRANSFER) {
-    if (GlobalConfig.flagLengthObfuscation) {
+    if (Config.flagLengthObfuscation) {
       size_t pf, l, pad;
 
       /* Calculate padding to round up to next multiple of padding_factor */
       l = len - 1; /* exclude END_MARKER */
-      pf = GlobalConfig.paddingFactor;
+      pf = Config.paddingFactor;
 
       // x rounded up to a multiple of N = (x + N - 1) & ~(N - 1) when N is a
       // power of 2
@@ -517,7 +517,7 @@ static err_t client_send(zt_client_connection_t *conn) {
       len += pad;
 
       MSG_SET_FLAGS(conn->msgbuf, MSG_FLAGS(conn->msgbuf) | MSG_FL_PADDING);
-    } else if (GlobalConfig.flagLZ4Compression) {
+    } else if (Config.flagLZ4Compression) {
       const char *rptr = (const char *)p;
       char *wptr = (char *)(MSG_XBUF_PTR(conn->msgbuf) + ZT_MSG_HEADER_SIZE);
 
@@ -678,7 +678,7 @@ err_t zt_client_conn_alloc(zt_client_connection_t **conn) {
     return ERR_NULL_PTR;
 
   alloc_size = sizeof(zt_client_connection_t) + sizeof(zt_msg_t);
-  if (GlobalConfig.flagLZ4Compression)
+  if (Config.flagLZ4Compression)
     alloc_size += ZT_MSG_XBUF_SIZE;
 
   if (!(*conn = zt_calloc(1, alloc_size)))
@@ -719,33 +719,33 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
   // clang-format off
   if ((ciphersuite = zt_cipher_suite_info_from_repr(
-           GlobalConfig.ciphersuite,
+           Config.ciphersuite,
            &vcry_algs[0], &vcry_algs[1], &vcry_algs[2],
            &vcry_algs[3], &vcry_algs[4], &vcry_algs[5])) == 0) {
     return ERR_INVALID;
   }
   // clang-format on
 
-  conn->hostname = GlobalConfig.hostname;
+  conn->hostname = Config.hostname;
 
   *done = false;
 
   if (conn->fl_explicit_port) {
-    snprintf(port, sizeof(port), "%u", GlobalConfig.servicePort);
+    snprintf(port, sizeof(port), "%u", Config.servicePort);
     conn->port = port;
   } else {
     conn->port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->connect_timeout = GlobalConfig.connectTimeout > 0
-                              ? GlobalConfig.connectTimeout
+  conn->connect_timeout = Config.connectTimeout > 0
+                              ? Config.connectTimeout
                               : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
-  conn->recv_timeout = GlobalConfig.recvTimeout > 0 ? GlobalConfig.recvTimeout
+  conn->recv_timeout = Config.recvTimeout > 0 ? Config.recvTimeout
                                                     : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = GlobalConfig.sendTimeout > 0 ? GlobalConfig.sendTimeout
+  conn->send_timeout = Config.sendTimeout > 0 ? Config.sendTimeout
                                                     : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
 
-  auth_type = GlobalConfig.authType;
+  auth_type = Config.authType;
 
   conn->state = CLIENT_CONN_INIT;
 
@@ -778,12 +778,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
         passwd_id =
-            zt_auth_passwd_load(GlobalConfig.passwdFile, GlobalConfig.passwdBundleId,
+            zt_auth_passwd_load(Config.passwdFile, Config.passwdBundleId,
                                 conn->renegotiation_passwd, &master_pass);
       } else {
-        passwd_id = zt_auth_passwd_new(GlobalConfig.passwdFile, GlobalConfig.wordlistFile,
-                                       GlobalConfig.authType, GlobalConfig.passwdBundleId,
-                                       GlobalConfig.passwordWords, &master_pass);
+        passwd_id = zt_auth_passwd_new(Config.passwdFile, Config.wordlistFile,
+                                       Config.authType, Config.passwdBundleId,
+                                       Config.passwordWords, &master_pass);
 
         if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
@@ -873,7 +873,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
          * 2. Check if this password Id is available in the passwddb, and offer
          *    a new Id (not necessarily the same as the one sent by the peer).
          */
-        if (GlobalConfig.authType != KAPPA_AUTHTYPE_1) {
+        if (Config.authType != KAPPA_AUTHTYPE_1) {
           log_error(NULL, "Invalid message sequence");
           ret = ERR_BAD_CONTROL_FLOW;
           goto cleanup2;
@@ -1009,7 +1009,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * Open the and lock the file here, so that its size remains fixed until
        * the entire file is sent
        */
-      if ((ret = zt_fio_open(&fileptr, GlobalConfig.filePath, FIO_RDONLY)) !=
+      if ((ret = zt_fio_open(&fileptr, Config.filePath, FIO_RDONLY)) !=
           ERR_SUCCESS) {
         goto cleanup2;
       }
@@ -1022,7 +1022,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       fileinfo.size = hton64(fileinfo.size);
       fileinfo.reserved = hton32(fileinfo.reserved);
 
-      setflags = GlobalConfig.flagLiveRead ? MSG_FL_LIVE_READ : 0;
+      setflags = Config.flagLiveRead ? MSG_FL_LIVE_READ : 0;
 
       MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t),
                setflags);
@@ -1047,7 +1047,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (!(pb = zt_progressbar_init(NULL, 1, NULL)))
         log_error(NULL, "Failed to create progress bar");
 
-      zt_progressbar_slot_begin(pb, 0, fileinfo.name, GlobalConfig.hostname,
+      zt_progressbar_slot_begin(pb, 0, fileinfo.name, Config.hostname,
                                 fileinfo.size, true);
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
