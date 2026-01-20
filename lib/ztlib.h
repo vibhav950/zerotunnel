@@ -56,4 +56,4 @@ struct config {
 };
 
 /** Global configuration options for use within the library */
-extern struct config GlobalConfig;
+extern struct config Config;

@@ -69,8 +69,8 @@ typedef struct _zt_client_connection_st {
  * @return An `err_t` status code.
  *
  * @note This function will allocate resources depending on the features
- * enabled as indicated by global config variable `GlobalConfig`. Make sure
- * the global configuration is set before calling this function.
+ * enabled as indicated by global `Config` variable which must be set
+ * prior to calling this function.
  */
 err_t zt_client_conn_alloc(zt_client_connection_t **conn);
 
