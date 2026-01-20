@@ -23,7 +23,7 @@ struct _fs_entry_st {
   char *name;    /* path relative to the target root directory */
   uint64_t size; /* physical size in bytes */
   uint32_t mode; /* permission flags */
-  uint32_t id;   /* 32-bit streamId */
+  uint64_t id;   /* 64-bit streamId */
 };
 
 typedef enum {
