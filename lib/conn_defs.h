@@ -97,11 +97,19 @@ typedef uint16_t zt_msg_flags_t;
    LZ4_COMPRESSBOUND(ZT_MSG_MAX_RW_SIZE + 1))
 
 #pragma pack(push, 1)
+typedef struct _zt_msg_hdr_st {
+  zt_msg_type_t type;   /* Message type */
+  uint32_t len;         /* Length of `data[]` */
+  uint16_t sid;         /* File Id */
+  zt_msg_flags_t flags; /* Message flags */
+} zt_msg_hdr_t;
+
 typedef struct _zt_msg_st {
   union {
     struct {
       zt_msg_type_t type;                   /* Message type */
       uint32_t len;                         /* Length of `data[]` */
+      uint16_t sid;                         /* File Id */
       zt_msg_flags_t flags;                 /* Message flags */
       uint8_t data[ZT_MSG_MAX_RW_SIZE + 1]; /* Message payload */
     };
@@ -112,6 +120,18 @@ typedef struct _zt_msg_st {
 } zt_msg_t;
 #pragma pack(pop)
 
+/** Get `hdr.type` */
+#define HDR_TYPE(hdrptr)                        ((hdrptr)->type)
+
+/** Get `hdr.len` */
+#define HDR_LEN(hdrptr)                         (ntoh32((hdrptr)->len))
+
+/** Get `hdr.sid` */
+#define HDR_SID(hdrptr)                         (ntoh16((hdrptr)->sid))
+
+/** Get `hdr.flags` */
+#define HDR_FLAGS(hdrptr)                       (ntoh16((hdrptr)->flags))
+
 /** `msg.data[]` pointer */
 #define MSG_DATA_PTR(msgptr)                    ((msgptr)->data)
 
@@ -121,17 +141,35 @@ typedef struct _zt_msg_st {
 /** `msg._xbuf[]` pointer */
 #define MSG_XBUF_PTR(msgptr)                    ((msgptr)->_xbuf)
 
+/** Get `msg.type` */
+#define MSG_TYPE(msgptr)                        ((msgptr)->type)
+
 /** Get `msg.len` */
 #define MSG_DATA_LEN(msgptr)                    (ntoh32((msgptr)->len))
 
-/** Get `msg.type` */
-#define MSG_TYPE(msgptr)                        ((msgptr)->type)
+/** Get `msg.sid` */
+#define MSG_SID(msgptr)                         (ntoh16((msgptr)->sid))
 
 /** Get `msg.flags` */
 #define MSG_FLAGS(msgptr)                       (ntoh16((msgptr)->flags))
 
+/** Get `hdr.len` */
+#define HDR_SET_TYPE(hdrptr, type_val)          (void)((hdrptr)->type = (type_val))
+
+/** Set `hdr.len` */
+#define HDR_SET_LEN(hdrptr, len_val)            (void)((hdrptr)->len = hton32(len_val))
+
+/** Set `hdr.sid` */
+#define HDR_SET_SID(hdrptr, sid_val)            (void)((hdrptr)->sid = hton16(sid_val))
+
+/** Set `hdr.flags` */
+#define HDR_SET_FLAGS(hdrptr, setflags)         (void)((hdrptr)->flags = hton16(setflags))
+
 /** Set `msg.len` */
 #define MSG_SET_LEN(msgptr, len_val)            (void)((msgptr)->len = hton32(len_val))
+
+/** Set `msg.sid` */
+#define MSG_SET_SID(msgptr, sid_val)            (void)((msgptr)->sid = hton16(sid_val))
 
 /** Set `msg.type` */
 #define MSG_SET_TYPE(msgptr, type_val)          (void)((msgptr)->type = (type_val))
@@ -147,6 +185,24 @@ typedef struct _zt_msg_st {
     MSG_SET_TYPE(msgptr, type);                                                \
     MSG_SET_LEN(msgptr, len);                                                  \
     MSG_SET_FLAGS(msgptr, setflags);                                           \
+  } while (0)
+
+/** Populate header `hdrptr` */
+#define HDR_MAKE(hdrptr, type, len, sid, setflags)                             \
+  do {                                                                         \
+    HDR_SET_TYPE(hdrptr, type);                                                \
+    HDR_SET_LEN(hdrptr, len);                                                  \
+    HDR_SET_SID(hdrptr, sid);                                                  \
+    HDR_SET_FLAGS(hdrptr, setflags);                                           \
+  } while (0)
+
+/** Populate message header from `hdrptr` to `msgptr` */
+#define MSG_SET_HDR(msgptr, hdrptr)                                            \
+  do {                                                                         \
+    MSG_SET_TYPE(msgptr, HDR_TYPE(hdrptr));                                    \
+    MSG_SET_LEN(msgptr, HDR_LEN(hdrptr));                                      \
+    MSG_SET_SID(msgptr, HDR_SID(hdrptr));                                      \
+    MSG_SET_FLAGS(msgptr, HDR_FLAGS(hdrptr));                                  \
   } while (0)
 
 /** Check message type validity */
