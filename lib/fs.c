@@ -63,8 +63,8 @@ static void _entry_destructor(void *ele) {
  *  - disk size in bytes
  *  - filesystem permission flags
  *
- * @note Limits the number of entries to \p max (if not -1),
- * and fails if this value is exhausted before the entire directory is traversed.
+ * @note Limits the number of entries to \p max and fails if this value is exhausted
+ * before the entire directory is traversed.
  */
 static err_t _dir_iterate(const char *dirpath, fs_iter_t *ctx, int max) {
   err_t ret = ERR_SUCCESS;
@@ -80,8 +80,7 @@ static err_t _dir_iterate(const char *dirpath, fs_iter_t *ctx, int max) {
     goto out;
   }
 
-  while ((r = uv_fs_scandir_next(&scandir_req, &dent)) == 0 &&
-         (max != -1 && ++cnt <= max)) {
+  while ((r = uv_fs_scandir_next(&scandir_req, &dent)) == 0 && (++cnt <= max)) {
     // if (!strcmp(dent.name, ".") || !strcmp(dent.name, ".."))
     // continue;
 
@@ -164,7 +163,7 @@ static int _fsent_cmp_size_dsc(const void *a, const void *b) {
  * \param[in] iter A pointer to an uninitialized `fs_iter_t` object.
  * \param[in] path Full target path.
  * \param[in] order The order in which to return entries.
- * \param[in] limit The max number of entries allowed, or -1 for no limit.
+ * \param[in] limit The max number of entries allowed.
  * \param[in] f_rand A pointer to a cryptographically secure random function to generate
  * stream Ids for each collected entry.
  * \return An `err_t` error code.
@@ -181,6 +180,8 @@ static int _fsent_cmp_size_dsc(const void *a, const void *b) {
  * This function may block for a while since it iterates over all filesystem entries under
  * \p path and copies them to an internal dynamic data structure.
  *
+ * The \p limit must be <= FS_ENTRIES_MAX, otherwise `ERR_REQUEST_TOO_LARGE` is returned.
+ *
  * If \p limit is exhausted before all entries are read, the function returns
  * `ERR_OPERATION_LIMIT_REACHED`. This could be helpful in memory-constrained environments
  * and ensures that we never use more that `limit * sizeof(fs_entry_t)` bytes plus some
@@ -188,7 +189,7 @@ static int _fsent_cmp_size_dsc(const void *a, const void *b) {
  *
  * Note: Not thread-safe.
  */
-err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int limit,
+err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, size_t limit,
                   secure_random_func_t *f_rand) {
   err_t ret = ERR_SUCCESS;
   size_t nents;
@@ -199,8 +200,8 @@ err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int 
   if (!iter || !path)
     return ERR_NULL_PTR;
 
-  if (limit != -1 && limit <= 0)
-    return ERR_BAD_ARGS;
+  if (limit > FS_ENTRIES_MAX)
+    return ERR_REQUEST_TOO_LARGE;
 
   memset(iter, 0, sizeof(fs_iter_t));
 
@@ -387,6 +388,20 @@ static inline int _check_safe_encoding(size_t len) {
   return 0;
 }
 
+#define R(sp, dp, rem, bits)                                                             \
+  do {                                                                                   \
+    dp = ntoh##bits(*(uint##bits##_t *)sp);                                              \
+    sp += sizeof(uint##bits##_t);                                                        \
+    rem -= sizeof(uint##bits##_t);                                                       \
+  } while (0)
+
+#define W(sp, dp, t, bits)                                                               \
+  do {                                                                                   \
+    t = hton##bits(dp);                                                                  \
+    memcpy(sp, PTRV(&t), sizeof(uint##bits##_t));                                        \
+    sp += sizeof(uint##bits##_t);                                                        \
+  } while (0)
+
 /**
  * Encode the iteraator \p iter into the buffer \p buf.
  * \return An `err_t` error code.
@@ -416,14 +431,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2) _encode_iter(const fs_iter_t *iter, uint8_t
   p += 16; /* skip checksum */
 
   /* copy dir-mode */
-  t32 = hton32(iter->mode);
-  memcpy(p, PTRV(&t32), sizeof(uint32_t));
-  p += sizeof(uint32_t);
+  W(p, iter->mode, t32, 32);
 
   /* copy nents */
-  t32 = hton32(iter->nents);
-  memcpy(p, PTRV(&t32), sizeof(uint32_t));
-  p += sizeof(uint32_t);
+  W(p, iter->nents, t32, 32);
 
   /* copy dirname */
   p += _COPY_STR(p, iter->root);
@@ -434,19 +445,13 @@ static err_t ATTRIBUTE_NONNULL(1, 2) _encode_iter(const fs_iter_t *iter, uint8_t
       return ERR_BAD_ARGS;
 
     /* copy entry size */
-    t64 = hton64(e->size);
-    memcpy(p, PTRV(&t64), sizeof(uint64_t));
-    p += sizeof(uint64_t);
+    W(p, e->size, t64, 64);
 
     /* copy entry mode */
-    t32 = hton32(e->mode);
-    memcpy(p, PTRV(&t32), sizeof(uint32_t));
-    p += sizeof(uint32_t);
+    W(p, e->mode, t32, 32);
 
     /* copy streamId */
-    t64 = hton64(e->id);
-    memcpy(p, PTRV(&t64), sizeof(uint64_t));
-    p += sizeof(uint64_t);
+    W(p, e->id, t64, 64);
 
     /* copy entry relpath */
     p += _COPY_STR(p, e->name);
@@ -496,14 +501,10 @@ static err_t ATTRIBUTE_NONNULL(1, 2)
   rem = len - 16;
 
   /* read dir-mode */
-  iter->mode = ntoh32(*(uint32_t *)p);
-  p += sizeof(uint32_t);
-  rem -= sizeof(uint32_t);
+  R(p, iter->mode, rem, 32);
 
   /* read nents */
-  iter->nents = ntoh32(*(uint32_t *)p);
-  p += sizeof(uint32_t);
-  rem -= sizeof(uint32_t);
+  R(p, iter->nents, rem, 32);
 
   /* read dirname */
   iter->root = zt_strndup((char *)p, rem);
@@ -534,19 +535,13 @@ static err_t ATTRIBUTE_NONNULL(1, 2)
     }
 
     /* read entry size */
-    e.size = ntoh64(*(uint64_t *)p);
-    p += sizeof(uint64_t);
-    rem -= sizeof(uint64_t);
+    R(p, e.size, rem, 64);
 
     /* read entry mode */
-    e.mode = ntoh32(*(uint32_t *)p);
-    p += sizeof(uint32_t);
-    rem -= sizeof(uint32_t);
+    R(p, e.mode, rem, 32);
 
     /* read streamId */
-    e.id = ntoh64(*(uint64_t *)p);
-    p += sizeof(uint64_t);
-    rem -= sizeof(uint64_t);
+    R(p, e.id, rem, 64);
 
     name = zt_strndup((char *)p, rem);
     if (!name) {
