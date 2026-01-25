@@ -353,7 +353,7 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   if (fcntl(fd, F_SETLK, &fl) < 0) {
     log_error(NULL, "fcntl: Failed to lock file '%s' (%s)", filepath, strerror(errno));
     close(fd);
-    return ERR_BAD_ARGS;
+    return ERR_INTERNAL;
   }
 
   size = zt_file_getsize(fd);
