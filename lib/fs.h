@@ -34,7 +34,10 @@ typedef enum {
   FS_ITER_ORDER_SIZE_DSC, /* Order by size descending */
 } fs_iter_order_t;
 
-err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, int limit,
+/** Maximum number of entries allowed in a filesystem iterator */
+#define FS_ENTRIES_MAX 4096
+
+err_t fs_iter_new(fs_iter_t *iter, const char *path, fs_iter_order_t order, size_t limit,
                   secure_random_func_t *f_rand);
 
 void fs_iter_destroy(fs_iter_t *iter);
