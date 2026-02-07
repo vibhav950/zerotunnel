@@ -365,13 +365,13 @@ KAPPA provides three levels of security with tradeoffs in ease of storage of the
 KAPPA provides three password-authentication models offering different levels of tradeoff between security and ease of use:
 
 - **KAPPA0 - static password (least secure)**
-  Authentication is done with a static pre-shared master password used over multiple handshakes. This form of authentication requires parties to regularly rotate passwords for a weaker assurance of forward secrecy.
+  Authentication is done with a static pre-shared master password that may be used over multiple handshakes. This form of authentication relies on users to limit password reuse by manually rotating the master password out-of-band.
 
 - **KAPPA1 - password bundle (more secure)**
-  Both parties store a preset bundle of N one-time use randomly generated passwords {_Password<sub>1</sub>_, _Password<sub>2</sub>_, ..., _Password<sub>N</sub>_}. The initiator selects a candidate password _Password<sub>1<=k<=N</sub>_ from this bundle to use as the master password for the current session, and sends the password identifier _k_ to the responder as part of the initial message. Both parties then delete this password from their bundles. The pair can therefore perform a maximum of N successful handshakes thereafter having to establish (a) new password(s).
+  Both parties agree upon and store a list of N one-time-use randomly generated passwords {_Password<sub>1</sub>_, _Password<sub>2</sub>_, ..., _Password<sub>N</sub>_}. The strength of each password in the bundle depends on the security parameters of that bundle. The initiator selects a candidate password _Password<sub>1<=k<=N</sub>_ from this bundle and sends its password identifier _k_ to the responder as part of the initial message. If the password identifier is unused in the responder's bundle, the corresponding master password is selected for the current session, following which, both parties delete this password from their bundles. The pair can therefore perform a maximum of N successful handshakes thereafter having to establish (a) new password(s).
 
 - **KAPPA2 - one-time password (most secure)**
-  The initiator generates a new phonetic _Password_ by randomly sampling words from a pre-defined dictionary which will be used only for the current session. The application prompts the responder to enter the one-time password which is required to progress the handshake.
+  The initiator generates a new phonetic _Password_ for the current session by randomly sampling words from a pre-defined dictionary. The application prompts the responder to enter the one-time password which is required to progress the handshake.
 
 > [!CAUTION]
 > In most cases, the security of an application using KAPPA depends on how master keys are managed outside the protocol. While KAPPA implementations shall offer a secure way for clients to generate password sets, the process of transferring master keys from the source to the target site and secure storage of a password for its lifetime are concepts beyond the scope of this specification.
