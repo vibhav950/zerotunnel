@@ -16,7 +16,7 @@
 // clang-format off
 
 #include "common/defines.h"
-#include "common/timeout.h"
+#include "common/spin.h"
 
 #include <stdatomic.h>
 #include <stddef.h>

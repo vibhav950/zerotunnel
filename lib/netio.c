@@ -10,7 +10,8 @@
 
 #include "client.h"
 #include "common/log.h"
-#include "common/timeout.h"
+// #include "common/timeout.h"
+// #include "common/spin.h"
 #include "io.h"
 #include "server.h"
 
