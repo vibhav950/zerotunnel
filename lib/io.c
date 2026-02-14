@@ -29,7 +29,7 @@
 #endif
 
 static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
-  int rc = -1;
+  int rc;
   struct pollfd pollfd;
 
   pollfd.fd = fd;
@@ -47,12 +47,8 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
       rc |= ZT_IO_READABLE;
     if (pollfd.revents & POLLOUT)
       rc |= ZT_IO_WRITABLE;
-  } else if (rc == 0) {
-    log_error(NULL, "Connection timed out");
-    return 0;
-  } else {
+  } else if (rc == -1) {
     log_error(NULL, "poll: Failed (%s)", strerror(errno));
-    return -1;
   }
   return rc;
 }
@@ -60,7 +56,7 @@ static inline int zt_io_waitfor1(int fd, timediff_t timeout_msec, int mode) {
 #ifdef HAVE_EPOLL
 static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
   struct epoll_event ev, events[1];
-  int epfd, rc = -1;
+  int epfd, rc;
 
   epfd = epoll_create1(0);
   if (epfd == -1) {
@@ -87,11 +83,8 @@ static inline int zt_io_waitfor2(int fd, timediff_t timeout_msec, int mode) {
       rc |= ZT_IO_READABLE;
     if (events[0].events & EPOLLOUT)
       rc |= ZT_IO_WRITABLE;
-  } else if (rc == 0) {
-    log_error(NULL, "Connection timed out");
-  } else {
+  } else if (rc == -1) {
     log_error(NULL, "epoll_wait: Failed (%s)", strerror(errno));
-    rc = -1;
   }
 
 cleanup:

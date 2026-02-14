@@ -13,9 +13,11 @@
 #endif
 #include "server.h"
 
+#include "common/defines.h"
 #include "common/log.h"
 #include "common/progressbar.h"
 #include "common/prompts.h"
+#include "common/timeout.h"
 #include "common/tty_io.h"
 #include "ip.h"
 #include "vcry.h"
@@ -48,14 +50,19 @@ static const char serverstate_names[][20] = {
 };
 // clang-format on
 
-#define SERVERSTATE_CHANGE(cur, next) (void)(cur = next)
-
 static inline const char *get_serverstate_name(ZT_SERVER_STATE state) {
   if (likely(state >= SERVER_NONE && state <= SERVER_DONE))
     return serverstate_names[state];
   else
     return "Unknown";
 }
+
+#define SERVERSTATE_CHANGE(conn, next)                                                   \
+  do {                                                                                   \
+    log_debug(NULL, "Server state change: %s -> %s",                                     \
+              get_serverstate_name((conn)->state), get_serverstate_name(next));          \
+    (conn)->state = next;                                                                \
+  } while (0)
 
 static inline ATTRIBUTE_NONNULL(1, 2) const
     char *get_ip_str(const struct sockaddr *sa, char *buf, size_t buflen) {
@@ -652,12 +659,12 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     conn->listen_port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->idle_timeout = Config.idleTimeout > 0 ? Config.idleTimeout
-                                                    : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
-  conn->recv_timeout = Config.recvTimeout > 0 ? Config.recvTimeout
-                                                    : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = Config.sendTimeout > 0 ? Config.sendTimeout
-                                                    : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
+  conn->idle_timeout =
+      Config.idleTimeout > 0 ? Config.idleTimeout : ZT_SERVER_TIMEOUT_IDLE_DEFAULT;
+  conn->recv_timeout =
+      Config.recvTimeout > 0 ? Config.recvTimeout : ZT_SERVER_TIMEOUT_RECV_DEFAULT;
+  conn->send_timeout =
+      Config.sendTimeout > 0 ? Config.sendTimeout : ZT_SERVER_TIMEOUT_SEND_DEFAULT;
 
   conn->state = SERVER_CONN_INIT;
 
@@ -681,7 +688,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       tty_printf(get_cli_prompt(OnServerListening), conn->self.ip, conn->self.port,
                  firstword);
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_CONN_LISTEN);
+      SERVERSTATE_CHANGE(conn, SERVER_CONN_LISTEN);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -698,7 +705,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_tcp_accept(conn)) != ERR_SUCCESS)
         goto cleanup1;
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
+      SERVERSTATE_CHANGE(conn, SERVER_AUTH_RESPOND);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -747,9 +754,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       /* Load the master password */
       if (!master_pass) {
-        passwd_id =
-            zt_auth_passwd_get(Config.passwdFile, Config.authType,
-                               Config.passwdBundleId, passwd_id, &master_pass);
+        passwd_id = zt_auth_passwd_get(Config.passwdFile, Config.authType,
+                                       Config.passwdBundleId, passwd_id, &master_pass);
       }
 
       if (conn->expected_passwd.expect && (conn->expected_passwd.id != passwd_id)) {
@@ -783,8 +789,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         log_info(NULL, "Retrying handshake with a new password...");
 
-        passwd_id_t pwid = zt_auth_passwd_load(
-            Config.passwdFile, Config.passwdBundleId, -1, &master_pass);
+        passwd_id_t pwid = zt_auth_passwd_load(Config.passwdFile, Config.passwdBundleId,
+                                               -1, &master_pass);
         if (pwid < 0) {
           log_error(NULL, "Failed to load a new password");
           ret = ERR_HSHAKE_ABORTED;
@@ -804,7 +810,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* We will expect a new MSG_HANDSHAKE from the client with a
          * confirmation that the client chose the expected password */
-        SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
+        SERVERSTATE_CHANGE(conn, SERVER_AUTH_RESPOND);
         break;
       } else if (passwd_id < 0) {
         /* KAPPA0 and KAPPA2 -- failed to get a password from the user */
@@ -897,7 +903,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = server_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_COMPLETE);
+      SERVERSTATE_CHANGE(conn, SERVER_AUTH_COMPLETE);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -912,9 +918,8 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * - MSG_HANDSHAKE_FIN: final auth message from the client and we can proceed
        *                      sending our auth message after responder verification
        */
-      if ((ret = server_recv(conn, MSG_HANDSHAKE | MSG_HANDSHAKE_FIN)) != ERR_SUCCESS) {
+      if ((ret = server_recv(conn, MSG_HANDSHAKE | MSG_HANDSHAKE_FIN)) != ERR_SUCCESS)
         goto cleanup2;
-      }
 
       if (MSG_TYPE(conn->msgbuf) == MSG_HANDSHAKE) {
         conn->fl_pending = true;
@@ -948,7 +953,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (server_send(conn) != ERR_SUCCESS)
         goto cleanup2;
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_COMMIT);
+      SERVERSTATE_CHANGE(conn, SERVER_COMMIT);
       break;
 
     retryhandshake:
@@ -984,7 +989,7 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /* Handshake will be restarted -- we need to init the module again */
       vcry_module_release();
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_AUTH_RESPOND);
+      SERVERSTATE_CHANGE(conn, SERVER_AUTH_RESPOND);
       break;
     }
 
@@ -1024,13 +1029,13 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (MSG_FLAGS(conn->msgbuf) & MSG_FL_LIVE_READ)
         conn->fl_live_read = true;
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_TRANSFER);
+      SERVERSTATE_CHANGE(conn, SERVER_TRANSFER);
       ATTRIBUTE_FALLTHROUGH;
     }
 
     case SERVER_TRANSFER: {
       err_t rv;
-      off_t size, remaining;
+      off_t sizelim, tsize, xferd;
       progressbar_t *pb;
 
       if ((ret = zt_fio_open(&fio, Config.filePath, FIO_WRONLY)) != ERR_SUCCESS) {
@@ -1043,21 +1048,25 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
        * as much as the limit and trim the file after the transfer is done
        * Otherwise, allocate exactly the size of the incoming file advertised by the peer
        */
-      size = conn->fl_live_read ? Config.maxFileRecvSize : conn->fileinfo.size;
+      sizelim = conn->fl_live_read ? Config.maxFileRecvSize : conn->fileinfo.size;
 
-      if ((ret = zt_fio_write_allocate(&fio, size)) != ERR_SUCCESS) {
-        log_error(NULL, "Not enough disk space (need %zu bytes)", size);
-        zt_fio_close(&fio);
-        goto cleanup2;
+      if (strcmp(Config.filePath, "-")) {
+        if ((ret = zt_fio_write_allocate(&fio, sizelim)) != ERR_SUCCESS) {
+          log_error(NULL, "Not enough disk space (need %zu bytes)", sizelim);
+          zt_fio_close(&fio);
+          goto cleanup2;
+        }
       }
 
       if (!(pb = zt_progressbar_init(NULL, 1, NULL)))
         log_error(NULL, "Failed to create progress bar");
 
-      remaining = size;
-      zt_progressbar_slot_begin(pb, 0, conn->fileinfo.name, conn->peer.ip, size, false);
+      zt_progressbar_slot_begin(pb, 0, conn->fileinfo.name, conn->peer.ip, sizelim,
+                                false);
 
-      while (remaining > 0) {
+      xferd = 0;
+      conn->fl_pending = true; /* pending client MSG_DONE */
+      while (xferd < sizelim) {
         off_t writelen;
 
         if ((ret = server_recv(conn, MSG_FILEDATA | MSG_DONE)) != ERR_SUCCESS) {
@@ -1073,67 +1082,96 @@ err_t zt_server_run(zt_server_connection_t *conn, void *args ATTRIBUTE_UNUSED,
            * For normal reads, we should only receive this message when
            * this loop completes.
            */
-          conn->fl_pending = true; /* don't expect this msg in SERVER_DONE */
+          conn->fl_pending = false; /* don't expect MSG_DONE in @state SERVER_DONE */
           break;
         }
 
-        writelen = MIN(remaining, MSG_DATA_LEN(conn->msgbuf));
+        writelen = MIN(sizelim - xferd, MSG_DATA_LEN(conn->msgbuf));
         rv = zt_fio_write(&fio, MSG_DATA_PTR(conn->msgbuf), writelen);
-        if (rv != ERR_SUCCESS)
-          break;
+        if (rv != ERR_SUCCESS) {
 
-        zt_progressbar_update(pb, 0, writelen);
-        remaining -= writelen;
-      }
-      zt_progressbar_slot_complete(pb, 0);
-      zt_progressbar_free(pb);
-
-      if (!conn->fl_live_read && remaining) {
-        /* We prematurely break-ed out of the loop */
-        log_error(NULL, "Failed to write file to disk (%s)", zt_error_str(rv));
-        ret = rv;
-        goto cleanupfile;
-      }
-
-      if (conn->fl_live_read) {
-        off_t size;
-
-        if (MSG_TYPE(conn->msgbuf) != MSG_DONE) {
-          log_error(NULL, "Transfer was capped at the limit of %lu%s",
-                    zt_filesize_unit_conv(Config.maxFileRecvSize),
-                    zt_filesize_unit_str(Config.maxFileRecvSize));
+          log_error(NULL, "Failed to write %zu bytes to file (%s)", writelen,
+                    zt_error_str(rv));
+          ret = rv;
           goto cleanupfile;
         }
 
-        if ((ret = zt_fio_trim(&fio, &size)) != ERR_SUCCESS) {
+        zt_progressbar_update(pb, 0, writelen);
+        xferd += writelen;
+      }
+
+      zt_progressbar_slot_complete(pb, 0);
+      zt_progressbar_free(pb);
+
+      if (conn->fl_live_read && conn->fl_pending) {
+        uint64_t fsize = zt_filesize_unit_conv(Config.maxFileRecvSize);
+        const char *funit = zt_filesize_unit_str(Config.maxFileRecvSize);
+
+        log_info(NULL, "Live read transfer reached the limit of %lu%s", fsize, funit);
+
+        if (!Config.flagAllowIncomplete) {
+          log_error(NULL, "Failing incomplete transfer capped by receive limit");
+          goto cleanupfile;
+        } else {
+          /**
+           * Send MSG_DONE to indicate to the client that we are no longer accepting data
+           */
+          MSG_MAKE(conn->msgbuf, MSG_DONE, NULL, 0, 0);
+          if ((ret = server_send(conn)) != ERR_SUCCESS)
+            goto cleanupfile;
+        }
+      }
+
+      if (strcmp(Config.filePath, "-")) {
+        if ((ret = zt_fio_trim(&fio, &tsize)) != ERR_SUCCESS) {
           log_error(NULL, "Failed to trim file '%s' (%s)", Config.filePath,
                     zt_error_str(ret));
           goto cleanupfile;
         }
-
-        log_info(NULL, "Transfer completed after %lu%s of data",
-                 zt_filesize_unit_conv(size), zt_filesize_unit_str(size));
       }
+
+      log_info(NULL, "Transfer completed after %lu%s of data",
+               zt_filesize_unit_conv(xferd), zt_filesize_unit_str(xferd));
 
       zt_fio_close(&fio);
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_DONE);
+      SERVERSTATE_CHANGE(conn, SERVER_DONE);
       ATTRIBUTE_FALLTHROUGH;
     }
 
     case SERVER_DONE: {
-      bool errfl = false;
+      if (conn->fl_pending && conn->fl_live_read) {
+        /**
+         * Wait to gracefully shutdown and discard any residual data
+         * still being sent by the client until we receive MSG_DONE
+         */
+        zt_timeout_t wait;
+        zt_timeout_begin(&wait, ZT_SERVER_TIMEOUT_SHUTDOWN, NULL);
 
-      if (!conn->fl_pending && (ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS)
-        goto cleanupfile;
-      conn->fl_pending = false;
+        while (1) {
+          if (zt_timeout_expired(&wait, NULL)) {
+            log_error(NULL, "Server shutdown timeout expired, failing this transfer");
+            goto cleanupfile;
+          }
 
-      MSG_MAKE(conn->msgbuf, MSG_DONE, NULL, 0, 0);
+          ret = server_recv(conn, MSG_FILEDATA | MSG_DONE);
+          if (ret != ERR_SUCCESS)
+            goto cleanupfile;
 
-      if ((ret = server_send(conn)) != ERR_SUCCESS)
-        goto cleanupfile;
+          if (MSG_TYPE(conn->msgbuf) == MSG_DONE)
+            break;
+        }
+      } else {
+        if (conn->fl_pending && (ret = server_recv(conn, MSG_DONE)) != ERR_SUCCESS)
+          goto cleanupfile;
 
-      SERVERSTATE_CHANGE(conn->state, SERVER_NONE);
+        MSG_MAKE(conn->msgbuf, MSG_DONE, NULL, 0, 0);
+
+        if ((ret = server_send(conn)) != ERR_SUCCESS)
+          goto cleanupfile;
+      }
+
+      SERVERSTATE_CHANGE(conn, SERVER_NONE);
       *done = true;
       goto cleanup2;
     }

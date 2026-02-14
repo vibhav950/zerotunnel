@@ -52,8 +52,9 @@ typedef struct _zt_client_connection_st {
     send_timeout,         /* send timeout (>0 ms) */
     recv_timeout;         /* receive timeout (>0 ms) */
   bool
-    first_send,           /* yet to send the first TCP message */
-    renegotiation;        /* renegotiation in progress */
+    first_send,       : 1,  /* yet to send the first TCP message */
+    renegotiation     : 1,  /* renegotiation in progress */
+    done              : 1;  /* received server done */
   bool
     fl_tcp_fastopen   : 1,  /* is TCP fastopen enabled */
     fl_tcp_nodelay    : 1,  /* is TCP_NODELAY enabled */
@@ -102,6 +103,10 @@ int zt_client_tcp_send(zt_client_connection_t *conn, const uint8_t *buf, size_t 
 
 ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf, size_t nbytes,
                            bool *pending);
+
+bool zt_client_tcp_readable(zt_client_connection_t *conn);
+
+bool zt_client_tcp_writable(zt_client_connection_t *conn);
 
 /**
  * Enable/disable TCP_FASTOPEN for the client connection

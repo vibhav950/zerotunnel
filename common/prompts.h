@@ -28,6 +28,7 @@ typedef enum {
   OnSendSuccessful,
   OnReceiveSuccessful,
   OnSendFailure,
+  OnReceiveFailure
 } prompt_t;
 
 /** Returns a CLI prompt string */

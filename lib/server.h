@@ -129,6 +129,10 @@ int zt_server_tcp_send(zt_server_connection_t *conn, const uint8_t *buf, size_t 
 ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf, size_t nbytes,
                            bool *pending);
 
+bool zt_server_tcp_readable(zt_server_connection_t *conn);
+
+bool zt_server_tcp_writable(zt_server_connection_t *conn);
+
 /**
  * Enable/disable TCP_FASTOPEN for the server connection
  *

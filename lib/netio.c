@@ -277,6 +277,26 @@ ssize_t zt_client_tcp_recv(zt_client_connection_t *conn, uint8_t *buf, size_t nb
 }
 
 /**
+ * @param[in] conn The client connection context.
+ * @return `true` if the connection is readable, `false` otherwise.
+ *
+ * Check if there is data to be read on the TCP connection represented by @p conn.
+ */
+bool zt_client_tcp_readable(zt_client_connection_t *conn) {
+  return zt_tcp_io_waitfor_read(conn->sockfd, 0 /*return immediately*/);
+}
+
+/**
+ * @param[in] conn The client connection context.
+ * @return `true` if the connection is writable, `false` otherwise.
+ *
+ * Check if the TCP connection represented by @p conn is writable.
+ */
+bool zt_client_tcp_writable(zt_client_connection_t *conn) {
+  return zt_tcp_io_waitfor_write(conn->sockfd, 0);
+}
+
+/**
  * @param[in] conn The server connection context.
  * @param[in] buf The buffer to send.
  * @param[in] nbytes The number of bytes to send.
@@ -377,4 +397,24 @@ ssize_t zt_server_tcp_recv(zt_server_connection_t *conn, uint8_t *buf, size_t nb
       *pending = false;
   }
   return nread;
+}
+
+/**
+ * @param[in] conn The server connection context.
+ * @return `true` if there is data to be read, `false` otherwise.
+ *
+ * Check if there is data to be read on the TCP connection represented by @p conn.
+ */
+bool zt_server_tcp_readable(zt_server_connection_t *conn) {
+  return zt_tcp_io_waitfor_read(conn->peer.fd, 0 /*return immediately*/);
+}
+
+/**
+ * @param[in] conn The server connection context.
+ * @return `true` if the connection is writable, `false` otherwise.
+ *
+ * Check if the TCP connection represented by @p conn is writable.
+ */
+bool zt_server_tcp_writable(zt_server_connection_t *conn) {
+  return zt_tcp_io_waitfor_write(conn->peer.fd, 0);
 }

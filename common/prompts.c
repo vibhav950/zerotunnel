@@ -58,6 +58,7 @@ static const char *cli_prompts[] = {
     [OnSendFailure] =
         ALERTPROMPT("Failed to transfer file... either your correspondent declined "
                     "the transfer or there was an unexpected network failure.\n"),
+    [OnReceiveFailure] = ALERTPROMPT("Failed to receive file.\n"),
 };
 
 const char *get_cli_prompt(prompt_t prompt) {

@@ -45,20 +45,25 @@ static const char clientstate_names[][22] = {
 };
 // clang-format on
 
-#define CLIENTSTATE_CHANGE(cur, next) (void)(cur = next)
+static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
+  if (likely(state >= CLIENT_NONE && state <= CLIENT_DONE))
+    return clientstate_names[state];
+  else
+    return "unknown";
+}
+
+#define CLIENTSTATE_CHANGE(conn, next)                                                   \
+  do {                                                                                   \
+    log_debug(NULL, "Client state change: %s -> %s",                                     \
+              get_clientstate_name((conn)->state), get_clientstate_name(next));          \
+    (conn)->state = next;                                                                \
+  } while (0)
 
 static sigjmp_buf jmpenv;
 static atomic_bool jmpenv_lock;
 
 ATTRIBUTE_NORETURN static void alrm_handler(int sig ATTRIBUTE_UNUSED) {
   siglongjmp(jmpenv, 1);
-}
-
-static inline const char *get_clientstate_name(ZT_CLIENT_STATE state) {
-  if (likely(state >= CLIENT_NONE && state <= CLIENT_DONE))
-    return clientstate_names[state];
-  else
-    return "unknown";
 }
 
 static err_t client_resolve_host_timeout(zt_client_connection_t *conn,
@@ -737,13 +742,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
     conn->port = ZT_DEFAULT_LISTEN_PORT;
   }
 
-  conn->connect_timeout = Config.connectTimeout > 0
-                              ? Config.connectTimeout
-                              : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
-  conn->recv_timeout = Config.recvTimeout > 0 ? Config.recvTimeout
-                                                    : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
-  conn->send_timeout = Config.sendTimeout > 0 ? Config.sendTimeout
-                                                    : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
+  conn->connect_timeout = Config.connectTimeout > 0 ? Config.connectTimeout
+                                                    : ZT_CLIENT_TIMEOUT_CONNECT_DEFAULT;
+  conn->recv_timeout =
+      Config.recvTimeout > 0 ? Config.recvTimeout : ZT_CLIENT_TIMEOUT_RECV_DEFAULT;
+  conn->send_timeout =
+      Config.sendTimeout > 0 ? Config.sendTimeout : ZT_CLIENT_TIMEOUT_SEND_DEFAULT;
 
   auth_type = Config.authType;
 
@@ -766,7 +770,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = client_tcp_conn1(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
+      CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_INIT);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -777,13 +781,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
       if (conn->renegotiation) {
         /* We can only get here when auth_type=KAPPA1 */
-        passwd_id =
-            zt_auth_passwd_load(Config.passwdFile, Config.passwdBundleId,
-                                conn->renegotiation_passwd, &master_pass);
+        passwd_id = zt_auth_passwd_load(Config.passwdFile, Config.passwdBundleId,
+                                        conn->renegotiation_passwd, &master_pass);
       } else {
-        passwd_id = zt_auth_passwd_new(Config.passwdFile, Config.wordlistFile,
-                                       Config.authType, Config.passwdBundleId,
-                                       Config.passwordWords, &master_pass);
+        passwd_id =
+            zt_auth_passwd_new(Config.passwdFile, Config.wordlistFile, Config.authType,
+                               Config.passwdBundleId, Config.passwordWords, &master_pass);
 
         if (passwd_id == 0 && auth_type == KAPPA_AUTHTYPE_2)
           tty_printf(get_cli_prompt(OnNewK2Password), master_pass->pw);
@@ -847,7 +850,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_VERIFY);
+      CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_VERIFY);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -901,12 +904,12 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         /* Handshake will be restarted -- we will init the module again */
         vcry_module_release();
 
-        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
+        CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_INIT);
         break;
       } /* case MSG_AUTH_RETRY */
 
       case MSG_HANDSHAKE: {
-        /* We should have recieved the expected handshake response */
+        /* We should have received the expected handshake response */
         if (rcvlen < AUTHID_BYTES_LEN + VCRY_VERIFY_MSG_LEN) {
           return ERR_INVALID_DATUM;
           goto cleanup2;
@@ -957,7 +960,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         if ((ret = client_send(conn)) != ERR_SUCCESS)
           goto cleanup2;
 
-        CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_COMPLETE);
+        CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_COMPLETE);
       } /* case MSG_HANDSHAKE*/
       } /* switch (MSG_TYPE(conn->msgbuf)) */
       break;
@@ -971,7 +974,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if (MSG_TYPE(conn->msgbuf) == MSG_AUTH_RETRY)
         goto retryhandshake;
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_OFFER);
+      CLIENTSTATE_CHANGE(conn, CLIENT_OFFER);
       break;
 
     retryhandshake:
@@ -998,7 +1001,7 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       /* Handshake will be restarted -- we need to init the module again */
       vcry_module_release();
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_AUTH_INIT);
+      CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_INIT);
       break;
     }
 
@@ -1006,23 +1009,33 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       int setflags;
 
       /**
-       * Open the and lock the file here, so that its size remains fixed until
-       * the entire file is sent
+       * Open and lock the file here, so that its size remains fixed until
+       * the entire file is sent.
        */
-      if ((ret = zt_fio_open(&fileptr, Config.filePath, FIO_RDONLY)) !=
-          ERR_SUCCESS) {
+      if ((ret = zt_fio_open(&fileptr, Config.filePath, FIO_RDONLY)) != ERR_SUCCESS) {
         goto cleanup2;
       }
 
+      /**
+       * It is OK to query the file info of a standard stream, this function
+       * handles that case.
+       */
       if ((ret = zt_fio_fileinfo(&fileptr, &fileinfo)) != ERR_SUCCESS) {
         zt_fio_close(&fileptr);
         goto cleanup2;
       }
 
-      fileinfo.size = hton64(fileinfo.size);
       fileinfo.reserved = hton32(fileinfo.reserved);
 
-      setflags = Config.flagLiveRead ? MSG_FL_LIVE_READ : 0;
+      /**
+       * If the client has set a send limit, we enforce that here and send the
+       * offer the correct value to the peer.
+       */
+      fileinfo.size =
+          hton64(Config.flagSendLimit ? MIN(fileinfo.size, Config.maxFileSendSize)
+                                      : fileinfo.size);
+
+      setflags = conn->fl_live_read ? MSG_FL_LIVE_READ : 0;
 
       MSG_MAKE(conn->msgbuf, MSG_METADATA, (void *)&fileinfo, sizeof(zt_fileinfo_t),
                setflags);
@@ -1035,29 +1048,46 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_TRANSFER);
+      CLIENTSTATE_CHANGE(conn, CLIENT_TRANSFER);
       ATTRIBUTE_FALLTHROUGH;
     }
 
     case CLIENT_TRANSFER: {
-      size_t nread;
+      size_t nread, rem;
       err_t rv;
       progressbar_t *pb;
 
       if (!(pb = zt_progressbar_init(NULL, 1, NULL)))
         log_error(NULL, "Failed to create progress bar");
 
-      zt_progressbar_slot_begin(pb, 0, fileinfo.name, Config.hostname,
-                                fileinfo.size, true);
+      zt_progressbar_slot_begin(pb, 0, fileinfo.name, Config.hostname, fileinfo.size,
+                                true);
+
+      rem = Config.maxFileSendSize;
 
       MSG_SET_TYPE(conn->msgbuf, MSG_FILEDATA);
       while (1) {
-        rv =
-            zt_fio_read(&fileptr, MSG_DATA_PTR(conn->msgbuf), ZT_MSG_MAX_RW_SIZE, &nread);
+        size_t toread =
+            Config.flagSendLimit ? MIN(rem, ZT_MSG_MAX_RW_SIZE) : ZT_MSG_MAX_RW_SIZE;
+
+        rv = zt_fio_read(&fileptr, MSG_DATA_PTR(conn->msgbuf), toread, &nread);
         if (rv != ERR_SUCCESS)
           break;
 
         MSG_SET_LEN(conn->msgbuf, nread);
+
+        if (conn->fl_live_read && zt_client_tcp_readable(conn)) {
+          if (client_recv(conn, MSG_DONE) != ERR_SUCCESS)
+            goto cleanup2;
+
+          /* We received the server MSG_DONE because the recipient got capped by a receive
+           * limit but finds an incomplete transfer acceptable.
+           * We respect this message and consider this a successful transfer.
+           */
+          log_debug(NULL, "Peer requested to end the transfer early");
+          conn->done = true;
+          break;
+        }
 
         if ((ret = client_send(conn)) != ERR_SUCCESS) {
           zt_fio_close(&fileptr);
@@ -1065,18 +1095,29 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
           zt_progressbar_free(pb);
           goto cleanup2;
         }
+
         zt_progressbar_update(pb, 0, nread);
+
+        if (Config.flagSendLimit) {
+          rem -= nread;
+
+          if (rem == 0) {
+            rv = ERR_EOF;
+            break;
+          }
+        }
       }
+
       zt_fio_close(&fileptr);
       zt_progressbar_slot_complete(pb, 0);
       zt_progressbar_free(pb);
 
-      if (rv != ERR_EOF) {
+      if (!conn->done && rv != ERR_EOF) {
         ret = rv;
         goto cleanup2;
       }
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_DONE);
+      CLIENTSTATE_CHANGE(conn, CLIENT_DONE);
       ATTRIBUTE_FALLTHROUGH;
     }
 
@@ -1086,12 +1127,10 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       if ((ret = client_send(conn)) != ERR_SUCCESS)
         goto cleanup2;
 
-      if ((ret = client_recv(conn, MSG_DONE)) != ERR_SUCCESS) {
-        tty_printf(get_cli_prompt(OnSendFailure));
+      if (!conn->done && ((ret = client_recv(conn, MSG_DONE)) != ERR_SUCCESS))
         goto cleanup2;
-      }
 
-      CLIENTSTATE_CHANGE(conn->state, CLIENT_NONE);
+      CLIENTSTATE_CHANGE(conn, CLIENT_NONE);
       *done = true;
       goto cleanup2;
     }

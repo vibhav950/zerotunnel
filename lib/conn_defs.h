@@ -41,6 +41,7 @@
 #define ZT_SERVER_TIMEOUT_IDLE_DEFAULT          120000U   /* Server idle timeout (msec) */
 #define ZT_SERVER_TIMEOUT_SEND_DEFAULT          120000U   /* Server send() timeout (msec) */
 #define ZT_SERVER_TIMEOUT_RECV_DEFAULT          120000U   /* Server recv() timeout (msec) */
+#define ZT_SERVER_TIMEOUT_SHUTDOWN              10000U   /* Server shutdown timeout (msec) */
 
 #define ZT_CLIENT_RESOLVE_RETRY_INTERVAL        1000U     /* Client resolve retry interval (msec) */
 
