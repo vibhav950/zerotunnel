@@ -17,6 +17,7 @@
 #include "common/hex.h"
 #include "common/log.h"
 #include "common/sha256.h"
+#include "common/vec.h"
 #include "common/ztver.h"
 #include "lib/ztlib.h"
 
@@ -35,8 +36,8 @@ struct option {
   const char long_name[22];
   char short_name;
   void *var;
-  void *flag;
-  int (*parser_f)(option_t *opt, const char *val, bool invert);
+  void *setflag;
+  int (*parser_f)(option_t *opt, const void *val, bool invert);
   int args;
   command_t command;
   const char *help[4];
@@ -66,95 +67,94 @@ exit_status_t get_exit_status(void) { return exit_status; }
 
 static void print_help(command_t command);
 
+static int parse_multi_opt(const char *optstart, zt_vec_t **optvec);
+
 static void print_version(void) {
   static const char version_text[] = "zerotunnel version " ZT_VERSION_STRING;
   fprintf(stdout, "%s\n", version_text);
 }
 
-static int parse_string(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+static int parse_string(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
   zt_free(*((char **)opt->var));
-  *((const char **)opt->var) = zt_strdup(val);
-  if (opt->flag)
-    *((char *)opt->flag) = 1;
+  *((const char **)opt->var) = zt_strdup((const char *)val);
   return 0;
 }
 
-static int parse_filename(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
-  wordexp_t wexp;
-
+static int parse_filename(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
+  wordexp_t wexp;
+  const char *cval = (const char *)val;
+
   zt_free(*((char **)opt->var));
-  if (wordexp(val, &wexp, 0) == 0) {
+  if (wordexp(cval, &wexp, 0) == 0) {
     *((char **)opt->var) = zt_strdup(wexp.we_wordv[0]);
-    if (opt->flag)
-      *((char *)opt->flag) = 1;
     wordfree(&wexp);
-    log_debug(NULL, "Expanded filepath: '%s'", *((char **)opt->var));
     return 0;
   }
-  log_error(NULL, "Error parsing string argument '%s'", val);
+  log_error(NULL, "Error parsing string argument '%s'", cval);
   return -1;
 }
 
-static int parse_boolean(option_t *opt, const char *val, bool invert) {
+static int parse_boolean(option_t *opt, const void *val, bool invert) {
   ASSERT(opt);
+  const char *cval = (const char *)val;
 
   if (opt->var) {
-    if (!val || !strcmp(val, "1") || !strcasecmp(val, "true") ||
-        !strcasecmp(val, "yes") || !strcasecmp(val, "on")) {
+    if (!cval || !strcmp(cval, "1") || !strcasecmp(cval, "true") ||
+        !strcasecmp(cval, "yes") || !strcasecmp(cval, "on")) {
       *((bool *)opt->var) = !invert;
-    } else if (!*val || !strcmp(val, "0") || !strcasecmp(val, "false") ||
-               !strcasecmp(val, "no") || !strcasecmp(val, "off")) {
+    } else if (!cval || !strcmp(cval, "0") || !strcasecmp(cval, "false") ||
+               !strcasecmp(cval, "no") || !strcasecmp(cval, "off")) {
       *((bool *)opt->var) = invert;
     } else {
-      log_error(NULL, "Invalid boolean value '%s'", val);
+      log_error(NULL, "Invalid boolean value '%s'", cval);
       return -1;
     }
   }
   return 0;
 }
 
-static int parse_int(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+static int parse_int(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
-  *((int *)opt->var) = val ? atoi(val) : 0;
-  if (opt->flag)
-    *((char *)opt->flag) = 1;
+  *((int *)opt->var) = val ? atoi((const char *)val) : 0;
   return 0;
 }
 
-static int parse_uint(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+static int parse_uint(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
-  long int uval = val ? strtol(val, NULL, 10) : 0;
+  const char *cval = (const char *)val;
+  long int uval = cval ? strtol(cval, NULL, 10) : 0;
+
   if (uval >= 0 && uval <= UINT_MAX) {
     *((unsigned int *)opt->var) = (unsigned int)uval;
-    if (opt->flag)
-      *((char *)opt->flag) = 1;
     return 0;
   }
-  log_error(NULL, "Value out of range [0, %u]: '%s'", UINT_MAX, val);
+  log_error(NULL, "Value out of range [0, %u]: '%s'", UINT_MAX, cval);
   return -1;
 }
 
-static int parse_uint16(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+static int parse_uint16(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
-  int port = val ? atoi(val) : 0;
+  const char *cval = (const char *)val;
+  int port = cval ? atoi(cval) : 0;
+
   if (port >= 0 && port <= UINT16_MAX) {
     *((uint16_t *)opt->var) = (uint16_t)port;
-    if (opt->flag)
-      *((char *)opt->flag) = 1;
     return 0;
   }
-  log_error(NULL, "Value out of range [0, 65535]: '%s'", val);
+  log_error(NULL, "Value out of range [0, 65535]: '%s'", cval);
   return -1;
 }
 
-static int parse_numbytes(option_t *opt, const char *val, bool invert ATTRIBUTE_UNUSED) {
+static int parse_numbytes(option_t *opt, const void *val, bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
+  const char *cval = (const char *)val;
   char *endptr;
-  unsigned long long nbytes = strtoull(val, &endptr, 10);
-  if (endptr == val) {
-    log_error(NULL, "Invalid number of bytes: '%s'", val);
+  unsigned long long nbytes = strtoull(cval, &endptr, 10);
+
+  if (endptr == cval) {
+    log_error(NULL, "Invalid number of bytes: '%s'", cval);
     return -1;
   }
   switch (tolower((unsigned char)*endptr)) {
@@ -174,53 +174,53 @@ static int parse_numbytes(option_t *opt, const char *val, bool invert ATTRIBUTE_
     break;
   }
   if (*endptr != '\0') {
-    log_error(NULL, "Invalid suffix in number of bytes: '%s'", val);
+    log_error(NULL, "Invalid suffix in number of bytes: '%s'", cval);
     return -1;
   }
   if (nbytes > LONG_MAX) {
-    log_error(NULL, "Number of bytes too large (max %ld): '%s'", LONG_MAX, val);
+    log_error(NULL, "Number of bytes too large (max %ld): '%s'", LONG_MAX, cval);
     return -1;
   }
   *((long *)opt->var) = zt_ulltol(nbytes);
-  if (opt->flag)
-    *((char *)opt->flag) = 1;
   return 0;
 }
 
-static int parse_padding_factor(option_t *opt, const char *val,
+static int parse_padding_factor(option_t *opt, const void *val,
                                 bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
-  unsigned long uval = val ? strtoul(val, NULL, 10) : 0;
+  const char *cval = (const char *)val;
+  unsigned long uval = cval ? strtoul(cval, NULL, 10) : 0;
+
   /* check bounds and power of 2 */
   if (uval > 0 && (uval & (uval - 1)) == 0 && uval <= 65536) {
     *((uint32_t *)opt->var) = (uint32_t)uval;
-    if (opt->flag)
-      *((char *)opt->flag) = 1;
     return 0;
   }
-  log_error(NULL, "Value not of the form 2^n (1<=n<=16): '%s'", val);
+  log_error(NULL, "Value not of the form 2^n (1<=n<=16): '%s'", cval);
   return -1;
 }
 
-static int parse_help_command(option_t *opt ATTRIBUTE_UNUSED, const char *val,
+static int parse_help_command(option_t *opt ATTRIBUTE_UNUSED, const void *val,
                               bool invert ATTRIBUTE_UNUSED) {
   ASSERT(opt);
-  if (!strcmp(val, "send")) {
+  const char *cval = (const char *)val;
+
+  if (!strcmp(cval, "send")) {
     print_help(cmdSend);
     return 0;
-  } else if (!strcmp(val, "receive")) {
+  } else if (!strcmp(cval, "receive")) {
     print_help(cmdReceive);
     return 0;
-  } else if (!strcmp(val, "passgen")) {
+  } else if (!strcmp(cval, "passgen")) {
     print_help(cmdPassgen);
     return 0;
   }
   return -1;
 }
 
-static int parse_help(option_t *opt ATTRIBUTE_UNUSED, const char *val ATTRIBUTE_UNUSED,
+static int parse_help(option_t *opt ATTRIBUTE_UNUSED, const void *val ATTRIBUTE_UNUSED,
                       bool invert ATTRIBUTE_UNUSED) {
-  /* This will be handled specially in init_config */
+  /* This will be handled in init_config */
   return 0;
 }
 
@@ -233,6 +233,7 @@ struct config Config = {
     .ciphersuite = "K-01",
     .preferredFamily = '4',
     .maxFileRecvSize = 4 * SIZE_GB,
+    .maxFileSendSize = 4 * SIZE_GB,
     .passwordBundleSize = 20,
     .passwordChars = 32,
     .passwordWords = 4,
@@ -244,6 +245,20 @@ struct config Config = {
 static option_t options[] = {
     // long name, short name, config variable, config flag, parser function, args, option section, option help
     // Add options in alphabetical order by long name
+    {
+      "allow-incomplete",
+      0,
+      &Config.flagAllowIncomplete,
+      NULL,
+      parse_boolean,
+      -1,
+      cmdReceive,
+      {
+        "Allow incomplete transfers limited by the receive limit.\n",
+        "This only applies when the sender does a live read.\n",
+        "(default: off).\n"
+       }
+    },
     {
       "auth-type",
       'a',
@@ -506,8 +521,9 @@ static option_t options[] = {
       1,
       cmdReceive,
       {
-        "Maximum number of bytes to receive on an incoming transfer.\n",
-        "An incoming or outgoing live read will be limited to this size.\n",
+        "Maximum number of bytes to receive on an incoming live read.\n",
+        "Incomplete transfers are failed unless --allow-incomplete is\n",
+        "enabled.\n",
         "(default: 4G).\n"
       }
     },
@@ -522,6 +538,21 @@ static option_t options[] = {
       {
         "Timeout for receiving data (in milliseconds).\n",
         "(default: 120000).\n"
+      }
+    },
+    {
+      "send-limit",
+      'S',
+      &Config.maxFileSendSize,
+      &Config.flagSendLimit,
+      parse_numbytes,
+      1,
+      cmdSend,
+      {
+        "Limit the number of bytes sent on an outgoing transfer.\n",
+        "For a file size larger than this value, the result is same\n",
+        "as sending a truncated version of the file.\n"
+        "(default: NA).\n"
       }
     },
     {
@@ -654,6 +685,27 @@ static void print_help(command_t command) {
   fputs(help_footer_text, stdout);
 }
 
+static int handle_single_or_multi_opt(option_t *opt, const char *val, void **optval) {
+  if (opt->args <= 0)
+    exit(1); // should not happen
+
+  switch (opt->args) {
+  case 1:
+    *optval = (void *)val;
+    return 0;
+  default:
+    int nopts = parse_multi_opt(val, (zt_vec_t **)optval);
+
+    if (nopts != opt->args) {
+      log_error(NULL, "Option '%s' requires %d arguments, but got %d", opt->long_name,
+                opt->args, nopts);
+      zt_vec_free((zt_vec_t **)optval);
+      return -1;
+    }
+    return 0;
+  }
+}
+
 static int ATTRIBUTE_PURE ATTRIBUTE_NONNULL(1, 2)
     option_compare(const void *key, const void *option) {
   return strcmp((const char *)key, ((const option_t *)option)->long_name);
@@ -665,17 +717,21 @@ static int ATTRIBUTE_NONNULL(1)
   bool invert = false, value_present = false;
   char namebuf[sizeof(options[0].long_name) + 5 /*len("--") + len("no-")*/], *p;
   int ret = 0, rv;
+  void *optval; // string | vector | NULL depending on opt->args
 
-  /* Handle options with value directly appended, like --foo=bar */
+  /* Handle options with value directly appended, like --foo=bar
+     In this case, we won't use `val` since that would be the next option */
   if ((p = strchr(name, '='))) {
     if (p - name >= (int)sizeof(namebuf)) {
       log_error(NULL, "Unknown option: '%s'", name);
       return -1;
     }
+
+    // separate out name
     memcpy(namebuf, name, p - name);
     namebuf[p - name] = '\0';
     name = namebuf;
-    val = p + 1;
+
     value_present = true;
   }
 
@@ -698,7 +754,7 @@ static int ATTRIBUTE_NONNULL(1)
   }
 
   if (value_present) {
-    // "option=*"
+    // handle value provided as "--option=value"
     if (invert) {
       if (!opt->args || opt->parser_f == parse_string ||
           opt->parser_f == parse_filename) {
@@ -709,37 +765,79 @@ static int ATTRIBUTE_NONNULL(1)
       log_error(NULL, "Option '%s' does not allow arguments", name);
       return -1;
     }
+
+    rv = handle_single_or_multi_opt(opt, p + 1, &optval);
+    if (rv < 0)
+      return rv;
   } else {
-    // "option"
+    // handle value provided as ["--option", "value"]
+    // if this option requires an argument, we consume `val` and return 1
     switch (opt->args) {
     case 0:
-      val = NULL;
+    case -1:
+      optval = NULL;
       break;
-    case 1:
+    default:
+      if (invert && (opt->parser_f == parse_string || opt->parser_f == parse_filename)) {
+        /* unset the value */
+        optval = NULL;
+        break;
+      } else if (invert) {
+        log_error(NULL, "Bad option no-%s", name);
+        return -1;
+      }
+
       if (!val) {
         log_error(NULL, "Option '%s' requires an argument", name);
         return -1;
       }
 
-      if (invert && (opt->parser_f == parse_string || opt->parser_f == parse_filename)) {
-        /* unset the value */
-        val = NULL;
-      } else {
-        ret = opt->args;
-      }
-      break;
-    case -1:
-      val = NULL;
-      break;
-    default:
-      break;
+      rv = handle_single_or_multi_opt(opt, val, &optval);
+      if (rv < 0)
+        return rv;
+
+      ret = 1;
     }
   }
 
-  if ((rv = opt->parser_f(opt, val, invert)) < 0)
+  rv = opt->parser_f(opt, optval, invert);
+
+  if (opt->args > 1)
+    zt_vec_free((zt_vec_t **)&optval);
+
+  if (rv < 0)
     return rv;
 
+  if (opt->setflag)
+    *((char *)opt->setflag) = 1;
+
   return ret;
+}
+
+/**
+ * Parses multiple comma separated arguments (i.e., "arg1,arg2,arg3") and returns a
+ * vector of strings
+ */
+static int parse_multi_opt(const char *optstart, zt_vec_t **optvec) {
+  zt_vec_t *vec;
+  char *p;
+  int count;
+
+  vec = zt_vec_new(8, NULL);
+  if (!vec)
+    exit(1);
+
+  for (p = (char *)optstart, count = 0; *p;) {
+    size_t i = 0;
+    for (; p[i] && p[i] != ','; ++i)
+      ;
+    zt_vec_append(vec, zt_strmemdup(p, i));
+    count++;
+    p = (p[i]) ? p + i + 1 : p + i;
+  }
+
+  *optvec = vec;
+  return count;
 }
 
 static int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t command) {
@@ -774,8 +872,10 @@ static int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t comm
 
     if (argp[1] == '-') {
       /* Long option */
-      if (argp[2] == '\0')
-        return n + 1;
+      if (argp[2] == '\0') {
+        log_error(NULL, "Invalid option: '--'");
+        return -1;
+      }
 
       if ((rv = set_long_option(argp + 2, n < argc - 1 ? argv[n + 1] : NULL, command)) <
           0) {
@@ -784,41 +884,72 @@ static int ATTRIBUTE_NONNULL(2) argparser(int argc, char *argv[], command_t comm
 
       n += rv;
     } else if (argp[1]) {
-      /* Short option(s) */
-      for (int pos = 1; argp[pos]; pos++) {
-        option_t *opt;
-        int idx;
+      /* Short option */
+      option_t *opt;
+      int idx, curpos = 1;
 
-        if (isalnum(argp[pos]) &&
-            (idx = option_shortcut_table[(unsigned char)argp[pos]])) {
-          opt = &options[idx - 1];
+      if (isascii(argp[curpos]) &&
+          (idx = option_shortcut_table[(unsigned char)argp[curpos]])) {
+        opt = &options[idx - 1];
 
-          if (!(opt->command & command)) {
-            log_error(NULL, "Option '-%c' is not valid for this command", argp[pos]);
+        if (!(opt->command & command)) {
+          log_error(NULL, "Option '-%c' is not valid for this command", argp[curpos]);
+          return -1;
+        }
+
+        if (opt->args > 1) {
+          zt_vec_t *optvals;
+          size_t nopts;
+          const char *optstart;
+
+          if (!argp[curpos + 1] && n + 1 >= argc) {
+            log_error(NULL, "Expected %d arguments for option '-%c', but got none",
+                      opt->args, argp[curpos]);
             return -1;
           }
 
-          if (opt->args > 0) {
-            const char *val;
+          optstart = argp[curpos + 1] ? argp + curpos + 1 : argv[++n];
 
-            if (!argp[pos + 1] && argc <= n + opt->args) {
-              log_error(NULL, "Missing argument(s) for option '-%c'", argp[pos]);
-              return -1;
-            }
-            val = argp[pos + 1] ? argp + pos + 1 : argv[++n];
-            if ((rv = opt->parser_f(opt, val, 0)) < 0)
-              return rv;
-            n += rv;
-            break;
-          } else { // if (opt->args == 0)
-            if ((rv = opt->parser_f(opt, NULL, 0)) < 0)
-              return rv;
+          nopts = parse_multi_opt(optstart, &optvals);
+          if (nopts != opt->args) {
+            log_error(NULL, "Expected %d arguments for option '-%c', but got %d",
+                      opt->args, argp[curpos], nopts);
+            zt_vec_free(&optvals);
+            return -1;
           }
-        } else {
-          log_error(NULL, "Unknown option '-%c'", argp[pos]);
-          return -1;
+
+          rv = opt->parser_f(opt, optvals, 0);
+          zt_vec_free(&optvals);
+
+          if (rv < 0)
+            return rv;
+        } else if (opt->args == 1) {
+          const char *val;
+
+          if (!argp[curpos + 1] && n + 1 >= argc) {
+            /* [..., "-c" <no next argument>] */
+            log_error(NULL, "Missing one expected argument for option '-%c'",
+                      argp[curpos]);
+            return -1;
+          }
+
+          val = argp[curpos + 1] ? argp + curpos + 1 : argv[++n];
+          if ((rv = opt->parser_f(opt, val, 0)) < 0)
+            return rv;
+        } else { // no args for this option
+          if ((rv = opt->parser_f(opt, NULL, 0)) < 0)
+            return rv;
         }
+
+        if (opt->setflag)
+          *((char *)opt->setflag) = 1;
+      } else {
+        log_error(NULL, "Unknown option '-%c'", argp[curpos]);
+        return -1;
       }
+    } else {
+      log_error(NULL, "Invalid option: '-'");
+      return -1;
     }
   }
 
@@ -962,10 +1093,10 @@ command_t init_config(int argc, char *argv[]) {
       goto err;
 
     if (Config.authType == KAPPA_AUTHTYPE_1 && !Config.passwdFile) {
-      char *fname = get_password_file_location(Config.hostname, true);
-      if (!fname)
+      char *pwfname = get_password_file_location(Config.hostname, true);
+      if (!pwfname)
         return cmdNone;
-      Config.passwdFile = fname;
+      Config.passwdFile = pwfname;
     }
 
     if (Config.flagLiveRead) {
@@ -986,10 +1117,10 @@ command_t init_config(int argc, char *argv[]) {
       if (!Config.hostname)
         goto err;
 
-      char *fname = get_password_file_location(Config.hostname, true);
-      if (!fname)
+      char *pwfname = get_password_file_location(Config.hostname, true);
+      if (!pwfname)
         return cmdNone;
-      Config.passwdFile = fname;
+      Config.passwdFile = pwfname;
     }
 
     if (!target)
@@ -1012,10 +1143,10 @@ command_t init_config(int argc, char *argv[]) {
       } else if (target) {
         Config.passwdFile = zt_strdup(target);
       } else {
-        char *fname = get_password_file_location(Config.hostname, false);
-        if (!fname)
+        char *pwfname = get_password_file_location(Config.hostname, false);
+        if (!pwfname)
           return cmdNone;
-        Config.passwdFile = fname;
+        Config.passwdFile = pwfname;
       }
     } else if (target || Config.hostname) {
       /* K0 does not take these arguments */
@@ -1034,10 +1165,10 @@ command_t init_config(int argc, char *argv[]) {
     if (target) {
       Config.passwdFile = zt_strdup(target);
     } else {
-      char *fname = get_password_file_location(Config.hostname, true);
-      if (!fname)
+      char *pwfname = get_password_file_location(Config.hostname, true);
+      if (!pwfname)
         return cmdNone;
-      Config.passwdFile = fname;
+      Config.passwdFile = pwfname;
     }
   }
   }
@@ -1059,4 +1190,5 @@ void deinit_config(void) {
   zt_free(Config.ciphersuite);
   zt_free(Config.filePath);
   zt_free(Config.passwdBundleId);
+  zt_free(Config.wordlistFile);
 }

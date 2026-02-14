@@ -118,6 +118,8 @@ static int do_send(void) {
 
   if (e == ERR_SUCCESS && done)
     tty_printf(get_cli_prompt(OnSendSuccessful), Config.filePath);
+  else
+    tty_printf(get_cli_prompt(OnSendFailure));
 
   zt_client_conn_dealloc(client);
 
@@ -142,6 +144,8 @@ static int do_receive(void) {
   if (e == ERR_SUCCESS && done) {
     if (strcmp(Config.filePath, "-"))
       tty_printf(get_cli_prompt(OnReceiveSuccessful), Config.filePath);
+  } else {
+    tty_printf(get_cli_prompt(OnReceiveFailure));
   }
 
   zt_server_conn_dealloc(server);
