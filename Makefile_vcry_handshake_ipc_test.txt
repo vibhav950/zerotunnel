@@ -25,7 +25,6 @@ bin/vcry_handshake_ipc_test: bin/vcry_handshake_ipc_test.o \
 										bin/test_utils.o \
 										bin/mem.o \
                     bin/cpu.o \
-                    bin/cbuf.o \
                     bin/rdrand.o \
                     bin/systemrand.o
 
@@ -92,9 +91,6 @@ bin/mem.o: common/mem.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/cpu.o: common/cpu.c
-	$(CC) $(CFLAGS) -c -o $@ $^
-
-bin/cbuf.o: common/cbuf.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bin/rdrand.o: random/rdrand.c

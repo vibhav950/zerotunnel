@@ -267,38 +267,57 @@ err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len) {
   return ERR_SUCCESS;
 }
 
-/** Add a 64-bit value to V in Big-Endian format */
-static inline void _add64_be(uint8_t *V, uint64_t n) {
-  uint64_t *p = (uint64_t *)V;
+/**
+ * Add a 64-bit value to the 8-byte vector V in Big-Endian format
+ * Returns 1 if the additon causes an overflow, 0 otherwise.
+ */
+static inline int _add64_be(uint8_t V[8], uint64_t n) {
+  uint64_t old, result;
+  int overflow;
 
+  /* load BE value */
+  memcpy(&old, V, sizeof(old));
 #ifdef __LITTLE_ENDIAN__
-  p[0] = BSWAP64(BSWAP64(p[0]) + n);
-#else
-  p[0] += n;
+  old = BSWAP64(old);
 #endif
+
+  result = old + n;
+  overflow = (result < old);
+
+  /* store BE result */
+#ifdef __LITTLE_ENDIAN__
+  result = BSWAP64(result);
+#endif
+  memcpy(V, &result, sizeof(result));
+
+  return overflow;
 }
 
 /** The encryption nonce (ini/res) */
 static const uint8_t *vcry_encr_nonce(vcry_crypto_hdr_t *hdr) {
   // Allocate a buffer for the IV on the thread-local stack
   static thread_local uint8_t iv[16];
-  uint64_t sid, offs;
+  uint64_t sid, offs, *iv64;
 
   memcpy(iv, _vcry_encr_iv(), VCRY_IV_ENCR_LEN);
 
   /* XXX: the following part of this function was written when the stream Id
    * and offset were 8 bytes long.
    * If these lengths are modified, the following code will cause a bug. */
+  iv64 = (uint64_t *)iv;
 #ifdef __LITTLE_ENDIAN__
-  sid = BSWAP64(*((uint64_t *)hdr->sid));
-  offs = BSWAP64(*((uint64_t *)hdr->offs));
+  sid = BSWAP64(((uint64_t *)hdr->sid)[0]);
+  offs = BSWAP64(((uint64_t *)hdr->offs)[0]);
+
+  iv64[0] = BSWAP64(BSWAP64(iv64[0]) ^ sid);
+  iv64[1] = BSWAP64(BSWAP64(iv64[1]) ^ offs);
 #else
   sid = ((uint64_t *)hdr->sid)[0];
   offs = ((uint64_t *)hdr->offs)[0];
-#endif
 
-  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sid;
-  ((uint64_t *)iv)[1] = ((uint64_t *)iv)[1] ^ offs;
+  iv64[0] = iv64[0] ^ sid;
+  iv64[1] = iv64[1] ^ offs;
+#endif
 
   return iv;
 }
@@ -306,21 +325,25 @@ static const uint8_t *vcry_encr_nonce(vcry_crypto_hdr_t *hdr) {
 /** The decryption nonce (ini/res) */
 static const uint8_t *vcry_decr_nonce(vcry_crypto_hdr_t *hdr) {
   static thread_local uint8_t iv[16];
-  uint64_t sid, offs;
+  uint64_t sid, offs, *iv64;
 
   memcpy(iv, _vcry_decr_iv(), VCRY_IV_ENCR_LEN);
 
+  iv64 = (uint64_t *)iv;
   /* Read the stream Id and offset as 64-bit big-endian integers */
 #ifdef __LITTLE_ENDIAN__
-  sid = BSWAP64(*((uint64_t *)hdr->sid));
-  offs = BSWAP64(*((uint64_t *)hdr->offs));
+  sid = BSWAP64(((uint64_t *)hdr->sid)[0]);
+  offs = BSWAP64(((uint64_t *)hdr->offs)[0]);
+
+  iv64[0] = BSWAP64(BSWAP64(iv64[0]) ^ sid);
+  iv64[1] = BSWAP64(BSWAP64(iv64[1]) ^ offs);
 #else
   sid = ((uint64_t *)hdr->sid)[0];
   offs = ((uint64_t *)hdr->offs)[0];
-#endif
 
-  ((uint64_t *)iv)[0] = ((uint64_t *)iv)[0] ^ sid;
-  ((uint64_t *)iv)[1] = ((uint64_t *)iv)[1] ^ offs;
+  iv64[0] = iv64[0] ^ sid;
+  iv64[1] = iv64[1] ^ offs;
+#endif
 
   return iv;
 }
@@ -1487,7 +1510,7 @@ void vcry_module_release(void) {
  *
  * The pointer must be freed using `vcry_crypto_hdr_free()` when no longer needed.
  */
-vcry_crypto_hdr_t *vcry_crypto_hdr_new(uint8_t stream_id[VCRY_STREAM_ID_LEN]) {
+vcry_crypto_hdr_t *vcry_crypto_hdr_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]) {
   vcry_crypto_hdr_t *hdr;
 
   if (!stream_id)
@@ -1553,7 +1576,7 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
   if (VCRY_STATE() != vcry_hs_done)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  if (_vcry_seqno_self() == UINT64_MAX)
+  if (_add64_be(hdr->offs, in_len - 1))
     return VCRY_ERR_SET(ERR_OPERATION_LIMIT_REACHED);
 
   tag_len = cipher_tag_len(vctx->aead);
@@ -1577,7 +1600,7 @@ err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
     return VCRY_ERR_SET(ret);
   }
 
-  _add64_be(hdr->offs, in_len - 1);
+  (void)_add64_be(hdr->offs, in_len - 1);
 
   return ERR_SUCCESS;
 }
@@ -1620,9 +1643,6 @@ err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
   if (VCRY_STATE() != vcry_hs_done)
     return VCRY_ERR_SET(ERR_INVALID);
 
-  if (_vcry_seqno_peer() == UINT64_MAX)
-    return VCRY_ERR_SET(ERR_OPERATION_LIMIT_REACHED);
-
   tag_len = cipher_tag_len(vctx->aead);
 
   /* Invalid message */
@@ -1649,7 +1669,8 @@ err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad
     return VCRY_ERR_SET(ret);
   }
 
-  _add64_be(hdr->offs, out_len - 1);
+  if (_add64_be(hdr->offs, *out_len - 1))
+    return VCRY_ERR_SET(ERR_OPERATION_LIMIT_REACHED);
 
   return ERR_SUCCESS;
 }

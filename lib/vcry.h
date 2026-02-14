@@ -161,7 +161,7 @@ err_t vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LE
                                      const uint8_t *id_a, const uint8_t *id_b,
                                      size_t len_a, size_t len_b);
 
-vcry_crypto_hdr_t *vcry_crypto_hdr_new(uint8_t stream_id[VCRY_STREAM_ID_LEN]);
+vcry_crypto_hdr_t *vcry_crypto_hdr_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]);
 
 void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr);
 
