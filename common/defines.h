@@ -177,35 +177,37 @@ static inline ATTRIBUTE_ALWAYS_INLINE uint64_t _rotr64(uint64_t x, int s) {
  *                         Error codes                        *
  **************************************************************/
 
-typedef enum {
-  ERR_SUCCESS,                 /* OK */
-  ERR_NOT_ALLOC,               /* memory/interface not allocated */
-  ERR_NOT_INIT,                /* not initialized */
-  ERR_NULL_PTR,                /* null pointer argument(s) */
-  ERR_BAD_ARGS,                /* invalid argument(s) */
-  ERR_MEM_FAIL,                /* out of memory */
-  ERR_BUFFER_TOO_SMALL,        /* buffer too small */
-  ERR_REQUEST_TOO_LARGE,       /* request exceeded allowed maximum size */
-  ERR_NOT_SUPPORTED,           /* operation not supported */
-  ERR_INTERNAL,                /* internal library error */
-  ERR_INVALID,                 /* invalid operation (sequence) */
-  ERR_OPERATION_LIMIT_REACHED, /* operation limit reached */
-  ERR_BAD_CONTROL_FLOW,        /* protocol deviation */
-  ERR_INVALID_DATUM,           /* invalid data */
-  ERR_HSHAKE_ABORTED,          /* handshake aborted */
-  ERR_AUTH_FAIL,               /* authentication failed */
-  ERR_AGAIN,                   /* try again */
-  ERR_TIMEOUT,                 /* operation timed out */
-  ERR_NORESOLVE,               /* could not resolve host */
-  ERR_TCP_ACCEPT,              /* failed to accept TCP connection */
-  ERR_TCP_CONNECT,             /* TCP connection failed */
-  ERR_TCP_SEND,                /* TCP send failed */
-  ERR_TCP_RECV,                /* TCP receive failed */
-  ERR_ALREADY,                 /* already in progress */
-  ERR_FIO_READ,                /* fio read failed */
-  ERR_FIO_WRITE,               /* fio write failed */
-  ERR_EOF,                     /* end of file reached */
-} err_t;
+enum {
+  ERR_SUCCESS                 =  0,  /* OK */
+  ERR_NOT_ALLOC               = -1,  /* memory/interface not allocated */
+  ERR_NOT_INIT                = -2,  /* not initialized */
+  ERR_NULL_PTR                = -3,  /* null pointer argument(s) */
+  ERR_BAD_ARGS                = -4,  /* invalid argument(s) */
+  ERR_MEM_FAIL                = -5,  /* out of memory */
+  ERR_BUFFER_TOO_SMALL        = -6,  /* buffer too small */
+  ERR_REQUEST_TOO_LARGE       = -7,  /* request exceeded allowed maximum size */
+  ERR_NOT_SUPPORTED           = -8,  /* operation not supported */
+  ERR_INTERNAL                = -9,  /* internal library error */
+  ERR_INVALID                 = -10, /* invalid operation (sequence) */
+  ERR_OPERATION_LIMIT_REACHED = -11, /* operation limit reached */
+  ERR_BAD_CONTROL_FLOW        = -12, /* protocol deviation */
+  ERR_INVALID_DATUM           = -13, /* invalid data */
+  ERR_HSHAKE_ABORTED          = -14, /* handshake aborted */
+  ERR_AUTH_FAIL               = -15, /* authentication failed */
+  ERR_AGAIN                   = -16, /* try again */
+  ERR_TIMEOUT                 = -17, /* operation timed out */
+  ERR_NORESOLVE               = -18, /* could not resolve host */
+  ERR_TCP_ACCEPT              = -19, /* failed to accept TCP connection */
+  ERR_TCP_CONNECT             = -20, /* TCP connection failed */
+  ERR_TCP_SEND                = -21, /* TCP send failed */
+  ERR_TCP_RECV                = -22, /* TCP receive failed */
+  ERR_ALREADY                 = -23, /* already in progress */
+  ERR_FIO_READ                = -24, /* fio read failed */
+  ERR_FIO_WRITE               = -25, /* fio write failed */
+  ERR_EOF                     = -26 /* end of file reached */
+};
+
+typedef int err_t;
 
 /**
  * Log an error message using the global logger and exit with failure.

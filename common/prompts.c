@@ -11,16 +11,15 @@
 #include "prompts.h"
 #include "defines.h"
 
-#define RED_FG "\033[38;5;196m"
-#define PURPLE_FG "\033[38;5;211m"
+// clang-format off
 
-#define CLEAR "\033[0m"
+#define RED_FG                      "\033[38;5;196m"
+#define PURPLE_FG                   "\033[38;5;211m"
+#define CLEAR                       "\033[0m"
 
 #define CAUTIONPROMPT(prompt, ...) (RED_FG "\nCAUTION! " prompt CLEAR __VA_ARGS__)
-
-#define GENERICPROMPT(prompt) (PURPLE_FG prompt CLEAR)
-
-#define ALERTPROMPT(prompt) (RED_FG prompt CLEAR)
+#define GENERICPROMPT(prompt)      (PURPLE_FG prompt CLEAR)
+#define ALERTPROMPT(prompt)        (RED_FG prompt CLEAR)
 
 static const char *cli_prompts[] = {
     [OnBadPasswdIdentifier] =
@@ -33,9 +32,11 @@ static const char *cli_prompts[] = {
                       "entered incorrect credentials, or this is a possible "
                       "Man-In-The-Middle attack and the attacker guessed wrong.\n",
                       "Do you want to retry? [Y/n] "),
-    [OnFileTransferRequest] = GENERICPROMPT("\nAccept this file transfer? [Y/n] "),
-    [OnPasswdFileExists] = CAUTIONPROMPT("A file with that name already exists.\n",
-                                         "Are you sure you want to overwrite it? [Y/n] "),
+    [OnFileTransferRequest] =
+        GENERICPROMPT("\nAccept this file transfer? [Y/n] "),
+    [OnPasswdFileExists] =
+        CAUTIONPROMPT("A file with that name already exists.\n",
+                      "Are you sure you want to overwrite it? [Y/n] "),
     [OnPasswdFileTryDelete] =
         CAUTIONPROMPT("This will permanently delete all passwords from selected file.\n",
                       "Are you sure you want to proceed? [Y/n] "),
@@ -47,18 +48,24 @@ static const char *cli_prompts[] = {
         CAUTIONPROMPT("Mismatch in authentication type... cannot proceed.\n"),
     [OnIncomingTransfer] =
         GENERICPROMPT("\nIncoming file transfer (name = %s, size = %jd %s)\n"),
-    [OnIncomingLiveRead] = GENERICPROMPT(
-        "\nIncoming live read file. Transfer will be limited to %llu %s.\n"),
-    [OnNewK0Password] = GENERICPROMPT("\nNew password: %s\n Your correspondent "
-                                      "must enter the same password."),
-    [OnNewK1PasswordFile] = GENERICPROMPT("\nPassword bundle saved to %s\n"),
-    [OnNewK2Password] = GENERICPROMPT("\nYour one-time use session password: %s\n"),
-    [OnSendSuccessful] = GENERICPROMPT("File sent successfully.\n"),
-    [OnReceiveSuccessful] = GENERICPROMPT("File saved to %s.\n"),
+    [OnIncomingLiveRead] =
+        GENERICPROMPT("\nIncoming live read file. Transfer will be limited to %llu %s.\n"),
+    [OnNewK0Password] =
+        GENERICPROMPT("\nNew password: %s\n Your correspondent "
+                      "must enter the same password."),
+    [OnNewK1PasswordFile] =
+        GENERICPROMPT("\nPassword bundle saved to %s\n"),
+    [OnNewK2Password] =
+        GENERICPROMPT("\nYour one-time use session password: %s\n"),
+    [OnSendSuccessful] =
+        GENERICPROMPT("File sent successfully.\n"),
+    [OnReceiveSuccessful] =
+        GENERICPROMPT("File saved to %s.\n"),
     [OnSendFailure] =
         ALERTPROMPT("Failed to transfer file... either your correspondent declined "
                     "the transfer or there was an unexpected network failure.\n"),
-    [OnReceiveFailure] = ALERTPROMPT("Failed to receive file.\n"),
+    [OnReceiveFailure] =
+        ALERTPROMPT("Failed to receive file.\n"),
 };
 
 const char *get_cli_prompt(prompt_t prompt) {
@@ -67,4 +74,10 @@ const char *get_cli_prompt(prompt_t prompt) {
   return NULL;
 }
 
+#undef RED_FG
+#undef PURPLE_FG
+#undef CLEAR
+
 #undef CAUTIONPROMPT
+#undef GENERICPROMPT
+#undef ALERTPROMPT
