@@ -11,12 +11,12 @@
  */
 
 #include "progressbar.h"
+#include "common/thread.h"
 #include "defines.h"
 #include "log.h"
 #include "time_utils.h"
 
 #include <float.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -87,8 +87,8 @@ typedef struct _progressbar_st {
   char *spaces;                     /* buffer for whitespace chars */
   short width;                      /* last recorded window width (columns) */
   bool redraw;                      /* redraw all slots */
-  pthread_t thread;
-  pthread_mutex_t lock;
+  zt_thread_t *thread;
+  zt_mutex_t lock;
   volatile uintptr_t dont_update;
   zt_logger_t *logger;
 } progressbar_t;
@@ -357,16 +357,16 @@ static void pb_update(progressbar_t *pb) {
   }
 }
 
-static void *pb_update_thread(void *args) {
+static int pb_update_thread(void *args) {
   progressbar_t *pb = (progressbar_t *)args;
 
   while (pb->dont_update != 4) {
-    pthread_mutex_lock(&pb->lock);
+    zt_mutex_lock(&pb->lock);
     pb_update(pb);
-    pthread_mutex_unlock(&pb->lock);
+    zt_mutex_unlock(&pb->lock);
     usleep(PB_THREAD_REFRESH_INTERVAL);
   }
-  return NULL;
+  return 0;
 }
 
 /**
@@ -376,7 +376,7 @@ static void *pb_update_thread(void *args) {
 static void pb_log_before_cb(void *args) {
   progressbar_t *pb = (progressbar_t *)args;
 
-  pthread_mutex_lock(&pb->lock);
+  zt_mutex_lock(&pb->lock);
   /*
     ESC[s  : save cursor position (SCO)
     ESC[nS : scroll up whole screen
@@ -387,7 +387,7 @@ static void pb_log_before_cb(void *args) {
   fprintf(stdout, "\x1B[s\x1B[1S\x1B[%dA\x1B[1G\x1B[0J", pb->nslots + 1);
   fflush(stdout);
   pb->dont_update = 3;
-  pthread_mutex_unlock(&pb->lock);
+  zt_mutex_unlock(&pb->lock);
 }
 
 /**
@@ -397,13 +397,13 @@ static void pb_log_before_cb(void *args) {
 static void pb_log_after_cb(void *args) {
   progressbar_t *pb = (progressbar_t *)args;
 
-  pthread_mutex_lock(&pb->lock);
+  zt_mutex_lock(&pb->lock);
   if (pb->dont_update == 3)
     pb->dont_update = 0;
   pb->redraw = true;
   pb_restore_cursor();
   pb_update(pb);
-  pthread_mutex_unlock(&pb->lock);
+  zt_mutex_unlock(&pb->lock);
 }
 
 progressbar_t *zt_progressbar_init(progressbar_t *bar, int slots, zt_logger_t *logger) {
@@ -425,13 +425,14 @@ progressbar_t *zt_progressbar_init(progressbar_t *bar, int slots, zt_logger_t *l
   if (!pb_update_winsize(pb, true))
     goto cleanup;
 
-  if (pthread_mutex_init(&pb->lock, NULL))
+  if (zt_mutex_init(&pb->lock))
     goto cleanup;
 
   /* Don't start updating until at least one slot has begun */
   pb->dont_update = 2;
 
-  if (pthread_create(&pb->thread, NULL, PTRV(pb_update_thread), PTRV(pb)))
+  pb->thread = zt_thread_create(pb_update_thread, PTRV(pb));
+  if (pb->thread == zt_thread_t_null)
     goto cleanup;
 
   /* Populate progress meters chars */
@@ -447,8 +448,8 @@ progressbar_t *zt_progressbar_init(progressbar_t *bar, int slots, zt_logger_t *l
   return pb;
 
 cleanup:
-  pthread_mutex_destroy(&pb->lock);
-  pthread_join(pb->thread, NULL);
+  zt_mutex_destroy(&pb->lock);
+  zt_thread_join(pb->thread);
   if (bar == NULL)
     zt_free(pb);
   return NULL;
@@ -458,12 +459,12 @@ void zt_progressbar_deinit(progressbar_t *bar) {
   if (bar == NULL)
     return;
 
-  pthread_mutex_lock(&bar->lock);
+  zt_mutex_lock(&bar->lock);
   bar->dont_update = 4; /* terminate thread loop */
-  pthread_mutex_unlock(&bar->lock);
+  zt_mutex_unlock(&bar->lock);
 
-  pthread_join(bar->thread, NULL);
-  pthread_mutex_destroy(&bar->lock);
+  zt_thread_join(bar->thread);
+  zt_mutex_destroy(&bar->lock);
 
   zt_logger_remove_before_cb(bar->logger, pb_log_before_cb);
   zt_logger_remove_after_cb(bar->logger, pb_log_after_cb);
@@ -489,13 +490,13 @@ void zt_progressbar_set_slots(progressbar_t *bar, int nslots) {
   if (bar == NULL)
     return;
 
-  pthread_mutex_lock(&bar->lock);
+  zt_mutex_lock(&bar->lock);
   int more_slots = nslots - bar->nslots;
   if (more_slots > 0) {
     progressbar_slot *new_slots =
         zt_realloc(bar->slots, nslots * sizeof(progressbar_slot));
     if (new_slots == NULL) {
-      pthread_mutex_unlock(&bar->lock);
+      zt_mutex_unlock(&bar->lock);
       return;
     }
     bar->slots = new_slots;
@@ -507,7 +508,7 @@ void zt_progressbar_set_slots(progressbar_t *bar, int nslots) {
 
     pb_update(bar);
   }
-  pthread_mutex_unlock(&bar->lock);
+  zt_mutex_unlock(&bar->lock);
 }
 
 void zt_progressbar_slot_begin(progressbar_t *bar, int slot, const char *filename,
@@ -515,7 +516,7 @@ void zt_progressbar_slot_begin(progressbar_t *bar, int slot, const char *filenam
   if (bar == NULL)
     return;
 
-  pthread_mutex_lock(&bar->lock);
+  zt_mutex_lock(&bar->lock);
   progressbar_slot *slotp = &bar->slots[slot];
 
   if (recipient)
@@ -541,15 +542,15 @@ void zt_progressbar_slot_begin(progressbar_t *bar, int slot, const char *filenam
   if (bar->dont_update == 2)
     bar->dont_update = 0;
 
-  pthread_mutex_unlock(&bar->lock);
+  zt_mutex_unlock(&bar->lock);
 }
 
 void zt_progressbar_update(progressbar_t *bar, int slot, size_t nbytes) {
   if (likely(bar)) {
-    pthread_mutex_lock(&bar->lock);
+    zt_mutex_lock(&bar->lock);
     bar->slots[slot].xferd_size += nbytes;
     bar->slots[slot].redraw = true;
-    pthread_mutex_unlock(&bar->lock);
+    zt_mutex_unlock(&bar->lock);
   }
 }
 
@@ -557,13 +558,13 @@ void zt_progressbar_slot_complete(progressbar_t *bar, int slot) {
   if (bar == NULL)
     return;
 
-  pthread_mutex_lock(&bar->lock);
+  zt_mutex_lock(&bar->lock);
   if (slot >= 0 && slot < bar->nslots) {
     progressbar_slot *slotp = &bar->slots[slot];
     slotp->status = DONE;
     pb_update_slot(bar, slot);
   }
-  pthread_mutex_unlock(&bar->lock);
+  zt_mutex_unlock(&bar->lock);
 }
 
 void zt_progressbar_winsize_changed(void) { winsize_changed = true; }
