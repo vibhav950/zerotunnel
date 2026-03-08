@@ -56,10 +56,23 @@ if(NOT SYS_WIN32)
   set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 endif()
 
-find_package(Threads REQUIRED)
+find_package(Threads)
 find_package(SQLite3)
 
 set(HAVE_SQLITE3 ${SQLite3_FOUND})
+
+if (SYS_WIN32)
+  # Windows has its own threading API, so we won't use POSIX threads.
+  if (Threads_FOUND AND CMAKE_USE_WIN32_THREADS_INIT)
+    set(HAVE_WIN32_THREADS ON)
+    list(APPEND PLATFORM_LIBRARIES Threads::Threads)
+  endif()
+else()
+  if(Threads_FOUND AND CMAKE_USE_PTHREADS_INIT)
+    set(HAVE_POSIX_THREADS ON)
+    list(APPEND PLATFORM_LIBRARIES Threads::Threads)
+  endif()
+endif()
 
 find_library(BSD_LIBRARY NAMES bsd)
 if (BSD_LIBRARY)
@@ -76,7 +89,6 @@ find_library(LIBGCRYPT_LIBRARY NAMES gcrypt libgcrypt)
 if(LIBGCRYPT_INCLUDE_DIR AND LIBGCRYPT_LIBRARY)
   include_directories(${LIBGCRYPT_INCLUDE_DIR})
   list(APPEND PLATFORM_LIBRARIES ${LIBGCRYPT_LIBRARY})
-  add_compile_definitions(HAVE_LIBGCRYPT)
 endif()
 
 if(NOT SYS_WIN32)
@@ -153,6 +165,11 @@ file(GLOB_RECURSE C_SOURCES
   "src/*.c"
 )
 
+list(REMOVE_ITEM C_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/thread_none.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/common/thread_posix.c"
+)
+
 file(GLOB CRYPTO_SOURCES
   "crypto/cipher.c"
   "crypto/hmac.c"
@@ -161,16 +178,10 @@ file(GLOB CRYPTO_SOURCES
   "crypto/kex.c"
 )
 
-if(WITH_OPENSSL)
-  file(GLOB_RECURSE CRYPTO_BACKEND_SOURCES "crypto/*_ossl.c")
-elseif(WITH_GNUTLS)
-  file(GLOB_RECURSE CRYPTO_BACKEND_SOURCES "crypto/*_gtls.c")
-endif()
+add_subdirectory(crypto)
+add_subdirectory(common)
 
-set(ALL_SOURCES ${C_SOURCES} ${CRYPTO_SOURCES} ${CRYPTO_BACKEND_SOURCES})
-
-file(GLOB_RECURSE TEST_FILES "tests/*.c")
-list(REMOVE_ITEM ALL_SOURCES ${TEST_FILES})
+set(ALL_SOURCES ${C_SOURCES} ${CRYPTO_SOURCES} ${CRYPTO_BACKEND_SOURCES} ${THREADS_BACKEND_SOURCES})
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/lib/protocol.in.h
@@ -184,6 +195,8 @@ add_executable(zerotunnel
 
 zt_parse_feature_macros(_feature_macros_list
   HAVE_SQLITE3
+  HAVE_POSIX_THREADS
+  HAVE_WIN32_THREADS
   HAVE_LIBGCRYPT
   HAVE_GETENTROPY
   HAVE_GETRANDOM
@@ -198,10 +211,7 @@ add_compile_definitions(${_feature_macros_list})
 target_link_libraries(zerotunnel PRIVATE
   ${CRYPTO_LIBRARIES}
   ${PLATFORM_LIBRARIES}
-  Threads::Threads
   SQLite::SQLite3
 )
 
 install(TARGETS zerotunnel DESTINATION bin)
-
-# add_subdirectory(tests)

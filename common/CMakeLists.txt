@@ -1,0 +1,16 @@
+if(HAVE_WIN32_THREADS)
+  set(THREADS_BACKEND_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/thread_win32.c"
+    PARENT_SCOPE
+  )
+elseif(HAVE_POSIX_THREADS)
+  set(THREADS_BACKEND_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/thread_posix.c"
+    PARENT_SCOPE
+  )
+else()
+  set(THREADS_BACKEND_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/thread_none.c"
+    PARENT_SCOPE
+  )
+endif()

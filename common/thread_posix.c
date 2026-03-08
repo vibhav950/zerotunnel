@@ -1,6 +1,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <errno.h>
 #include <pthread.h>
 
 #include "common/defines.h"
@@ -155,3 +156,125 @@ int zt_thread_equal(zt_thread_t *t1, zt_thread_t *t2) {
     return 0;
   return pthread_equal(*t1, *t2);
 }
+
+// TEMP
+static void ATTRIBUTE_NORETURN thread_abort(void) { pthread_exit(NULL); }
+
+err_t zt_mutex_init(zt_mutex_t *mtx) {
+#if defined(NODEBUG) || !defined(PTHREAD_MUTEX_ERRORCHECK)
+  return pthread_mutex_init(mtx, NULL) ? ERR_INTERNAL : ERR_SUCCESS;
+#else
+  pthread_mutexattr_t attr;
+  int rv;
+
+  rv = pthread_mutexattr_init(&attr);
+  if (rv)
+    return ERR_INTERNAL;
+
+  rv = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+  if (rv) {
+    pthread_mutexattr_destroy(&attr);
+    return ERR_INTERNAL;
+  }
+
+  rv = pthread_mutex_init(mtx, &attr);
+  pthread_mutexattr_destroy(&attr);
+  return rv ? ERR_INTERNAL : ERR_SUCCESS;
+#endif
+}
+
+err_t zt_mutex_init_recursive(zt_mutex_t *mtx) {
+  pthread_mutexattr_t attr;
+  int rv;
+
+  rv = pthread_mutexattr_init(&attr);
+  if (rv)
+    return ERR_INTERNAL;
+
+  rv = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  if (rv) {
+    pthread_mutexattr_destroy(&attr);
+    return ERR_INTERNAL;
+  }
+
+  rv = pthread_mutex_init(mtx, &attr);
+  pthread_mutexattr_destroy(&attr);
+  return rv ? ERR_INTERNAL : ERR_SUCCESS;
+}
+
+void zt_mutex_destroy(zt_mutex_t *mtx) {
+  if (pthread_mutex_destroy(mtx))
+    thread_abort();
+}
+
+void zt_mutex_lock(zt_mutex_t *mtx) {
+  if (pthread_mutex_lock(mtx))
+    thread_abort();
+}
+
+void zt_mutex_unlock(zt_mutex_t *mtx) {
+  if (pthread_mutex_unlock(mtx))
+    thread_abort();
+}
+
+err_t zt_rwlock_init(zt_rwlock_t *rwlock) {
+  return pthread_rwlock_init(rwlock, NULL) ? ERR_INTERNAL : ERR_SUCCESS;
+}
+
+void zt_rwlock_destroy(zt_rwlock_t *rwlock) {
+  if (pthread_rwlock_destroy(rwlock))
+    thread_abort();
+}
+
+void zt_rwlock_rdlock(zt_rwlock_t *rwlock) {
+  if (pthread_rwlock_rdlock(rwlock))
+    thread_abort();
+}
+
+err_t zt_rwlock_tryrdlock(zt_rwlock_t *rwlock) {
+  int rv;
+
+  rv = pthread_rwlock_tryrdlock(rwlock);
+  if (rv) {
+    if (rv == EBUSY || rv == EAGAIN)
+      return ERR_AGAIN;
+    else
+      return ERR_INTERNAL;
+  }
+  return ERR_SUCCESS;
+}
+
+void zt_rwlock_rdunlock(zt_rwlock_t *rwlock) {
+  if (pthread_rwlock_unlock(rwlock))
+    thread_abort();
+}
+
+void zt_rwlock_wrlock(zt_rwlock_t *rwlock) {
+  if (pthread_rwlock_wrlock(rwlock))
+    thread_abort();
+}
+
+err_t zt_rwlock_trywrlock(zt_rwlock_t *rwlock) {
+  int rv;
+
+  rv = pthread_rwlock_trywrlock(rwlock);
+  if (rv) {
+    if (rv == EBUSY || rv == EAGAIN)
+      return ERR_AGAIN;
+    else
+      return ERR_INTERNAL;
+  }
+  return ERR_SUCCESS;
+}
+
+void zt_rwlock_wrunlock(zt_rwlock_t *rwlock) {
+  if (pthread_rwlock_unlock(rwlock))
+    thread_abort();
+}
+
+void zt_once(zt_once_t *ctrl, void (*callback)(void)) {
+  if (pthread_once(ctrl, callback))
+    thread_abort();
+}
+
+// TODO: add semaphore support

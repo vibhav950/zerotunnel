@@ -12,13 +12,13 @@ function(zt_count_true _output_count)
   set(${_output_count} ${_len_val} PARENT_SCOPE)
 endfunction()
 
-# Find all HAVE_* variables that are true.
+# Find all HAVE_* variables that are defined and set to true.
 # Usage: zt_parse_feature_macros(<output_macro_list> HAVE_FOO HAVE_BAR ...)
 function(zt_parse_feature_macros _output_macro_list)
   set(_macro_list "")
   foreach(_var IN LISTS ARGN)
     if(_var MATCHES "^HAVE_")
-      if(${_var})
+      if((DEFINED ${_var}) AND ${_var})
         list(APPEND _macro_list ${_var})
       endif()
     endif()

@@ -1,7 +1,5 @@
 #include "common/thread.h"
 
-struct _zt_thread_noapi_st {};
-
 zt_thread_t *zt_thread_create(int (*entry)(void *arg) ATTRIBUTE_UNUSED,
                               void *arg ATTRIBUTE_UNUSED) {
   return zt_thread_t_null;
@@ -17,8 +15,20 @@ err_t zt_thread_setaffinity(zt_thread_t *t ATTRIBUTE_UNUSED,
   return ERR_NOT_SUPPORTED;
 }
 
-zt_thread_t zt_thread_self(void) { return zt_thread_t_null; }
+zt_thread_t zt_thread_self(void) { return (zt_thread_t){0}; }
 
 int zt_thread_equal(zt_thread_t *t1 ATTRIBUTE_UNUSED, zt_thread_t *t2 ATTRIBUTE_UNUSED) {
   return 0;
 }
+
+err_t zt_mutex_init(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return ERR_NOT_SUPPORTED; }
+
+err_t zt_mutex_init_recursive(zt_mutex_t *mtx ATTRIBUTE_UNUSED) {
+  return ERR_NOT_SUPPORTED;
+}
+
+void zt_mutex_destroy(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
+
+void zt_mutex_lock(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
+
+void zt_mutex_unlock(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
