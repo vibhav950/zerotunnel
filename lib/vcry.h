@@ -103,61 +103,72 @@
 #define VCRY_VERIFY_CONST0            "First proof message (Proof_A)"
 #define VCRY_VERIFY_CONST1            "Second proof message (Proof_B)"
 
-#define VCRY_STREAM_ID_LEN            8UL
+#define VCRY_STREAM_ID_LEN            4UL
 #define VCRY_STREAM_OFFSET_LEN        8UL
 
+// clang-format on
+
+/** VCRY stream header */
 typedef struct _vcry_crypto_hdr_st {
   uint8_t sid[VCRY_STREAM_ID_LEN];      /* stream Id */
   uint8_t offs[VCRY_STREAM_OFFSET_LEN]; /* byte offset in stream */
 } vcry_crypto_hdr_t;
 
-// clang-format on
+/** Opaque VCRY handle */
+typedef struct vcry_ctx_st vcry_ctx_t;
 
 /** Get the most recent failure status code */
-err_t vcry_get_last_err(void);
+err_t vcry_get_last_err(vcry_ctx_t *ctx);
 
 /** Clear the most recent failure status code */
-void vcry_clear_last_err(void);
+void vcry_clear_last_err(vcry_ctx_t *ctx);
 
-err_t vcry_module_init(void);
+vcry_ctx_t *vcry_new(void);
 
-void vcry_set_role_initiator(void);
-void vcry_set_role_responder(void);
+void vcry_set_role_initiator(vcry_ctx_t *ctx);
+void vcry_set_role_responder(vcry_ctx_t *ctx);
 
-err_t vcry_set_authpass(const uint8_t *authpass, size_t authkey_len);
+err_t vcry_set_authpass(vcry_ctx_t *ctx, const uint8_t *authpass, size_t authpass_len);
 
-void vcry_module_release(void);
+void vcry_release(vcry_ctx_t *ctx);
 
-err_t vcry_set_crypto_params(int cipher_id, int aead_id, int hmac_id, int kex_id,
-                             int kem_id, int kdf_id);
+vcry_ctx_t *vcry_duplicate(vcry_ctx_t *ctx);
 
-err_t vcry_set_crypto_params_from_names(const char *cipher_name, const char *aead_name,
-                                        const char *hmac_name, const char *kex_name,
-                                        const char *kem_name, const char *kdf_name);
+err_t vcry_set_crypto_params(vcry_ctx_t *ctx, int cipher_id, int aead_id, int hmac_id,
+                             int kex_id, int kem_id, int kdf_id);
 
-size_t vcry_get_aead_tag_len(void);
-size_t vcry_get_hmac_digest_len(void);
+err_t vcry_set_crypto_params_from_names(vcry_ctx_t *ctx, const char *cipher_name,
+                                        const char *aead_name, const char *hmac_name,
+                                        const char *kex_name, const char *kem_name,
+                                        const char *kdf_name);
 
-err_t vcry_handshake_initiate(uint8_t **peerdata, size_t *peerdata_len);
+size_t vcry_get_aead_tag_len(vcry_ctx_t *ctx);
+size_t vcry_get_hmac_digest_len(vcry_ctx_t *ctx);
 
-err_t vcry_handshake_respond(const uint8_t *peerdata_theirs, size_t peerdata_theirs_len,
-                             uint8_t **peerdata_mine, size_t *peerdata_mine_len);
+err_t vcry_handshake_initiate(vcry_ctx_t *ctx, uint8_t **peerdata, size_t *peerdata_len);
 
-err_t vcry_handshake_complete(const uint8_t *peerdata, size_t peerdata_len);
+err_t vcry_handshake_respond(vcry_ctx_t *ctx, const uint8_t *peerdata_theirs,
+                             size_t peerdata_theirs_len, uint8_t **peerdata_mine,
+                             size_t *peerdata_mine_len);
 
-err_t vcry_derive_session_key(void);
+err_t vcry_handshake_complete(vcry_ctx_t *ctx, const uint8_t *peerdata,
+                              size_t peerdata_len);
 
-err_t vcry_initiator_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
+err_t vcry_derive_session_key(vcry_ctx_t *ctx);
+
+err_t vcry_initiator_verify_initiate(vcry_ctx_t *ctx, uint8_t **verify_msg,
+                                     size_t *verify_msg_len, const uint8_t *id_a,
+                                     const uint8_t *id_b, size_t len_a, size_t len_b);
+err_t vcry_responder_verify_initiate(vcry_ctx_t *ctx, uint8_t **verify_msg,
+                                     size_t *verify_msg_len, const uint8_t *id_a,
+                                     const uint8_t *id_b, size_t len_a, size_t len_b);
+
+err_t vcry_initiator_verify_complete(vcry_ctx_t *ctx,
+                                     const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
                                      const uint8_t *id_a, const uint8_t *id_b,
                                      size_t len_a, size_t len_b);
-err_t vcry_responder_verify_initiate(uint8_t **verify_msg, size_t *verify_msg_len,
-                                     const uint8_t *id_a, const uint8_t *id_b,
-                                     size_t len_a, size_t len_b);
-
-err_t vcry_initiator_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
-                                     const uint8_t *id_a, const uint8_t *id_b,
-                                     size_t len_a, size_t len_b);
-err_t vcry_responder_verify_complete(const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
+err_t vcry_responder_verify_complete(vcry_ctx_t *ctx,
+                                     const uint8_t verify_msg[VCRY_VERIFY_MSG_LEN],
                                      const uint8_t *id_a, const uint8_t *id_b,
                                      size_t len_a, size_t len_b);
 
@@ -165,9 +176,11 @@ vcry_crypto_hdr_t *vcry_crypto_hdr_new(const uint8_t stream_id[VCRY_STREAM_ID_LE
 
 void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr);
 
-err_t vcry_aead_encrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len);
-err_t vcry_aead_decrypt(uint8_t *in, size_t in_len, const uint8_t *ad, size_t ad_len,
-                        vcry_crypto_hdr_t *hdr, uint8_t *out, size_t *out_len);
+err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
+                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t *out_len);
+err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
+                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t *out_len);
 
-#endif // __VCRY_H__
+#endif /* __VCRY_H__ */
