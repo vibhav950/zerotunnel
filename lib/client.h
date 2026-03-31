@@ -13,6 +13,7 @@
 
 #include "auth.h"
 #include "conn_defs.h"
+#include "vcry.h"
 
 typedef enum {
   CLIENT_NONE = 0,
@@ -38,6 +39,8 @@ typedef struct _zt_client_connection_st {
   const char
     *hostname,            /* peer's hostname or IPv4/6 address */
     *port;                /* explicit target service port */
+  vcry_ctx_t
+    *vcry;                /* VCRY handle */
   struct authid
     authid_mine,          /* local AuthId */
     authid_peer;          /* peer's AuthId */

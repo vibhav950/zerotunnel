@@ -14,12 +14,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static const uint8_t AUTHKEY[32] = {
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a,
-    0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x15, 0x15,
-    0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
+static const uint8_t AUTHKEY[32] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                                    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+                                    0x10, 0x11, 0x12, 0x13, 0x15, 0x15, 0x16, 0x17,
+                                    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
 
 static const uint8_t plaintext[32] = {0};
+
+static const uint8_t plaintext2[32] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                       0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+                                       0x10, 0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87,
+                                       0x98, 0xa9, 0xba, 0xcb, 0xdc, 0xed, 0xfe, 0x0f};
 
 static const char *id_initiator = "Alice";
 static const char *id_responder = "Bob";
@@ -70,20 +75,21 @@ static uint8_t *recv_data(int fd, size_t *len) {
 static void initiator_process(int read_fd, int write_fd) {
   uint8_t *read_data = NULL, *write_data = NULL;
   size_t read_len = 0, write_len = 0;
+  vcry_ctx_t *ctx;
 
-  ASSERT(vcry_module_init() == ERR_SUCCESS);
+  ASSERT((ctx = vcry_new()) != NULL);
 
-  vcry_set_role_initiator();
+  vcry_set_role_initiator(ctx);
 
-  ASSERT(vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
+  ASSERT(vcry_set_authpass(ctx, AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
 
-  ASSERT(vcry_set_crypto_params_from_names(
-             "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
-             "KEM-KYBER512", "KDF-ARGON2") == ERR_SUCCESS);
+  ASSERT(vcry_set_crypto_params_from_names(ctx, "AES-CTR-256", "AES-GCM-256",
+                                           "HMAC-SHA256", "ECDH-X25519", "KEM-KYBER512",
+                                           "KDF-ARGON2") == ERR_SUCCESS);
 
   /* ============ HANDSHAKE INITIATE ============ */
 
-  ASSERT(vcry_handshake_initiate(&write_data, &write_len) == ERR_SUCCESS);
+  ASSERT(vcry_handshake_initiate(ctx, &write_data, &write_len) == ERR_SUCCESS);
 
   /* send initiation message */
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
@@ -95,14 +101,14 @@ static void initiator_process(int read_fd, int write_fd) {
 
   /* ============ HANDSHAKE COMPLETE ============ */
 
-  ASSERT(vcry_handshake_complete(read_data, read_len) == ERR_SUCCESS);
+  ASSERT(vcry_handshake_complete(ctx, read_data, read_len) == ERR_SUCCESS);
   zt_free(read_data);
 
-  ASSERT(vcry_derive_session_key() == ERR_SUCCESS);
+  ASSERT(vcry_derive_session_key(ctx) == ERR_SUCCESS);
 
   /* ============ VERIFY INITIATE ============ */
 
-  ASSERT(vcry_initiator_verify_initiate(&write_data, &write_len, id_initiator,
+  ASSERT(vcry_initiator_verify_initiate(ctx, &write_data, &write_len, id_initiator,
                                         id_responder, strlen(id_initiator),
                                         strlen(id_responder)) == ERR_SUCCESS);
 
@@ -116,18 +122,18 @@ static void initiator_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY COMPLETE ============ */
 
-  ASSERT(vcry_initiator_verify_complete(read_data, id_initiator, id_responder,
+  ASSERT(vcry_initiator_verify_complete(ctx, read_data, id_initiator, id_responder,
                                         strlen(id_initiator),
                                         strlen(id_responder)) == ERR_SUCCESS);
   zt_free(read_data);
 
   /* ================ SEND DATA ================ */
 
-  write_len = sizeof(plaintext) + vcry_get_aead_tag_len();
+  write_len = sizeof(plaintext) + vcry_get_aead_tag_len(ctx);
   write_data = zt_malloc(write_len);
   ASSERT(write_data != NULL);
 
-  ASSERT(vcry_aead_encrypt((uint8_t *)plaintext, sizeof(plaintext), NULL, 0,
+  ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext, sizeof(plaintext), NULL, 0,
                            write_data, &write_len) == ERR_SUCCESS);
 
   /* send encrypted data */
@@ -143,8 +149,7 @@ static void initiator_process(int read_fd, int write_fd) {
   size_t len = sizeof(plaintext);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(read_data, read_len, NULL, 0, buf, &len) ==
-         ERR_SUCCESS);
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, buf, &len) == ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext));
   ASSERT_MEMEQ(buf, plaintext, sizeof(plaintext));
@@ -152,7 +157,36 @@ static void initiator_process(int read_fd, int write_fd) {
   zt_free(read_data);
   zt_free(buf);
 
-  vcry_module_release();
+  /* ============ ROUND 2: SEND DATA ============ */
+
+  write_len = sizeof(plaintext2) + vcry_get_aead_tag_len(ctx);
+  write_data = zt_malloc(write_len);
+  ASSERT(write_data != NULL);
+
+  ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext2, sizeof(plaintext2), NULL, 0,
+                           write_data, &write_len) == ERR_SUCCESS);
+
+  ASSERT(send_data(write_fd, write_data, write_len) == 0);
+  zt_free(write_data);
+
+  /* ============ ROUND 2: RECV DATA ============ */
+
+  read_data = recv_data(read_fd, &read_len);
+  ASSERT(read_data != NULL);
+
+  buf = zt_malloc(sizeof(plaintext2));
+  len = sizeof(plaintext2);
+  ASSERT(buf != NULL);
+
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, buf, &len) == ERR_SUCCESS);
+
+  ASSERT_EQ(len, sizeof(plaintext2));
+  ASSERT_MEMEQ(buf, plaintext2, sizeof(plaintext2));
+
+  zt_free(read_data);
+  zt_free(buf);
+
+  vcry_release(ctx);
 
   close(read_fd);
   close(write_fd);
@@ -161,16 +195,17 @@ static void initiator_process(int read_fd, int write_fd) {
 static void responder_process(int read_fd, int write_fd) {
   uint8_t *read_data = NULL, *write_data = NULL;
   size_t read_len = 0, write_len = 0;
+  vcry_ctx_t *ctx;
 
-  ASSERT(vcry_module_init() == ERR_SUCCESS);
+  ASSERT((ctx = vcry_new()) != NULL);
 
-  vcry_set_role_responder();
+  vcry_set_role_responder(ctx);
 
-  ASSERT(vcry_set_authpass(AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
+  ASSERT(vcry_set_authpass(ctx, AUTHKEY, sizeof(AUTHKEY)) == ERR_SUCCESS);
 
-  ASSERT(vcry_set_crypto_params_from_names(
-             "AES-CTR-256", "AES-GCM-256", "HMAC-SHA256", "ECDH-X25519",
-             "KEM-KYBER512", "KDF-ARGON2") == ERR_SUCCESS);
+  ASSERT(vcry_set_crypto_params_from_names(ctx, "AES-CTR-256", "AES-GCM-256",
+                                           "HMAC-SHA256", "ECDH-X25519", "KEM-KYBER512",
+                                           "KDF-ARGON2") == ERR_SUCCESS);
 
   /* wait for initiation message */
   read_data = recv_data(read_fd, &read_len);
@@ -178,7 +213,7 @@ static void responder_process(int read_fd, int write_fd) {
 
   /* ============ HANDSHAKE RESPONSE ============ */
 
-  ASSERT(vcry_handshake_respond(read_data, read_len, &write_data, &write_len) ==
+  ASSERT(vcry_handshake_respond(ctx, read_data, read_len, &write_data, &write_len) ==
          ERR_SUCCESS);
   zt_free(read_data);
 
@@ -186,11 +221,11 @@ static void responder_process(int read_fd, int write_fd) {
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
   zt_free(write_data);
 
-  ASSERT(vcry_derive_session_key() == ERR_SUCCESS);
+  ASSERT(vcry_derive_session_key(ctx) == ERR_SUCCESS);
 
   /* ============ VERIFY INITIATE ============ */
 
-  ASSERT(vcry_responder_verify_initiate(&write_data, &write_len, id_initiator,
+  ASSERT(vcry_responder_verify_initiate(ctx, &write_data, &write_len, id_initiator,
                                         id_responder, strlen(id_initiator),
                                         strlen(id_responder)) == ERR_SUCCESS);
 
@@ -204,18 +239,18 @@ static void responder_process(int read_fd, int write_fd) {
 
   /* ============ VERIFY COMPLETE ============ */
 
-  ASSERT(vcry_responder_verify_complete(read_data, id_initiator, id_responder,
+  ASSERT(vcry_responder_verify_complete(ctx, read_data, id_initiator, id_responder,
                                         strlen(id_initiator),
                                         strlen(id_responder)) == ERR_SUCCESS);
   zt_free(read_data);
 
   /* ================ SEND DATA ================ */
 
-  write_len = sizeof(plaintext) + vcry_get_aead_tag_len();
+  write_len = sizeof(plaintext) + vcry_get_aead_tag_len(ctx);
   write_data = zt_malloc(write_len);
   ASSERT(write_data != NULL);
 
-  ASSERT(vcry_aead_encrypt((uint8_t *)plaintext, sizeof(plaintext), NULL, 0,
+  ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext, sizeof(plaintext), NULL, 0,
                            write_data, &write_len) == ERR_SUCCESS);
 
   /* send encrypted data */
@@ -231,8 +266,7 @@ static void responder_process(int read_fd, int write_fd) {
   size_t len = sizeof(plaintext);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(read_data, read_len, NULL, 0, buf, &len) ==
-         ERR_SUCCESS);
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, buf, &len) == ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext));
   ASSERT_MEMEQ(buf, plaintext, sizeof(plaintext));
@@ -240,7 +274,36 @@ static void responder_process(int read_fd, int write_fd) {
   zt_free(read_data);
   zt_free(buf);
 
-  vcry_module_release();
+  /* ============ ROUND 2: SEND DATA ============ */
+
+  write_len = sizeof(plaintext2) + vcry_get_aead_tag_len(ctx);
+  write_data = zt_malloc(write_len);
+  ASSERT(write_data != NULL);
+
+  ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext2, sizeof(plaintext2), NULL, 0,
+                           write_data, &write_len) == ERR_SUCCESS);
+
+  ASSERT(send_data(write_fd, write_data, write_len) == 0);
+  zt_free(write_data);
+
+  /* ============ ROUND 2: RECV DATA ============ */
+
+  read_data = recv_data(read_fd, &read_len);
+  ASSERT(read_data != NULL);
+
+  buf = zt_malloc(sizeof(plaintext2));
+  len = sizeof(plaintext2);
+  ASSERT(buf != NULL);
+
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, buf, &len) == ERR_SUCCESS);
+
+  ASSERT_EQ(len, sizeof(plaintext2));
+  ASSERT_MEMEQ(buf, plaintext2, sizeof(plaintext2));
+
+  zt_free(read_data);
+  zt_free(buf);
+
+  vcry_release(ctx);
 
   close(read_fd);
   close(write_fd);

@@ -16,7 +16,6 @@
 #include "common/prompts.h"
 #include "common/tty_io.h"
 #include "ip.h"
-#include "vcry.h"
 #include "ztlib.h"
 
 #include <arpa/inet.h>
@@ -547,8 +546,8 @@ static err_t client_send(zt_client_connection_t *conn) {
                                                            : ZT_MSG_MAX_RAW_SIZE) -
              ZT_MSG_HEADER_SIZE;
 
-    if ((ret = vcry_aead_encrypt(datap, len, p, ZT_MSG_HEADER_SIZE, datap, &tosend)) !=
-        ERR_SUCCESS) {
+    if ((ret = vcry_aead_encrypt(conn->vcry, datap, len, p, ZT_MSG_HEADER_SIZE, datap,
+                                 &tosend)) != ERR_SUCCESS) {
       log_error(NULL, "Encryption failed (%s)", zt_error_str(ret));
       return ret;
     }
@@ -634,7 +633,7 @@ static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expected_ty
   is_encrypted =
       !(MSG_TYPE(conn->msgbuf) & (MSG_HANDSHAKE | MSG_AUTH_RETRY | MSG_HANDSHAKE_FIN));
 
-  taglen = is_encrypted ? vcry_get_aead_tag_len() : 0;
+  taglen = is_encrypted ? vcry_get_aead_tag_len(conn->vcry) : 0;
   datalen = MSG_DATA_LEN(conn->msgbuf) + taglen;
 
   /* Read message payload */
@@ -655,8 +654,8 @@ static err_t client_recv(zt_client_connection_t *conn, zt_msg_type_t expected_ty
   if (is_encrypted) {
     nread = ZT_MSG_MAX_RAW_SIZE - ZT_MSG_HEADER_SIZE;
 
-    if ((ret = vcry_aead_decrypt(dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE, dataptr,
-                                 &nread)) != ERR_SUCCESS) {
+    if ((ret = vcry_aead_decrypt(conn->vcry, dataptr, datalen, rawptr, ZT_MSG_HEADER_SIZE,
+                                 dataptr, &nread)) != ERR_SUCCESS) {
       log_error(NULL, "Decryption failed (%s)", zt_error_str(ret));
       goto out;
     }
@@ -798,14 +797,18 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      if ((ret = vcry_module_init()) != ERR_SUCCESS) {
+      conn->vcry = vcry_new();
+      if (!conn->vcry) {
+        log_error(NULL, "vcry_new: failed to allocate VCRY context");
         zt_auth_passwd_free(master_pass, NULL);
+        ret = ERR_MEM_FAIL;
         goto cleanup2;
       }
 
-      vcry_set_role_initiator();
+      vcry_set_role_initiator(conn->vcry);
 
-      if ((ret = vcry_set_authpass(master_pass->pw, master_pass->pwlen)) != ERR_SUCCESS) {
+      if ((ret = vcry_set_authpass(conn->vcry, master_pass->pw, master_pass->pwlen)) !=
+          ERR_SUCCESS) {
         log_error(NULL, "vcry_set_authpass: %s", zt_error_str(ret));
         zt_auth_passwd_free(master_pass, NULL);
         goto cleanup2;
@@ -813,14 +816,14 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
       zt_auth_passwd_free(master_pass, NULL);
       master_pass = NULL;
 
-      if ((ret = vcry_set_crypto_params(vcry_algs[0], vcry_algs[1], vcry_algs[2],
-                                        vcry_algs[3], vcry_algs[4], vcry_algs[5])) !=
-          ERR_SUCCESS) {
+      if ((ret = vcry_set_crypto_params(conn->vcry, vcry_algs[0], vcry_algs[1],
+                                        vcry_algs[2], vcry_algs[3], vcry_algs[4],
+                                        vcry_algs[5])) != ERR_SUCCESS) {
         log_error(NULL, "vcry_set_crypto_params: %s", zt_error_str(ret));
         goto cleanup2;
       }
 
-      if ((ret = vcry_handshake_initiate(&sndbuf, &sndlen)) != ERR_SUCCESS) {
+      if ((ret = vcry_handshake_initiate(conn->vcry, &sndbuf, &sndlen)) != ERR_SUCCESS) {
         log_error(NULL, "vcry_handshake_initiate: %s", zt_error_str(ret));
         goto cleanup2;
       }
@@ -901,8 +904,9 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         conn->renegotiation_passwd = ((passwd_id_t *)rcvbuf)[0];
         conn->renegotiation = true;
 
-        /* Handshake will be restarted -- we will init the module again */
-        vcry_module_release();
+        /* Handshake will be restarted -- we will init the context again */
+        vcry_release(conn->vcry);
+        conn->vcry = NULL;
 
         CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_INIT);
         break;
@@ -922,19 +926,20 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         rcvlen -= AUTHID_BYTES_LEN;
 
         /* process handshake response */
-        if ((ret = vcry_handshake_complete(rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) !=
-            ERR_SUCCESS) {
+        if ((ret = vcry_handshake_complete(
+                 conn->vcry, rcvbuf, rcvlen - VCRY_VERIFY_MSG_LEN)) != ERR_SUCCESS) {
           log_error(NULL, "vcry_handshake_complete: %s", zt_error_str(ret));
           goto cleanup2;
         }
 
-        if ((ret = vcry_derive_session_key()) != ERR_SUCCESS)
+        if ((ret = vcry_derive_session_key(conn->vcry)) != ERR_SUCCESS)
           goto cleanup2;
 
         /* create our verify-initiation message */
         if ((ret = vcry_initiator_verify_initiate(
-                 &sndbuf, &sndlen, conn->authid_mine.bytes, conn->authid_peer.bytes,
-                 AUTHID_BYTES_LEN, AUTHID_BYTES_LEN)) != ERR_SUCCESS) {
+                 conn->vcry, &sndbuf, &sndlen, conn->authid_mine.bytes,
+                 conn->authid_peer.bytes, AUTHID_BYTES_LEN, AUTHID_BYTES_LEN)) !=
+            ERR_SUCCESS) {
           log_error(NULL, "vcry_initiator_verify_initiate: %s", zt_error_str(ret));
           goto cleanup2;
         }
@@ -944,8 +949,9 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
 
         /* Process the responder's verify-initiation message */
         ret = vcry_initiator_verify_complete(
-            rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN), conn->authid_mine.bytes,
-            conn->authid_peer.bytes, AUTHID_BYTES_LEN, AUTHID_BYTES_LEN);
+            conn->vcry, rcvbuf + (ptrdiff_t)(rcvlen - VCRY_VERIFY_MSG_LEN),
+            conn->authid_mine.bytes, conn->authid_peer.bytes, AUTHID_BYTES_LEN,
+            AUTHID_BYTES_LEN);
         switch (ret) {
         case ERR_SUCCESS:
           break; /* successful */
@@ -998,8 +1004,9 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
         goto cleanup2;
       }
 
-      /* Handshake will be restarted -- we need to init the module again */
-      vcry_module_release();
+      /* Handshake will be restarted -- we need to init the context again */
+      vcry_release(conn->vcry);
+      conn->vcry = NULL;
 
       CLIENTSTATE_CHANGE(conn, CLIENT_AUTH_INIT);
       break;
@@ -1144,7 +1151,8 @@ err_t zt_client_run(zt_client_connection_t *conn, void *args ATTRIBUTE_UNUSED,
   } /* while(1) */
 
 cleanup2:
-  vcry_module_release();
+  vcry_release(conn->vcry);
+  conn->vcry = NULL;
 
   shutdown(conn->sockfd, SHUT_RDWR);
   close(conn->sockfd);

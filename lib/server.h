@@ -15,6 +15,7 @@
 #include "ciphersuites.h"
 #include "conn_defs.h"
 #include "io.h"
+#include "vcry.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -66,6 +67,8 @@ typedef struct _zt_server_connection_st {
     *listen_port;                   /* stated port string; if NULL, defaults to ZT_DEFAULT_LISTEN_PORT */
   ciphersuite_t
     ciphersuite;                    /* negotiated ciphersuite */
+  vcry_ctx_t
+    *vcry;                          /* VCRY handle */
   struct {
     bool expect;                    /* expecting a passwd renegotiation */
     passwd_id_t id;                 /* expected passwd Id after renegotiation */
