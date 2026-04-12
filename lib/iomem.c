@@ -52,7 +52,7 @@ iomem_pool_t *iomem_pool_new(size_t capacity, size_t chunk_size) {
   if (!pool->chunks)
     goto cleanup1;
 
-  if (!mpmc_queue_init(pool->free_q, capacity))
+  if (mpmc_queue_init(pool->free_q, capacity))
     goto cleanup2;
 
   /* carve backing into chunks and enqueue all of them */

@@ -47,9 +47,12 @@ typedef struct mpmc_queue_st {
 /**
  * Allocate memory for the allocated queue object \p q to hold \p capacity chunks.
  * The resulting queue is initialized in the empty state.
+ *
  * Note: \p capacity must be a power of 2.
+ *
+ * Returns 0 on success, -1 on failure.
  */
-static bool mpmc_queue_init(mpmc_queue_t *q, size_t capacity) {
+static int mpmc_queue_init(mpmc_queue_t *q, size_t capacity) {
   ASSERT(q != NULL);
   ASSERT((capacity & (capacity - 1)) == 0);
 
@@ -59,13 +62,13 @@ static bool mpmc_queue_init(mpmc_queue_t *q, size_t capacity) {
 
   q->slots = zt_calloc(capacity, sizeof(mpmc_queue_slot_t));
   if (!q->slots)
-    return false;
+    return -1;
 
   for (size_t i = 0; i < capacity; i++) {
     atomic_store_explicit(&q->slots[i].seq, i, memory_order_relaxed);
     q->slots[i].chunk = NULL;
   }
-  return true;
+  return 0;
 }
 
 // /**
