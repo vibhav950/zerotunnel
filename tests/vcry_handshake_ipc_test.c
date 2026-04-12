@@ -71,12 +71,12 @@ static void initiator_process(int read_fd, int write_fd) {
   uint8_t *read_data = NULL, *write_data = NULL;
   size_t read_len = 0, write_len = 0;
   vcry_ctx_t *ctx;
-  vcry_crypto_hdr_t *snd_hdr, *rcv_hdr;
+  vcry_stream_t *snd_stream, *rcv_stream;
 
   ASSERT((ctx = vcry_new()) != NULL);
 
-  ASSERT((snd_hdr = vcry_crypto_hdr_new(STREAMID)) != NULL);
-  ASSERT((rcv_hdr = vcry_crypto_hdr_new(STREAMID)) != NULL);
+  ASSERT((snd_stream = vcry_stream_new(STREAMID)) != NULL);
+  ASSERT((rcv_stream = vcry_stream_new(STREAMID)) != NULL);
 
   vcry_set_role_initiator(ctx);
 
@@ -133,7 +133,7 @@ static void initiator_process(int read_fd, int write_fd) {
   ASSERT(write_data != NULL);
 
   ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext1, sizeof(plaintext1), NULL, 0,
-                           snd_hdr, write_data, &write_len) == ERR_SUCCESS);
+                           snd_stream, write_data, &write_len) == ERR_SUCCESS);
 
   /* send encrypted data */
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
@@ -148,7 +148,7 @@ static void initiator_process(int read_fd, int write_fd) {
   size_t len = sizeof(plaintext2);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_hdr, buf, &len) ==
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_stream, buf, &len) ==
          ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext2));
@@ -164,7 +164,7 @@ static void initiator_process(int read_fd, int write_fd) {
   ASSERT(write_data != NULL);
 
   ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext2, sizeof(plaintext2), NULL, 0,
-                           snd_hdr, write_data, &write_len) == ERR_SUCCESS);
+                           snd_stream, write_data, &write_len) == ERR_SUCCESS);
 
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
   zt_free(write_data);
@@ -178,7 +178,7 @@ static void initiator_process(int read_fd, int write_fd) {
   len = sizeof(plaintext1);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_hdr, buf, &len) ==
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_stream, buf, &len) ==
          ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext1));
@@ -188,8 +188,8 @@ static void initiator_process(int read_fd, int write_fd) {
   zt_free(buf);
 
   vcry_release(ctx);
-  vcry_crypto_hdr_free(snd_hdr);
-  vcry_crypto_hdr_free(rcv_hdr);
+  vcry_stream_free(snd_stream);
+  vcry_stream_free(rcv_stream);
 
   close(read_fd);
   close(write_fd);
@@ -199,12 +199,12 @@ static void responder_process(int read_fd, int write_fd) {
   uint8_t *read_data = NULL, *write_data = NULL;
   size_t read_len = 0, write_len = 0;
   vcry_ctx_t *ctx;
-  vcry_crypto_hdr_t *snd_hdr, *rcv_hdr;
+  vcry_stream_t *snd_stream, *rcv_stream;
 
   ASSERT((ctx = vcry_new()) != NULL);
 
-  ASSERT((snd_hdr = vcry_crypto_hdr_new(STREAMID)) != NULL);
-  ASSERT((rcv_hdr = vcry_crypto_hdr_new(STREAMID)) != NULL);
+  ASSERT((snd_stream = vcry_stream_new(STREAMID)) != NULL);
+  ASSERT((rcv_stream = vcry_stream_new(STREAMID)) != NULL);
 
   vcry_set_role_responder(ctx);
 
@@ -258,7 +258,7 @@ static void responder_process(int read_fd, int write_fd) {
   ASSERT(write_data != NULL);
 
   ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext2, sizeof(plaintext2), NULL, 0,
-                           snd_hdr, write_data, &write_len) == ERR_SUCCESS);
+                           snd_stream, write_data, &write_len) == ERR_SUCCESS);
 
   /* send encrypted data */
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
@@ -273,7 +273,7 @@ static void responder_process(int read_fd, int write_fd) {
   size_t len = sizeof(plaintext1);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_hdr, buf, &len) ==
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_stream, buf, &len) ==
          ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext1));
@@ -289,7 +289,7 @@ static void responder_process(int read_fd, int write_fd) {
   ASSERT(write_data != NULL);
 
   ASSERT(vcry_aead_encrypt(ctx, (uint8_t *)plaintext1, sizeof(plaintext1), NULL, 0,
-                           snd_hdr, write_data, &write_len) == ERR_SUCCESS);
+                           snd_stream, write_data, &write_len) == ERR_SUCCESS);
 
   ASSERT(send_data(write_fd, write_data, write_len) == 0);
   zt_free(write_data);
@@ -303,7 +303,7 @@ static void responder_process(int read_fd, int write_fd) {
   len = sizeof(plaintext2);
   ASSERT(buf != NULL);
 
-  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_hdr, buf, &len) ==
+  ASSERT(vcry_aead_decrypt(ctx, read_data, read_len, NULL, 0, rcv_stream, buf, &len) ==
          ERR_SUCCESS);
 
   ASSERT_EQ(len, sizeof(plaintext2));
@@ -313,8 +313,8 @@ static void responder_process(int read_fd, int write_fd) {
   zt_free(buf);
 
   vcry_release(ctx);
-  vcry_crypto_hdr_free(snd_hdr);
-  vcry_crypto_hdr_free(rcv_hdr);
+  vcry_stream_free(snd_stream);
+  vcry_stream_free(rcv_stream);
 
   close(read_fd);
   close(write_fd);

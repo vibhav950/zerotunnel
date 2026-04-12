@@ -188,6 +188,11 @@ struct vcry_ctx_st {
     err_set; /** most recent failure status code */
 };
 
+struct vcry_stream_st {
+  uint8_t sid[VCRY_STREAM_ID_LEN];      /* stream Id */
+  uint8_t offs[VCRY_STREAM_OFFSET_LEN]; /* byte offset in stream */
+};
+
 // clang-format on
 
 static inline ATTRIBUTE_ALWAYS_INLINE
@@ -238,35 +243,37 @@ ATTRIBUTE_NONNULL(1) uint8_t *vcry_decr_iv(struct vcry_ctx_st *ctx) {
     return ctx->skey + VCRY_IV_ENCR_INI_OFFSET;
 }
 
-static inline ATTRIBUTE_NONNULL(1, 2) const uint8_t *vcry_encr_nonce(
-    struct vcry_ctx_st *ctx, vcry_crypto_hdr_t *hdr) {
+// clang-format off
+static inline ATTRIBUTE_NONNULL(1, 2)
+    const uint8_t *vcry_encr_nonce(struct vcry_ctx_st *ctx, struct vcry_stream_st *stream) {
   static thread_local uint8_t nonce[VCRY_IV_ENCR_LEN];
   size_t i;
 
   memcpy(nonce, vcry_encr_iv(ctx), VCRY_IV_ENCR_LEN);
 
   for (i = 0; i < VCRY_STREAM_OFFSET_LEN; ++i)
-    nonce[i] ^= hdr->offs[i];
+    nonce[i] ^= stream->offs[i];
   for (i = 0; i < VCRY_STREAM_ID_LEN; ++i)
-    nonce[i + VCRY_STREAM_OFFSET_LEN] ^= hdr->sid[i];
+    nonce[i + VCRY_STREAM_OFFSET_LEN] ^= stream->sid[i];
 
   return nonce;
 }
 
-static inline ATTRIBUTE_NONNULL(1, 2) const uint8_t *vcry_decr_nonce(
-    struct vcry_ctx_st *ctx, vcry_crypto_hdr_t *hdr) {
+static inline ATTRIBUTE_NONNULL(1, 2)
+    const uint8_t *vcry_decr_nonce(struct vcry_ctx_st *ctx, struct vcry_stream_st *stream) {
   static thread_local uint8_t nonce[VCRY_IV_ENCR_LEN];
   size_t i;
 
   memcpy(nonce, vcry_decr_iv(ctx), VCRY_IV_ENCR_LEN);
 
   for (i = 0; i < VCRY_STREAM_OFFSET_LEN; ++i)
-    nonce[i] ^= hdr->offs[i];
+    nonce[i] ^= stream->offs[i];
   for (i = 0; i < VCRY_STREAM_ID_LEN; ++i)
-    nonce[i + VCRY_STREAM_OFFSET_LEN] ^= hdr->sid[i];
+    nonce[i + VCRY_STREAM_OFFSET_LEN] ^= stream->sid[i];
 
   return nonce;
 }
+// clang-format on
 
 /**
  * Add a 64-bit value to the 8-byte vector V in Big-Endian format
@@ -1510,51 +1517,49 @@ err_t vcry_responder_verify_complete(vcry_ctx_t *ctx,
 }
 
 /**
- * Allocate and initialize a new crypto header object for a byte stream
- * with the given \p stream_id of byte length `VCRY_STREAM_ID_LEN`.
+ * Allocate and initialize a new VCRY byte stream with the given \p stream_id of byte
+ * length `VCRY_STREAM_ID_LEN`.
  *
  * It is important that the stream ID is unique per-stream so two streams
  * can never have the same per-message nonce. This value should be generated
  * using a cryptographically-strong RNG function.
  *
- * Returns a pointer to the newly allocated `vcry_crypto_hdr_t` object,
+ * Returns a pointer to the newly allocated `vcry_stream_t` object,
  * or `NULL` on failure.
  *
- * The pointer must be freed using `vcry_crypto_hdr_free()` when no longer needed.
+ * The pointer must be freed using `vcry_stream_free()` when no longer needed.
  */
-vcry_crypto_hdr_t *vcry_crypto_hdr_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]) {
-  vcry_crypto_hdr_t *hdr;
+vcry_stream_t *vcry_stream_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]) {
+  vcry_stream_t *stream;
 
   if (!stream_id)
     return NULL;
 
-  hdr = zt_calloc(1, sizeof(vcry_crypto_hdr_t));
-  if (!hdr)
+  stream = zt_calloc(1, sizeof(vcry_stream_t));
+  if (!stream)
     return NULL;
 
-  memcpy(hdr->sid, stream_id, VCRY_STREAM_ID_LEN);
+  memcpy(stream->sid, stream_id, VCRY_STREAM_ID_LEN);
 
-  return hdr;
+  return stream;
 }
 
 /**
- * Free a previously allocated `vcry_crypto_hdr_t` object pointed to by \p hdr.
+ * Free a previously allocated `vcry_stream_t` object pointed to by \p stream.
  */
-void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr) {
-  if (hdr)
-    zt_clr_free(hdr, sizeof(vcry_crypto_hdr_t));
+void vcry_stream_free(vcry_stream_t *stream) {
+  if (stream)
+    zt_clr_free(stream, sizeof(vcry_stream_t));
 }
 
 /**
- * Encrypt data in \p in of size \p in_len using the selected AEAD cipher
- * algorithm with the key material derived for this session, and store the
- * result in \p out.
+ * Encrypt data in \p in of size \p in_len bound to \p stream using the
+ * selected AEAD cipher with the key material derived for this session,
+ * and store the result in \p out.
  * \p out_len must contain the length of the buffer pointed to by \p out,
  * sufficient to store the encrypted data and the authentication tag.
  *
  * \p in and \p out can overlap.
- *
- * \p hdr must contain the stream-bound crypto header.
  *
  * A successful encryption will result in \p out_len being set to the total
  * length of the encrypted and authenticated payload.
@@ -1578,7 +1583,7 @@ void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr) {
  * and the tag, the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
-                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t ad_len, vcry_stream_t *stream, uint8_t *out,
                         size_t *out_len) {
   err_t ret;
   size_t tag_len;
@@ -1586,7 +1591,7 @@ err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
   if (!ctx)
     return ERR_NULL_PTR;
 
-  if (!in || !hdr || !out || !out_len)
+  if (!in || !stream || !out || !out_len)
     return VCRY_ERR_SET(ctx, ERR_NULL_PTR);
 
   if (VCRY_STATE(ctx) != vcry_hs_done)
@@ -1601,7 +1606,7 @@ err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
     return VCRY_ERR_SET(ctx, ret);
   }
 
-  if ((ret = cipher_set_iv(ctx->aead, vcry_encr_nonce(ctx, hdr), VCRY_IV_ENCR_LEN)) !=
+  if ((ret = cipher_set_iv(ctx->aead, vcry_encr_nonce(ctx, stream), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ctx, ret);
   }
@@ -1613,22 +1618,20 @@ err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
     return VCRY_ERR_SET(ctx, ret);
   }
 
-  if (add64_be(hdr->offs, in_len - 1))
+  if (add64_be(stream->offs, in_len - 1))
     return VCRY_ERR_SET(ctx, ERR_OPERATION_LIMIT_REACHED);
 
   return ERR_SUCCESS;
 }
 
 /**
- * Decrypt data in \p in of size \p in_len using the selected AEAD cipher
- * algorithm with the key material derived for this session, and store the
- * result in \p out.
+ * Decrypt data in \p in of size \p in_len bound to \p stream using the
+ * selected AEAD cipher with the key material derived for this session,
+ * and store the result in \p out.
  * \p out_len must contain the length of the buffer pointed to by \p out,
  * sufficient to store the plaintext.
  *
  * \p in and \p out can overlap.
- *
- * \p hdr must contain the stream-bound crypto header.
  *
  * A successful decryption will result in \p out_len being set to the length of
  * the plaintext data.
@@ -1647,7 +1650,7 @@ err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
  * the function returns an `ERR_BUFFER_TOO_SMALL`.
  */
 err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
-                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t ad_len, vcry_stream_t *stream, uint8_t *out,
                         size_t *out_len) {
   err_t ret;
   size_t tag_len;
@@ -1655,7 +1658,7 @@ err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
   if (!ctx)
     return ERR_NULL_PTR;
 
-  if (!in || !hdr || !out || !out_len)
+  if (!in || !stream || !out || !out_len)
     return VCRY_ERR_SET(ctx, ERR_NULL_PTR);
 
   if (VCRY_STATE(ctx) != vcry_hs_done)
@@ -1675,7 +1678,7 @@ err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
     return VCRY_ERR_SET(ctx, ret);
   }
 
-  if ((ret = cipher_set_iv(ctx->aead, vcry_decr_nonce(ctx, hdr), VCRY_IV_ENCR_LEN)) !=
+  if ((ret = cipher_set_iv(ctx->aead, vcry_decr_nonce(ctx, stream), VCRY_IV_ENCR_LEN)) !=
       ERR_SUCCESS) {
     return VCRY_ERR_SET(ctx, ret);
   }
@@ -1687,7 +1690,7 @@ err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8
     return VCRY_ERR_SET(ctx, ret);
   }
 
-  if (add64_be(hdr->offs, *out_len - 1))
+  if (add64_be(stream->offs, *out_len - 1))
     return VCRY_ERR_SET(ctx, ERR_OPERATION_LIMIT_REACHED);
 
   return ERR_SUCCESS;

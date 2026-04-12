@@ -178,7 +178,7 @@ static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
  * @param[in] fio The fio object to be initialized.
  * @param[in] filepath Complete system-specific filepath.
  * @param[in] mode The file open mode.
- * @param[in] hdr VCRY crypto stream header.
+ * @param[in] stream VCRY stream.
  * @return An `err_t` status code.
  *
  * Open a new fio stream associated with @p filepath in the given @p mode.
@@ -204,12 +204,12 @@ static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
  * are complete.
  */
 err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
-                  zt_fio_mode_t mode, vcry_crypto_hdr_t *hdr) {
+                  zt_fio_mode_t mode, vcry_stream_t *stream) {
   err_t ret;
   int fd = -1, flags = 0, rv;
   struct flock fl;
 
-  if (!fio || !multio || !filepath || !hdr)
+  if (!fio || !multio || !filepath || !stream)
     return ERR_NULL_PTR;
 
   if (!multio->init)
@@ -285,7 +285,7 @@ err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
   }
 
   fio->path = zt_strdup(filepath);
-  fio->vcry_hdr = hdr;
+  fio->stream = stream;
 
   FIO_FL_SET(fio, FIO_FL_OPEN);
 
@@ -664,8 +664,8 @@ static void uv__fio_read_cb(uv_fs_t *req) {
     if (a->fio->cb)
       a->fio->cb(a->multio, a->fio, a->fio->cbdata);
   } else {
-    log_error("Failed to read from file (stream=%p, offset=%zu) (%s)",
-              PTR64(a->fio->vcry_hdr->sid), a->fio->offset, uv_strerror((int)result));
+    log_error("Failed to read from file (path=%p, offset=%zu) (%s)", a->fio->path,
+              a->fio->offset, uv_strerror((int)result));
 
     iomem_pool_free_chunk(a->multio->pool, a->chunk); // throw away chunk
 
@@ -697,8 +697,8 @@ static void _fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
   rv = uv_fs_read(multio->loop, fio->req, file, &buf, 1, fio->offset, uv__fio_read_cb);
   if (rv < 0) {
-    log_error(NULL, "Failed to read from file (stream=%p, offset=%zu) (%s)",
-              PTR64(fio->vcry_hdr->sid), fio->offset, uv_strerror(rv));
+    log_error(NULL, "Failed to read from file (path=%p, offset=%zu) (%s)", fio->path,
+              fio->offset, uv_strerror(rv));
     iomem_pool_free_chunk(multio->pool, chunk);
 
     if (multio->err_cb)
@@ -764,8 +764,8 @@ static void uv__fio_write_cb(uv_fs_t *req) {
     // schedule next write
     _fio_write_chunk(a->multio, a->fio);
   } else {
-    log_error("Failed to write to file (stream=%p, offset=%zu) (%s)",
-              PTR64(a->fio->vcry_hdr->sid), a->fio->offset, uv_strerror((int)result));
+    log_error("Failed to write to file (path=%p, offset=%zu) (%s)", a->fio->path,
+              a->fio->offset, uv_strerror((int)result));
 
     if (a->multio->err_cb)
       a->multio->err_cb(a->multio, a->fio, ERR_FIO_WRITE, a->multio->err_cbdata);
@@ -796,8 +796,8 @@ static void _fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
   rv = uv_fs_write(multio->loop, fio->req, file, &buf, 1, fio->offset, uv__fio_write_cb);
   if (rv < 0) {
-    log_error(NULL, "Failed to write to file (stream=%p, offset=%zu) (%s)",
-              PTR64(fio->vcry_hdr->sid), fio->offset, uv_strerror(rv));
+    log_error(NULL, "Failed to write to file (path=%p, offset=%zu) (%s)", fio->path,
+              fio->offset, uv_strerror(rv));
 
     iomem_pool_free_chunk(multio->pool, chunk);
 

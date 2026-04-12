@@ -108,13 +108,8 @@
 
 // clang-format on
 
-/** VCRY stream header */
-typedef struct _vcry_crypto_hdr_st {
-  uint8_t sid[VCRY_STREAM_ID_LEN];      /* stream Id */
-  uint8_t offs[VCRY_STREAM_OFFSET_LEN]; /* byte offset in stream */
-} vcry_crypto_hdr_t;
+typedef struct vcry_stream_st vcry_stream_t;
 
-/** Opaque VCRY handle */
 typedef struct vcry_ctx_st vcry_ctx_t;
 
 /** Get the most recent failure status code */
@@ -172,15 +167,15 @@ err_t vcry_responder_verify_complete(vcry_ctx_t *ctx,
                                      const uint8_t *id_a, const uint8_t *id_b,
                                      size_t len_a, size_t len_b);
 
-vcry_crypto_hdr_t *vcry_crypto_hdr_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]);
+vcry_stream_t *vcry_stream_new(const uint8_t stream_id[VCRY_STREAM_ID_LEN]);
 
-void vcry_crypto_hdr_free(vcry_crypto_hdr_t *hdr);
+void vcry_stream_free(vcry_stream_t *stream);
 
 err_t vcry_aead_encrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
-                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t ad_len, vcry_stream_t *stream, uint8_t *out,
                         size_t *out_len);
 err_t vcry_aead_decrypt(vcry_ctx_t *ctx, uint8_t *in, size_t in_len, const uint8_t *ad,
-                        size_t ad_len, vcry_crypto_hdr_t *hdr, uint8_t *out,
+                        size_t ad_len, vcry_stream_t *stream, uint8_t *out,
                         size_t *out_len);
 
 #endif /* __VCRY_H__ */

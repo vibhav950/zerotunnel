@@ -44,8 +44,8 @@ typedef struct _zt_fio_st {
     *cbdata;          /* user callback data */
   uv_fs_t
     *req;             /* uv fs read/write request */
-  vcry_crypto_hdr_t
-    *vcry_hdr;        /* VCRY crypto header */
+  vcry_stream_t
+    *stream;          /* VCRY stream */
   ssize_t
     offset;           /* current r/w offset */
   const char
