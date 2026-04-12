@@ -431,7 +431,7 @@ progressbar_t *zt_progressbar_init(progressbar_t *bar, int slots, zt_logger_t *l
   /* Don't start updating until at least one slot has begun */
   pb->dont_update = 2;
 
-  pb->thread = zt_thread_create(pb_update_thread, PTRV(pb));
+  pb->thread = zt_thread_create(pb_update_thread, PTRV(pb), NULL, NULL);
   if (pb->thread == zt_thread_t_null)
     goto cleanup;
 

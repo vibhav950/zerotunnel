@@ -14,7 +14,9 @@
 #include "common/defines.h"
 
 #if defined(HAVE_POSIX_THREADS)
+
 #include <pthread.h>
+
 #define zt_thread_t pthread_t
 #define zt_mutex_t pthread_mutex_t
 #define zt_rwlock_t pthread_rwlock_t
@@ -22,8 +24,12 @@
 #define zt_cond_t pthread_cond_t
 
 #define zt_thread_t_null NULL
-#else
+#define ZT_ONCE_INIT PTHREAD_ONCE_INIT
+
+#else /* !defined(HAVE_POSIX_THREADS) */
+
 struct thread_noapi_st {};
+
 typedef struct thread_noapi_st zt_thread_t;
 typedef struct thread_noapi_st zt_mutex_t;
 typedef struct thread_noapi_st zt_rwlock_t;
@@ -31,9 +37,12 @@ typedef struct thread_noapi_st zt_once_t;
 typedef struct thread_noapi_st zt_cond_t;
 
 #define zt_thread_t_null NULL
-#endif
+#define ZT_ONCE_INIT {}
 
-zt_thread_t *zt_thread_create(int (*entry)(void *arg), void *arg);
+#endif /* defined(HAVE_POSIX_THREADS) */
+
+zt_thread_t *zt_thread_create(err_t (*entry)(void *arg), void *arg,
+                              void (*on_error_cb)(err_t, void *cbdata), void *cbdata);
 
 void zt_thread_destroy(zt_thread_t *t);
 
@@ -52,6 +61,8 @@ err_t zt_mutex_init_recursive(zt_mutex_t *mtx);
 void zt_mutex_destroy(zt_mutex_t *mtx);
 
 void zt_mutex_lock(zt_mutex_t *mtx);
+
+err_t zt_mutex_trylock(zt_mutex_t *mtx);
 
 void zt_mutex_unlock(zt_mutex_t *mtx);
 

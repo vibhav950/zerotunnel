@@ -79,46 +79,55 @@ pthread_setaffinity_np(pthread_t thread, size_t cpuset_size, cpu_set_t *cpuset) 
 }
 #endif /* __MACH__ */
 
-struct thread_entry {
+struct thread_call {
   err_t (*func)(void *);
-  void *arg;
+  void (*on_error_cb)(err_t, void *cbdata);
+  void *arg, *cbdata;
 };
 
 static void *thread_create_thunk(void *arg) {
-  struct thread_entry *te = arg;
-  err_t (*func)(void *) = te->func;
-  void *actual_arg = te->arg;
+  struct thread_call *tc = arg;
+  err_t (*func)(void *) = tc->func;
+  void (*on_error_cb)(err_t, void *cbdata) = tc->on_error_cb;
+  void *actual_arg = tc->arg, *cbdata = tc->cbdata;
+  err_t ret;
 
-  free(te);
+  free(tc);
 
-  (*func)(actual_arg);
+  ret = (*func)(actual_arg);
+
+  if (ret != ERR_SUCCESS && on_error_cb)
+    on_error_cb(ret, cbdata);
 
   return NULL;
 }
 
 static void ATTRIBUTE_NORETURN thread_exit(void) { pthread_exit(NULL); }
 
-zt_thread_t *zt_thread_create(err_t (*entry)(void *arg), void *arg) {
+zt_thread_t *zt_thread_create(err_t (*entry)(void *arg), void *arg,
+                              void (*on_error_cb)(err_t, void *cbdata), void *cbdata) {
   zt_thread_t *t;
-  struct thread_entry *te;
+  struct thread_call *tc;
 
   t = zt_calloc(1, sizeof(zt_thread_t));
-  te = zt_calloc(1, sizeof(struct thread_entry));
-  if (!(t && te)) {
+  tc = zt_calloc(1, sizeof(struct thread_call));
+  if (!(t && tc)) {
     return NULL;
   }
 
-  te->func = entry;
-  te->arg = arg;
+  tc->func = entry;
+  tc->arg = arg;
+  tc->on_error_cb = on_error_cb;
+  tc->cbdata = cbdata;
 
-  if (pthread_create(t, NULL, thread_create_thunk, te))
+  if (pthread_create(t, NULL, thread_create_thunk, tc))
     goto err;
 
   return t;
 
 err:
   zt_free(t);
-  zt_free(te);
+  zt_free(tc);
   return zt_thread_t_null;
 }
 
@@ -237,6 +246,18 @@ void zt_mutex_lock(zt_mutex_t *mtx) {
 void zt_mutex_unlock(zt_mutex_t *mtx) {
   if (pthread_mutex_unlock(mtx))
     thread_exit();
+}
+
+err_t zt_mutex_trylock(zt_mutex_t *mtx) {
+  int rv;
+
+  rv = pthread_mutex_trylock(mtx);
+  if (rv) {
+    if (rv != EBUSY && rv != EAGAIN)
+      thread_exit();
+    return ERR_AGAIN;
+  }
+  return ERR_SUCCESS;
 }
 
 err_t zt_rwlock_init(zt_rwlock_t *rwlock) {
