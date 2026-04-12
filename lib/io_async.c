@@ -57,14 +57,14 @@ struct _zt_multio_st {
   bool init : 1;           /* multio initialized */
 };
 
-struct uv__fio_rw_cb_arg {
+struct fio_rw_cb_arg {
   zt_fio_t *fio;        /* fio handle */
   zt_multio_t *multio;  /* multio handle */
   iomem_chunk_t *chunk; /* iomem chunk */
 };
 
 /** Lock the entire file associated with @p handle */
-static int _lock_file(void *handle) {
+static int lock_file(void *handle) {
   uv_fs_t *fs_req = (uv_fs_t *)handle;
 
 #if defined(_WIN32)
@@ -92,7 +92,7 @@ static int _lock_file(void *handle) {
 }
 
 /** Unlock the file associated with @p handle */
-static void _unlock_file(void *handle) {
+static void unlock_file(void *handle) {
   uv_fs_t *fs_req = (uv_fs_t *)handle;
 
 #if defined(_WIN32)
@@ -112,7 +112,7 @@ static void _unlock_file(void *handle) {
 }
 
 /** Open a uv tty/pipe handle associated with a standard stream (stdin, stdout) */
-static int _open_std_stream(int fd, uv_loop_t *loop, void **handle) {
+static int open_std_stream(int fd, uv_loop_t *loop, void **handle) {
   ASSERT(fd == 0 || fd == 1); // sanity check
 
   if (uv_guess_handle(fd) == UV_TTY) {
@@ -139,7 +139,7 @@ static int _open_std_stream(int fd, uv_loop_t *loop, void **handle) {
  *
  * This takes care of both standard streams and regular files.
  */
-static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
+static inline void ATTRIBUTE_NONNULL(1) fio_reset(zt_fio_t *fio) {
   ASSERT(fio);
 
   if (fio->handle) {
@@ -150,7 +150,7 @@ static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
       uv_fs_t *fs_req = (uv_fs_t *)fio->handle;
 
       if (FIO_FL_TST(fio, FIO_FL_OPEN))
-        _unlock_file(fio->handle);
+        unlock_file(fio->handle);
 
       uv_fs_req_cleanup(fs_req);
       uv_fs_close(NULL, fs_req, fs_req->result, NULL); // sync
@@ -215,7 +215,7 @@ err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
   if (!multio->init)
     return ERR_BAD_ARGS;
 
-  _reset_fio(fio);
+  fio_reset(fio);
 
   /* if (!strcmp(filepath, "-")) {
     switch (mode) {
@@ -231,7 +231,7 @@ err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
     default:
       return ERR_BAD_ARGS;
     }
-    if (_open_std_stream(fd, multio->loop, &fio->handle) < 0) {
+    if (open_std_stream(fd, multio->loop, &fio->handle) < 0) {
       log_error(NULL, "Could not open standard stream -- not a TTY or pipe");
       return ERR_INTERNAL;
     }
@@ -278,7 +278,7 @@ err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
     goto cleanup;
   }
 
-  if (_lock_file(fio->handle) < 0) {
+  if (lock_file(fio->handle) < 0) {
     log_error(NULL, "Failed to lock file '%s' (%s)", filepath, strerror(errno));
     ret = ERR_INTERNAL;
     goto cleanup;
@@ -300,7 +300,7 @@ err_t zt_fio_open(zt_multio_t *multio, zt_fio_t *fio, const char *filepath,
   return ERR_SUCCESS;
 
 cleanup:
-  _reset_fio(fio);
+  fio_reset(fio);
   return ret;
 }
 
@@ -316,7 +316,7 @@ cleanup:
  */
 void zt_fio_close(zt_fio_t *fio) {
   if (fio)
-    _reset_fio(fio);
+    fio_reset(fio);
 }
 
 /**
@@ -459,32 +459,49 @@ err_t zt_file_rename(const char *oldpath, const char *newpath) {
 }
 
 /**
- * Get the physical size of the file represented by an open fio handle
- * @note This should not be a handle to a stream */
-static inline uint64_t ATTRIBUTE_NONNULL(1) zt_file_getsize(uv_fs_t *handle) {
+ * Get the physical size of the file associated with this \p handle
+ */
+static inline uint64_t ATTRIBUTE_NONNULL(1) file_getsize(uv_fs_t *handle) {
 #if defined(_WIN32)
   HANDLE h = (HANDLE)uv_get_osfhandle(handle->result);
   LARGE_INTEGER size;
-  if (likely(h != INVALID_HANDLE_VALUE)) {
+  if (likely(h != INVALID_HANDLE_VALUE))
     if (likely(GetFileSizeEx(h, &size)))
       return (uint64_t)size.QuadPart;
-  }
 #else
   int fd = handle->result;
   struct stat st;
-  if (likely(fd > 2)) {
-    if (likely(fstat(fd, &st) == 0)) {
-      if (S_ISREG(st.st_mode)) {
-        return st.st_size;
-      } else if (S_ISBLK(st.st_mode)) {
-        uint64_t bytes = 0;
-        if (likely(ioctl(fd, BLKGETSIZE64, &bytes) == 0))
-          return bytes;
-      }
+  if (likely(fstat(fd, &st) == 0)) {
+    if (S_ISREG(st.st_mode)) {
+      return st.st_size;
+    } else if (S_ISBLK(st.st_mode)) {
+      uint64_t bytes = 0;
+      if (likely(ioctl(fd, BLKGETSIZE64, &bytes) == 0))
+        return bytes;
     }
   }
 #endif
-  return UINT64_MAX;
+  abort();
+  return -1; /* make the compiler happy */
+}
+
+/**
+ * @param[in] fio An open fio.
+ * @param[out] size Pointer to place the size value.
+ * @return An `err_t` status code.
+ *
+ * Return the physical size of the file associated with this @p fio.
+ */
+err_t zt_fio_getsize(zt_fio_t *fio, uint64_t *size) {
+  if (unlikely(!fio || !size))
+    return ERR_NULL_PTR;
+
+  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN) || FIO_FL_TST(fio, FIO_FL_STREAM)))
+    return ERR_BAD_ARGS;
+
+  *size = file_getsize(fio->handle);
+
+  return ERR_SUCCESS;
 }
 
 /**
@@ -492,7 +509,7 @@ static inline uint64_t ATTRIBUTE_NONNULL(1) zt_file_getsize(uv_fs_t *handle) {
  * @param[out] info The file info pointer.
  * @return An `err_t` status code.
  *
- * Get the file information for the file represented by the `fio`.
+ * Get the file information for the file associated with this `fio`.
  */
 err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
   char *p;
@@ -536,7 +553,7 @@ err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
   return ERR_SUCCESS;
 }
 
-static inline int ATTRIBUTE_NONNULL(1) _alloc_file(uv_fs_t *handle, size_t total_size) {
+static inline int ATTRIBUTE_NONNULL(1) alloc_file(uv_fs_t *handle, size_t total_size) {
 #if defined(_WIN32)
   HANDLE hFile;
   LARGE_INTEGER size;
@@ -622,23 +639,17 @@ err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
 
   handle = (uv_fs_t *)fio->handle;
 
-  if (_alloc_file(handle, total_size) < 0)
+  if (alloc_file(handle, total_size) < 0)
     return ERR_INVALID;
   else
     return ERR_SUCCESS;
 }
 
-struct uv__fio_rw_cb_arg {
-  zt_fio_t *fio;        /* fio handle */
-  zt_multio_t *multio;  /* multio handle */
-  iomem_chunk_t *chunk; /* iomem chunk */
-};
-
 /** */
-static void uv__fio_read_cb(uv_fs_t *req) {
+static void fio_read_cb(uv_fs_t *req) {
   int rv;
   ssize_t result;
-  struct uv__fio_rw_cb_arg *a = req->data;
+  struct fio_rw_cb_arg *a = req->data;
 
   if (unlikely(!atomic_load_explicit(&a->multio->active, memory_order_acquire)))
     return;
@@ -655,7 +666,7 @@ static void uv__fio_read_cb(uv_fs_t *req) {
 
     // schedule next read
     a->fio->offset += result;
-    _fio_read_chunk(a->multio, a->fio);
+    fio_read_chunk(a->multio, a->fio);
   } else if (result == 0) {
     // reached EOF
 
@@ -675,7 +686,7 @@ static void uv__fio_read_cb(uv_fs_t *req) {
 }
 
 /**  */
-static void _fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
+static void fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
   int rv;
   uv_file file;
   uv_buf_t buf;
@@ -687,7 +698,7 @@ static void _fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
   chunk = iomem_pool_get_chunk(multio->pool);
   ASSERT(chunk);
-  ((struct uv__fio_rw_cb_arg *)fs_req->data)->chunk = chunk;
+  ((struct fio_rw_cb_arg *)fs_req->data)->chunk = chunk;
 
   buf = uv_buf_init(chunk->mem, chunk->size - ZT_MSG_HEADER_SIZE);
 
@@ -695,7 +706,7 @@ static void _fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
   fs_req = fio->req;
 
-  rv = uv_fs_read(multio->loop, fio->req, file, &buf, 1, fio->offset, uv__fio_read_cb);
+  rv = uv_fs_read(multio->loop, fio->req, file, &buf, 1, fio->offset, fio_read_cb);
   if (rv < 0) {
     log_error(NULL, "Failed to read from file (path=%p, offset=%zu) (%s)", fio->path,
               fio->offset, uv_strerror(rv));
@@ -709,7 +720,7 @@ static void _fio_read_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 /** */
 err_t zt_fio_readstream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t cb,
                               void *cbdata) {
-  struct uv__fio_rw_cb_arg *arg;
+  struct fio_rw_cb_arg *arg;
 
   if (unlikely(!multio || !fio))
     return ERR_NULL_PTR;
@@ -727,7 +738,7 @@ err_t zt_fio_readstream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t cb
   if (iomem_pool_chunk_size(multio->pool) <= ZT_MSG_HEADER_SIZE)
     return ERR_BUFFER_TOO_SMALL;
 
-  if (!(arg = zt_calloc(1, sizeof(struct uv__fio_rw_cb_arg))))
+  if (!(arg = zt_calloc(1, sizeof(struct fio_rw_cb_arg))))
     return ERR_MEM_FAIL;
 
   /* set fio, multio handles for uv read callbacks */
@@ -739,15 +750,15 @@ err_t zt_fio_readstream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t cb
   fio->cbdata = cbdata;
 
   // fire callback chain
-  _fio_read_chunk(multio, fio);
+  fio_read_chunk(multio, fio);
 
   return ERR_SUCCESS;
 }
 
-static void uv__fio_write_cb(uv_fs_t *req) {
+static void fio_write_cb(uv_fs_t *req) {
   int rv;
   ssize_t result;
-  struct uv__fio_rw_cb_arg *a = req->data;
+  struct fio_rw_cb_arg *a = req->data;
 
   if (unlikely(!atomic_load_explicit(&a->multio->active, memory_order_acquire)))
     return;
@@ -762,7 +773,7 @@ static void uv__fio_write_cb(uv_fs_t *req) {
     a->fio->offset += result;
 
     // schedule next write
-    _fio_write_chunk(a->multio, a->fio);
+    fio_write_chunk(a->multio, a->fio);
   } else {
     log_error("Failed to write to file (path=%p, offset=%zu) (%s)", a->fio->path,
               a->fio->offset, uv_strerror((int)result));
@@ -773,7 +784,7 @@ static void uv__fio_write_cb(uv_fs_t *req) {
 }
 
 /** */
-static void _fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
+static void fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
   int rv;
   uv_file file;
   uv_buf_t buf;
@@ -786,7 +797,7 @@ static void _fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
   // XXX: this can block indefinitely
   rv = mpmc_queue_dequeue(multio->q[_MULTIO_Q_SRC], (void **)&chunk, MPMC_Q_NONE);
   ASSERT(rv == 0);
-  ((struct uv__fio_rw_cb_arg *)fs_req->data)->chunk = chunk;
+  ((struct fio_rw_cb_arg *)fs_req->data)->chunk = chunk;
 
   buf = uv_buf_init(chunk->mem, chunk->size);
 
@@ -794,7 +805,7 @@ static void _fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
   fs_req = fio->req;
 
-  rv = uv_fs_write(multio->loop, fio->req, file, &buf, 1, fio->offset, uv__fio_write_cb);
+  rv = uv_fs_write(multio->loop, fio->req, file, &buf, 1, fio->offset, fio_write_cb);
   if (rv < 0) {
     log_error(NULL, "Failed to write to file (path=%p, offset=%zu) (%s)", fio->path,
               fio->offset, uv_strerror(rv));
@@ -808,7 +819,7 @@ static void _fio_write_chunk(zt_multio_t *multio, zt_fio_t *fio) {
 
 err_t zt_fio_writestream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t cb,
                                void *cbdata) {
-  struct uv__fio_rw_cb_arg *arg;
+  struct fio_rw_cb_arg *arg;
 
   if (unlikely(!multio || !fio))
     return ERR_NULL_PTR;
@@ -823,7 +834,7 @@ err_t zt_fio_writestream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t c
   if (unlikely(!multio->init))
     return ERR_BAD_ARGS;
 
-  if (!(arg = zt_calloc(1, sizeof(struct uv__fio_rw_cb_arg))))
+  if (!(arg = zt_calloc(1, sizeof(struct fio_rw_cb_arg))))
     return ERR_MEM_FAIL;
 
   /* set fio, multio handles for uv write callbacks */
@@ -835,7 +846,7 @@ err_t zt_fio_writestream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t c
   fio->cbdata = cbdata;
 
   // fire callback chain
-  _fio_write_chunk(multio, fio);
+  fio_write_chunk(multio, fio);
 
   return ERR_SUCCESS;
 }
@@ -845,7 +856,7 @@ err_t zt_fio_writestream_start(zt_multio_t *multio, zt_fio_t *fio, zt_fio_cb_t c
  * @param[out] size Set to the current size of the file after trimming.
  * @return An `err_t` status code.
  *
- * Trims the file represented by @p fio to the current offset.
+ * Trims the file associated with @p fio to the current offset.
  *
  * For a file whose allocated size was greater than the sum of all
  * writes through this @p fio, this function will trim the file to

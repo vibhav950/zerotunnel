@@ -215,26 +215,22 @@ err_t zt_file_rename(const char *oldpath, const char *newpath) {
 }
 
 /**
- * @param[in] fio An open file descriptor.
- * @return The size of the file in bytes or -1 on error.
- *
- * Get the size of the file represented by an open file descriptor.
+ * Get the size of the file associated with \p fd.
  */
-off_t zt_file_getsize(int fd) {
+static inline off_t file_getsize(int fd) {
   struct stat st;
 
-  if (likely(fd > 2)) {
-    if (likely(fstat(fd, &st) == 0)) {
-      if (S_ISREG(st.st_mode)) {
-        return st.st_size;
-      } else if (S_ISBLK(st.st_mode)) {
-        uint64_t bytes = 0;
-        if (likely(ioctl(fd, BLKGETSIZE64, &bytes) == 0))
-          return bytes;
-      }
+  if (likely(fstat(fd, &st) == 0)) {
+    if (S_ISREG(st.st_mode)) {
+      return st.st_size;
+    } else if (S_ISBLK(st.st_mode)) {
+      uint64_t bytes = 0;
+      if (likely(ioctl(fd, BLKGETSIZE64, &bytes) == 0))
+        return bytes;
     }
   }
-  return -1;
+  abort();
+  return -1; /* make the compiler happy */
 }
 
 /** How far past the page boundary is `offs` */
@@ -247,7 +243,7 @@ off_t zt_file_getsize(int fd) {
 #define FIO_FL_SET(fio, flag) (fio->flags |= (flag))
 #define FIO_FL_CLR(fio, flag) (fio->flags &= ~(flag))
 
-static inline void ATTRIBUTE_NONNULL(1) _reset_fio(zt_fio_t *fio) {
+static inline void ATTRIBUTE_NONNULL(1) fio_reset(zt_fio_t *fio) {
   ASSERT(fio);
 
   fio->fd = -1;
@@ -287,7 +283,7 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
   if (!fio || !filepath)
     return ERR_NULL_PTR;
 
-  _reset_fio(fio);
+  fio_reset(fio);
 
   if (!strcmp(filepath, "-")) {
     switch (mode) {
@@ -349,7 +345,7 @@ err_t zt_fio_open(zt_fio_t *fio, const char *filepath, zt_fio_mode_t mode) {
     return ERR_INTERNAL;
   }
 
-  size = zt_file_getsize(fd);
+  size = file_getsize(fd);
 
   fio->fd = fd;
   fio->size = size;
@@ -399,8 +395,26 @@ void zt_fio_close(zt_fio_t *fio) {
       close(fio->fd);
       zt_free(fio->path);
     }
-    _reset_fio(fio);
+    fio_reset(fio);
   }
+}
+
+/**
+ * @param[in] fio An open fio.
+ * @param[out] size Pointer to place the size value.
+ * @return An `err_t` status code.
+ *
+ * Return the physical size of the file associated with this @p fio.
+ */
+err_t zt_fio_getsize(zt_fio_t *fio, uint64_t *size) {
+  if (unlikely(!fio || !size))
+    return ERR_NULL_PTR;
+
+  if (unlikely(!FIO_FL_TST(fio, FIO_FL_OPEN) || fio->fd < 3))
+    return ERR_BAD_ARGS;
+
+  *size = (uint64_t)file_getsize(fio->fd);
+  return ERR_SUCCESS;
 }
 
 /**
@@ -408,7 +422,7 @@ void zt_fio_close(zt_fio_t *fio) {
  * @param[out] info The file info pointer.
  * @return An `err_t` status code.
  *
- * Get the file information for the file represented by the `fio`.
+ * Get the file information for the file associated with this @p fio.
  */
 err_t zt_fio_fileinfo(zt_fio_t *fio, zt_fileinfo_t *info) {
   char *p;
@@ -513,7 +527,7 @@ err_t zt_fio_read(zt_fio_t *fio, void **buf, size_t *bufsize) {
  * @param[out] nread The number of bytes read.
  * @return An `err_t` status code.
  *
- * Reads at most @p bufsize bytes of data from the file represented by @p fio
+ * Reads at most @p bufsize bytes of data from the file associated with this @p fio
  * into @p buf.
  *
  * If the file EOF is reached, @p nread is set to 0 and `ERR_EOF` is returned.
@@ -600,7 +614,7 @@ err_t zt_fio_write_allocate(zt_fio_t *fio, off_t total_size) {
  * @param[in] bufsize The number of bytes to write.
  * @return An `err_t` status code.
  *
- * Writes @p bufsize bytes from @p buf to the file represented by @p fio.
+ * Writes @p bufsize bytes from @p buf to the file associated with this @p fio.
  * Partial writes are treated as errors.
  */
 err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
@@ -627,7 +641,7 @@ err_t zt_fio_write(zt_fio_t *fio, const void *buf, size_t bufsize) {
  * @param[out] size Set to the current size of the file after trimming.
  * @return An `err_t` status code.
  *
- * Trims the file represented by @p fio to the current offset.
+ * Trims the file associated with this @p fio to the current offset.
  *
  * @note For a file whose allocated size was greater than the sum of all
  *       writes through this @p fio, this function will trim the file to

@@ -71,7 +71,7 @@ err_t zt_file_zdelete(const char *filepath);
 
 err_t zt_file_rename(const char *oldpath, const char *newpath);
 
-off_t zt_file_getsize(int fd);
+err_t zt_fio_getsize(zt_fio_t *fio, uint64_t *size);
 
 err_t zt_fio_open(zt_fio_t *fio, const char *name, zt_fio_mode_t mode);
 
