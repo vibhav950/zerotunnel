@@ -10,8 +10,10 @@
 
 #include "common/thread.h"
 
-zt_thread_t *zt_thread_create(int (*entry)(void *arg) ATTRIBUTE_UNUSED,
-                              void *arg ATTRIBUTE_UNUSED) {
+zt_thread_t *zt_thread_create(err_t (*entry)(void *arg) ATTRIBUTE_UNUSED,
+                              void *arg ATTRIBUTE_UNUSED,
+                              void (*on_error_cb)(err_t, void *cbdata) ATTRIBUTE_UNUSED,
+                              void *cbdata ATTRIBUTE_UNUSED) {
   return zt_thread_t_null;
 }
 
@@ -40,6 +42,8 @@ err_t zt_mutex_init_recursive(zt_mutex_t *mtx ATTRIBUTE_UNUSED) {
 void zt_mutex_destroy(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
 
 void zt_mutex_lock(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
+
+err_t zt_mutex_trylock(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return ERR_NOT_SUPPORTED; }
 
 void zt_mutex_unlock(zt_mutex_t *mtx ATTRIBUTE_UNUSED) { return; }
 
